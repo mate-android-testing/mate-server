@@ -35,7 +35,6 @@ public class AccessibilityUtils {
         lastImagePath = imagePath;
 
         double contrastRatio = 21;
-        //System.out.println("Widget: " + widget.getClazz()+ " - "+ widget.getId() + " "+ widget.getText() + " " + widget.getNextChildsText() + " "+widget.getBounds());
         if (image!=null) {
             contrastRatio = ColorUtils.calculateContrastRatioForAreaOtsu(image, x1, y1, x2, y2);
 
@@ -51,14 +50,6 @@ public class AccessibilityUtils {
                 }
             }
         }
-
-//        long time = new Date().getTime();
-//        File outputfile = new File(imagePath.replace(".png",time+".png"));
-//        try {
-//            ImageIO.write(image,"png",outputfile);
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
 
         return contrastRatio;
     }

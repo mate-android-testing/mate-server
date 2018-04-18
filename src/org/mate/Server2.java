@@ -27,7 +27,7 @@ public class Server2 {
 
     public static void main(String[] args) {
 
-        long timeout = 1;
+        long timeout = 5;
         long length = 1000;
         if (args!=null && args.length==2) {
             String timeoutstr = args[0];
