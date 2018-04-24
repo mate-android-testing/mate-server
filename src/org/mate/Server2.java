@@ -11,11 +11,13 @@ import java.util.*;
  */
 public class Server2 {
 
+    public static boolean isWin;
+
 
     public static String getEmulator(Hashtable<String,Boolean> emulatorsAllocated, String packageName){
         for (String key: emulatorsAllocated.keySet()){
             String cmd = "adb -s " + key + " shell ps " + packageName;
-            List<String> result = ProcessRunner.runProcess(false,cmd);
+            List<String> result = ProcessRunner.runProcess(isWin,cmd);
             for (String res: result){
                 System.out.println(res);
                 if (res.contains(packageName))
@@ -26,6 +28,11 @@ public class Server2 {
     }
 
     public static void main(String[] args) {
+        isWin = false;
+        String os = System.getProperty("os.name");
+        if (os!=null && os.startsWith("Windows"))
+            isWin = true;
+
 
         long timeout = 5;
         long length = 1000;
@@ -41,7 +48,7 @@ public class Server2 {
         Hashtable<String,Boolean> emulatorsAllocated = new Hashtable<String,Boolean>();
         Hashtable<String,String> emulatorsPackage = new Hashtable<String,String>();
         String getDevices = "adb devices";
-        List<String> resultDevices = ProcessRunner.runProcess(false, getDevices);
+        List<String> resultDevices = ProcessRunner.runProcess(isWin, getDevices);
 
         int count = 0;
         for (String res:resultDevices){
@@ -56,7 +63,7 @@ public class Server2 {
             }
         }
 
-        //ProcessRunner.runProcess(false, "rm *.png");
+        //ProcessRunner.runProcess(isWin, "rm *.png");
         try {
             ServerSocket server = new ServerSocket(12345, 5000);
             Socket client = null;
@@ -173,7 +180,7 @@ public class Server2 {
                 //result = null;
                 System.out.println(cmdStr);
 
-                List<String> result = ProcessRunner.runProcess(false, cmdStr);
+                List<String> result = ProcessRunner.runProcess(isWin, cmdStr);
 
                 //get results
                 if (cmdStr.contains("dumpsys activity activities")) {
