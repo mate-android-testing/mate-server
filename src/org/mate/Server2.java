@@ -1,10 +1,15 @@
 package org.mate;
 
-import java.io.IOException;
-import java.io.PrintWriter;
+import com.sun.deploy.util.StringUtils;
+
+import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
+import java.util.List;
 
 /**
  * Created by marceloeler on 14/03/17.
@@ -144,6 +149,42 @@ public class Server2 {
                     System.out.println(cmdStr);
                 }
 
+                if(cmdStr.contains("mark-image")) {
+                    try {
+                        System.out.println(cmdStr);
+                        String[] parts = cmdStr.split(":");
+                        String imageName = parts[1];
+                        int x = Integer.parseInt(parts[2].split("-")[1]);
+                        int y = Integer.parseInt(parts[3].split("-")[1]);
+                        int width = Integer.parseInt(parts[4].split("-")[1]);
+                        int height = Integer.parseInt(parts[5].split("-")[1]);
+
+                        String fileName = imageName.split("_")[0] + imageName.split("_")[1] + ".txt";
+
+                        Writer output;
+                        output = new BufferedWriter(new FileWriter(fileName, true));
+
+                        output.append(imageName)
+                                .append(",")
+                                .append(parts[6])
+                                .append(",")
+                                .append(parts[7])
+                                .append("\n");
+
+                        output.close();
+
+                        BufferedImage img = ImageIO.read(new File(imageName));
+                        Graphics2D g2d = img.createGraphics();
+                        g2d.setColor(Color.RED);
+                        g2d.setStroke(new BasicStroke(5));
+                        g2d.drawRect(x, y, width, height);
+                        ImageIO.write(img, "PNG", new File(imageName));
+                        g2d.dispose();
+                    }catch (Exception e){
+                        System.out.println("EXCEPTION --->" + e.getMessage());
+                    }
+                    System.out.println(cmdStr);
+                }
                 if (cmdStr.contains("contrastratio")) {
                     try {
                         System.out.println(cmdStr);
