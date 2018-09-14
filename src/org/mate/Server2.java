@@ -20,6 +20,7 @@ import java.util.List;
 public class Server2 {
 
     public static boolean isWin;
+    public static boolean generatePDFReport;
 
 
     public static String getEmulator(Hashtable<String,Boolean> emulatorsAllocated, String packageName){
@@ -37,12 +38,16 @@ public class Server2 {
 
     public static void main(String[] args) throws DocumentException {
         isWin = false;
+        generatePDFReport = false;
+
+        ADB.isWin=isWin;
+
         String os = System.getProperty("os.name");
         if (os!=null && os.startsWith("Windows"))
             isWin = true;
 
 
-        long timeout = 5;
+        long timeout = 1;
         long length = 1000;
         if (args!=null && args.length==2) {
             String timeoutstr = args[0];
@@ -92,6 +97,12 @@ public class Server2 {
 
                 System.out.println(cmdStr);
                 String response = "";
+
+                if (cmdStr.contains("getActivity")){
+                    String parts[] = cmdStr.split(":");
+                    String emulatorID = parts[1];
+                    response = ADB.getCurrentActivity(emulatorID);
+                }
 
 
                 if (cmdStr.contains("getEmulator")){
@@ -153,7 +164,7 @@ public class Server2 {
                     System.out.println(cmdStr);
                 }
 
-                if(cmdStr.contains("mark-image")) {
+                if(cmdStr.contains("mark-image") && generatePDFReport) {
                     try {
                         System.out.println(cmdStr);
                         String[] parts = cmdStr.split(":");
@@ -189,6 +200,7 @@ public class Server2 {
                     }
                     System.out.println(cmdStr);
                 }
+
                 if (cmdStr.contains("contrastratio")) {
                     try {
                         System.out.println(cmdStr);
@@ -227,13 +239,13 @@ public class Server2 {
 
                 List<String> result = ProcessRunner.runProcess(isWin, cmdStr);
 
-                //get results
-                if (cmdStr.contains("dumpsys activity activities")) {
-                    response = "unkonwn";
-                    if (result != null && result.size() > 0)
-                        response = result.get(0);
-                    System.out.println("activity: " + response);
-                }
+//                //get results
+//                if (cmdStr.contains("dumpsys activity activities")) {
+//                    response = "unkonwn";
+//                    if (result != null && result.size() > 0)
+//                        response = result.get(0);
+//                    System.out.println("activity: " + response);
+//                }
 
                 if (cmdStr.contains("density")) {
                     response = "0";
@@ -262,7 +274,7 @@ public class Server2 {
                 if (cmdStr.contains("randomlength"))
                     response = String.valueOf(length);
 
-                if(cmdStr.contains("FINISH")) {
+                if(cmdStr.contains("FINISH") && generatePDFReport) {
 
                     System.out.println(cmdStr);
                     String name = cmdStr.split("_")[1];
