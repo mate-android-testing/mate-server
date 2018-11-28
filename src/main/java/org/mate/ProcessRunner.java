@@ -13,7 +13,7 @@ import static java.util.Arrays.*;
  */
 public class ProcessRunner {
     private static final String[] WIN_RUNTIME = { "cmd.exe", "/C" };
-    private static final String[] OS_LINUX_RUNTIME = { "/bin/bash", "-l", "-c" };
+    private static final String[] OS_LINUX_RUNTIME = { "/bin/bash", "-c" };
 
     private ProcessRunner() {
     }
