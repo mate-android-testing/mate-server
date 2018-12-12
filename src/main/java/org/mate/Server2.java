@@ -82,6 +82,9 @@ public class Server2 {
         if (cmdStr.contains("getActivity"))
             return getActivity(cmdStr);
 
+        if (cmdStr.contains("getActivities"))
+            return getActivities(cmdStr);
+
         if (cmdStr.contains("getEmulator"))
             return Device.allocateDevice(cmdStr);
 
@@ -147,6 +150,13 @@ public class Server2 {
         String deviceID = parts[1];
         Device device = Device.devices.get(deviceID);
         return device.getCurrentActivity();
+    }
+
+    public static String getActivities(String cmdStr){
+        String parts[] = cmdStr.split(":");
+        String deviceID = parts[1];
+        Device device = Device.devices.get(deviceID);
+        return String.join("\n", device.getActivities());
     }
 
 

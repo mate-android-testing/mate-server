@@ -1,5 +1,6 @@
 package org.mate;
 
+import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
 
@@ -78,6 +79,16 @@ public class Device {
             response = result.get(0);
         System.out.println("activity: " + response);
 
+        return response;
+    }
+
+    public List<String> getActivities(){
+        String cmd = "aapt dump xmltree " + packageName + ".apk AndroidManifest.xml | ./getActivityNames.py";
+        List<String> response = ADB.runCommand(cmd);
+        System.out.println("activities:");
+        for (String activity : response) {
+            System.out.println("\t" + activity);
+        }
         return response;
     }
 
