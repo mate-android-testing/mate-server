@@ -23,6 +23,8 @@ public class Server2 {
     public static boolean showImagesOnTheFly;
     public static long timeout;
     public static long length;
+    public static String emuName;
+    public static int port;
 
     public static void main(String[] args) throws DocumentException {
 
@@ -32,27 +34,38 @@ public class Server2 {
         boolean isWin = false;
         generatePDFReport = false;
         String os = System.getProperty("os.name");
-        if (os!=null && os.startsWith("Windows"))
+        if (os != null && os.startsWith("Windows"))
             isWin = true;
         ADB.isWin = isWin;
 
         //read arguments and set default values otherwise
         timeout = 1;
         length = 1000;
-        if (args!=null && args.length==2) {
-            String timeoutstr = args[0];
-            timeout = Long.valueOf(timeoutstr);
-            String lenghStr = args[1];
-            length = Long.valueOf(lenghStr);
+        port = 12345;
+        if (args.length > 0) {
+            timeout = Long.valueOf(args[0]);
+        }
+        if (args.length > 1) {
+            length = Long.valueOf(args[1]);
+        }
+        if (args.length > 2) {
+            port = Integer.valueOf(args[2]);
+        }
+        if (args.length > 3) {
+            emuName = args[3];
         }
         ImageHandler.screenShotDir = "";
 
-        Device.loadActiveDevices();
-
         //ProcessRunner.runProcess(isWin, "rm *.png");
         try {
-            ServerSocket server = new ServerSocket(12345, 5000);
-            Socket client = null;
+            ServerSocket server = new ServerSocket(port, 100000000);
+            if (port == 0) {
+                System.out.println(server.getLocalPort());
+            }
+            Socket client;
+
+            Device.loadActiveDevices();
+
             while (true) {
 
                 Device.listActiveDevices();
@@ -95,7 +108,7 @@ public class Server2 {
         if (cmdStr.contains("screenshot"))
             return ImageHandler.takeScreenshot(cmdStr);
 
-        if(cmdStr.contains("mark-image") && generatePDFReport)
+        if (cmdStr.contains("mark-image") && generatePDFReport)
             return ImageHandler.markImage(cmdStr);
 
         if (cmdStr.contains("contrastratio"))
@@ -103,6 +116,21 @@ public class Server2 {
 
         if (cmdStr.contains("rm emulator"))
             return "";
+
+        if (cmdStr.contains("timeout"))
+            return String.valueOf(timeout);
+
+        if (cmdStr.contains("randomlength"))
+            return String.valueOf(length);
+
+        if (cmdStr.contains("FINISH") && generatePDFReport) {
+            try {
+                Report.generateReport(cmdStr);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return "Finished PDF report";
+        }
 
         List<String> result = ADB.runCommand(cmdStr);
         String response = "";
@@ -128,31 +156,17 @@ public class Server2 {
             response = "NH: screenshot";
         }
 
-        if (cmdStr.contains("timeout"))
-            response = String.valueOf(timeout);
-
-        if (cmdStr.contains("randomlength"))
-            response = String.valueOf(length);
-
-        if(cmdStr.contains("FINISH") && generatePDFReport) {
-            try {
-                Report.generateReport(cmdStr);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-
         return response;
     }
 
-    public static String getActivity(String cmdStr){
+    public static String getActivity(String cmdStr) {
         String parts[] = cmdStr.split(":");
         String deviceID = parts[1];
         Device device = Device.devices.get(deviceID);
         return device.getCurrentActivity();
     }
 
-    public static String getActivities(String cmdStr){
+    public static String getActivities(String cmdStr) {
         String parts[] = cmdStr.split(":");
         String deviceID = parts[1];
         Device device = Device.devices.get(deviceID);

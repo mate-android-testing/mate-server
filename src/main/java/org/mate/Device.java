@@ -120,6 +120,9 @@ public class Device {
     }
 
     public static String allocateDevice(String cmdStr){
+        if (Server2.emuName != null) {
+            return Server2.emuName;
+        }
         String parts[] = cmdStr.split(":");
         String packageName = parts[1];
 
