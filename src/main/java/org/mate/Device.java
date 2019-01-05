@@ -92,9 +92,16 @@ public class Device {
         return response;
     }
 
-    public String stopApp() {
-        System.out.println("Stopping app");
-        String cmd = "adb shell input keyevent 3; adb shell monkey -p " + packageName + " 1";
+    public String removeCoverageData() {
+        System.out.println("Removing coverage data");
+        String cmd = "rm -r " + packageName + ".coverage";
+        List<String> response = ADB.runCommand(cmd);
+        return String.join("\n", response);
+    }
+
+    public String storeCoverageData() {
+        System.out.println("Storing coverage data");
+        String cmd = "./storeCoverageData.py " + deviceID + " " + packageName;
         List<String> response = ADB.runCommand(cmd);
         return String.join("\n", response);
     }
@@ -102,7 +109,7 @@ public class Device {
 
     public String getCoverage() {
         String response="unknown";
-        String cmd = "./getCoverage.py " + deviceID + " " + packageName;
+        String cmd = "./getCoverage.py " + packageName;
         List<String> result = ADB.runCommand(cmd);
         if (result != null && result.size() > 0)
             response = result.get(result.size() - 1);

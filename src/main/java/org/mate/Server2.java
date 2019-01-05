@@ -1,13 +1,7 @@
 package org.mate;
 
 import com.itextpdf.text.*;
-import com.itextpdf.text.Font;
-import com.itextpdf.text.Image;
-import com.itextpdf.text.pdf.PdfWriter;
 
-import javax.imageio.ImageIO;
-import java.awt.*;
-import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -95,8 +89,11 @@ public class Server2 {
         if (cmdStr.contains("getActivity"))
             return getActivity(cmdStr);
 
-        if (cmdStr.contains("stopApp"))
-            return stopApp(cmdStr);
+        if (cmdStr.contains("removeCoverageData"))
+            return removeCoverageData(cmdStr);
+
+        if (cmdStr.contains("storeCoverageData"))
+            return storeCoverageData(cmdStr);
 
         if (cmdStr.contains("getActivities"))
             return getActivities(cmdStr);
@@ -172,11 +169,18 @@ public class Server2 {
         return device.getCurrentActivity();
     }
 
-    public static String stopApp(String cmdStr) {
+    public static String removeCoverageData(String cmdStr) {
         String parts[] = cmdStr.split(":");
         String deviceID = parts[1];
         Device device = Device.devices.get(deviceID);
-        return device.stopApp();
+        return device.removeCoverageData();
+    }
+
+    public static String storeCoverageData(String cmdStr) {
+        String parts[] = cmdStr.split(":");
+        String deviceID = parts[1];
+        Device device = Device.devices.get(deviceID);
+        return device.storeCoverageData();
     }
 
 
