@@ -82,13 +82,24 @@ public class Device {
         return response;
     }
 
-    public List<String> getActivities(){
+    public List<String> getActivities() {
         String cmd = "aapt dump xmltree " + packageName + ".apk AndroidManifest.xml | ./getActivityNames.py";
         List<String> response = ADB.runCommand(cmd);
         System.out.println("activities:");
         for (String activity : response) {
             System.out.println("\t" + activity);
         }
+        return response;
+    }
+
+    public String getCoverage() {
+        String response="unknown";
+        String cmd = "./getCoverage.py " + deviceID + " " + packageName;
+        List<String> result = ADB.runCommand(cmd);
+        if (result != null && result.size() > 0)
+            response = result.get(result.size() - 1);
+        System.out.println("coverage: " + response);
+
         return response;
     }
 
