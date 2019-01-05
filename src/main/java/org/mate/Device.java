@@ -92,9 +92,19 @@ public class Device {
         return response;
     }
 
-    public String storeCoverageData(String chromosome) {
+    public String storeCoverageData(String chromosome, String entity) {
         System.out.println("Storing coverage data");
         String cmd = "./storeCoverageData.py " + deviceID + " " + packageName + " " + chromosome;
+        if (entity != null) {
+            cmd += " " + entity;
+        }
+        List<String> response = ADB.runCommand(cmd);
+        return String.join("\n", response);
+    }
+
+    public String copyCoverageData(String chromosome_source, String chromosome_target, String entities) {
+        System.out.println("Copying coverage data");
+        String cmd = "./copyCoverageData.py " + packageName + " " + chromosome_source + " " + chromosome_target + " " + entities;
         List<String> response = ADB.runCommand(cmd);
         return String.join("\n", response);
     }

@@ -92,6 +92,9 @@ public class Server2 {
         if (cmdStr.contains("storeCoverageData"))
             return storeCoverageData(cmdStr);
 
+        if (cmdStr.contains("copyCoverageData"))
+            return copyCoverageData(cmdStr);
+
         if (cmdStr.contains("getActivities"))
             return getActivities(cmdStr);
 
@@ -170,8 +173,22 @@ public class Server2 {
         String parts[] = cmdStr.split(":");
         String deviceID = parts[1];
         String chromosome = parts[2];
+        String entity = null;
+        if (parts.length > 3) {
+            entity = parts[3];
+        }
         Device device = Device.devices.get(deviceID);
-        return device.storeCoverageData(chromosome);
+        return device.storeCoverageData(chromosome, entity);
+    }
+
+    public static String copyCoverageData(String cmdStr) {
+        String parts[] = cmdStr.split(":");
+        String deviceID = parts[1];
+        String chromosome_source = parts[2];
+        String chromosome_target = parts[3];
+        String entities = parts[4];
+        Device device = Device.devices.get(deviceID);
+        return device.copyCoverageData(chromosome_source, chromosome_target, entities);
     }
 
 
