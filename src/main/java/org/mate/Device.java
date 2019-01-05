@@ -131,11 +131,15 @@ public class Device {
     }
 
     public static String allocateDevice(String cmdStr){
-        if (Server2.emuName != null) {
-            return Server2.emuName;
-        }
         String parts[] = cmdStr.split(":");
         String packageName = parts[1];
+
+        if (Server2.emuName != null) {
+            Device device = devices.get(Server2.emuName);
+            device.setPackageName(packageName);
+            device.setBusy(true);
+            return Server2.emuName;
+        }
 
         String deviceID = getDeviceRunningPackage(packageName);
         Device device = devices.get(deviceID);
