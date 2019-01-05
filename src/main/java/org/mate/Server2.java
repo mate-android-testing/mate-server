@@ -89,9 +89,6 @@ public class Server2 {
         if (cmdStr.contains("getActivity"))
             return getActivity(cmdStr);
 
-        if (cmdStr.contains("removeCoverageData"))
-            return removeCoverageData(cmdStr);
-
         if (cmdStr.contains("storeCoverageData"))
             return storeCoverageData(cmdStr);
 
@@ -169,18 +166,12 @@ public class Server2 {
         return device.getCurrentActivity();
     }
 
-    public static String removeCoverageData(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        Device device = Device.devices.get(deviceID);
-        return device.removeCoverageData();
-    }
-
     public static String storeCoverageData(String cmdStr) {
         String parts[] = cmdStr.split(":");
         String deviceID = parts[1];
+        String chromosome = parts[2];
         Device device = Device.devices.get(deviceID);
-        return device.storeCoverageData();
+        return device.storeCoverageData(chromosome);
     }
 
 
@@ -194,7 +185,8 @@ public class Server2 {
     public static String getCoverage(String cmdStr) {
         String parts[] = cmdStr.split(":");
         String deviceID = parts[1];
+        String chromosome = parts[2];
         Device device = Device.devices.get(deviceID);
-        return device.getCoverage();
+        return device.getCoverage(chromosome);
     }
 }

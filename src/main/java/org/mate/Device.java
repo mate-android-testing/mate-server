@@ -92,24 +92,17 @@ public class Device {
         return response;
     }
 
-    public String removeCoverageData() {
-        System.out.println("Removing coverage data");
-        String cmd = "rm -r " + packageName + ".coverage";
-        List<String> response = ADB.runCommand(cmd);
-        return String.join("\n", response);
-    }
-
-    public String storeCoverageData() {
+    public String storeCoverageData(String chromosome) {
         System.out.println("Storing coverage data");
-        String cmd = "./storeCoverageData.py " + deviceID + " " + packageName;
+        String cmd = "./storeCoverageData.py " + deviceID + " " + packageName + " " + chromosome;
         List<String> response = ADB.runCommand(cmd);
         return String.join("\n", response);
     }
 
 
-    public String getCoverage() {
+    public String getCoverage(String chromosome) {
         String response="unknown";
-        String cmd = "./getCoverage.py " + packageName;
+        String cmd = "./getCoverage.py " + packageName + " " + chromosome;
         List<String> result = ADB.runCommand(cmd);
         if (result != null && result.size() > 0)
             response = result.get(result.size() - 1);
