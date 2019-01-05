@@ -92,6 +92,14 @@ public class Device {
         return response;
     }
 
+    public String stopApp() {
+        System.out.println("Stopping app");
+        String cmd = "adb shell input keyevent 3; adb shell monkey -p " + packageName + " 1";
+        List<String> response = ADB.runCommand(cmd);
+        return String.join("\n", response);
+    }
+
+
     public String getCoverage() {
         String response="unknown";
         String cmd = "./getCoverage.py " + deviceID + " " + packageName;

@@ -95,6 +95,9 @@ public class Server2 {
         if (cmdStr.contains("getActivity"))
             return getActivity(cmdStr);
 
+        if (cmdStr.contains("stopApp"))
+            return stopApp(cmdStr);
+
         if (cmdStr.contains("getActivities"))
             return getActivities(cmdStr);
 
@@ -168,6 +171,14 @@ public class Server2 {
         Device device = Device.devices.get(deviceID);
         return device.getCurrentActivity();
     }
+
+    public static String stopApp(String cmdStr) {
+        String parts[] = cmdStr.split(":");
+        String deviceID = parts[1];
+        Device device = Device.devices.get(deviceID);
+        return device.stopApp();
+    }
+
 
     public static String getActivities(String cmdStr) {
         String parts[] = cmdStr.split(":");
