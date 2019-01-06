@@ -70,7 +70,7 @@ public class Device {
             cmd = "adb -s " + deviceID +" shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
         }
 
-        if (getAPIVersion()==27 || getAPIVersion()==28){
+        if (getAPIVersion()==26 || getAPIVersion()==27 || getAPIVersion()==28){
             cmd = "adb -s " + deviceID +" shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
         }
 
