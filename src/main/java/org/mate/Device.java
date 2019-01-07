@@ -121,6 +121,17 @@ public class Device {
         return response;
     }
 
+    public String getCombinedCoverage() {
+        String response="unknown";
+        String cmd = "./getCombinedCoverage.py " + packageName;
+        List<String> result = ADB.runCommand(cmd);
+        if (result != null && result.size() > 0)
+            response = result.get(result.size() - 1);
+        System.out.println("combined coverage: " + response);
+
+        return response;
+    }
+
     public static void loadActiveDevices(){
         if (devices==null)
             devices = new Hashtable<String,Device>();

@@ -107,6 +107,9 @@ public class Server2 {
         if (cmdStr.contains("getCoverage"))
             return getCoverage(cmdStr);
 
+        if (cmdStr.contains("getCombinedCoverage"))
+            return getCombinedCoverage(cmdStr);
+
         //format commands
         if (cmdStr.contains("screenshot"))
             return ImageHandler.takeScreenshot(cmdStr);
@@ -205,5 +208,12 @@ public class Server2 {
         String chromosome = parts[2];
         Device device = Device.devices.get(deviceID);
         return device.getCoverage(chromosome);
+    }
+
+    public static String getCombinedCoverage(String cmdStr) {
+        String parts[] = cmdStr.split(":");
+        String deviceID = parts[1];
+        Device device = Device.devices.get(deviceID);
+        return device.getCombinedCoverage();
     }
 }
