@@ -92,6 +92,11 @@ public class Device {
         return response;
     }
 
+    public List<String> getSourceLines() {
+        String cmd = "./getSourceLines " + packageName;
+        return ADB.runCommand(cmd);
+    }
+
     public String storeCoverageData(String chromosome, String entity) {
         System.out.println("Storing coverage data");
         String cmd = "./storeCoverageData.py " + deviceID + " " + packageName + " " + chromosome;
@@ -117,6 +122,17 @@ public class Device {
         if (result != null && result.size() > 0)
             response = result.get(result.size() - 1);
         System.out.println("coverage: " + response);
+
+        return response;
+    }
+
+    public String getLineCoveredPercentage(String chromosome, String line) {
+        String response="unknown";
+        String cmd = "./getLineCoveredPercentage.py " + packageName + " " + chromosome + " " + line;
+        List<String> result = ADB.runCommand(cmd);
+        if (result != null && result.size() > 0)
+            response = result.get(result.size() - 1);
+        System.out.println("Line (" + line + ") covered percentage: " + response);
 
         return response;
     }

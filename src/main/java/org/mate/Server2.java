@@ -89,6 +89,9 @@ public class Server2 {
         if (cmdStr.contains("getActivity"))
             return getActivity(cmdStr);
 
+        if (cmdStr.contains("getSourceLines"))
+            return getSourceLines(cmdStr);
+
         if (cmdStr.contains("storeCoverageData"))
             return storeCoverageData(cmdStr);
 
@@ -106,6 +109,9 @@ public class Server2 {
 
         if (cmdStr.contains("getCoverage"))
             return getCoverage(cmdStr);
+
+        if (cmdStr.contains("getLineCoveredPercentage"))
+            return getLineCoveredPercentage(cmdStr);
 
         if (cmdStr.contains("getCombinedCoverage"))
             return getCombinedCoverage(cmdStr);
@@ -202,12 +208,28 @@ public class Server2 {
         return String.join("\n", device.getActivities());
     }
 
+    public static String getSourceLines(String cmdStr) {
+        String parts[] = cmdStr.split(":");
+        String deviceID = parts[1];
+        Device device = Device.devices.get(deviceID);
+        return String.join("\n", device.getSourceLines());
+    }
+
     public static String getCoverage(String cmdStr) {
         String parts[] = cmdStr.split(":");
         String deviceID = parts[1];
         String chromosome = parts[2];
         Device device = Device.devices.get(deviceID);
         return device.getCoverage(chromosome);
+    }
+
+    public static String getLineCoveredPercentage(String cmdStr) {
+        String parts[] = cmdStr.split(":");
+        String deviceID = parts[1];
+        String chromosome = parts[2];
+        String line = parts[3];
+        Device device = Device.devices.get(deviceID);
+        return device.getLineCoveredPercentage(chromosome, line);
     }
 
     public static String getCombinedCoverage(String cmdStr) {
