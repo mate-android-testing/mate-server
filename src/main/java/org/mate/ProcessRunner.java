@@ -42,7 +42,6 @@ public class ProcessRunner {
             ProcessBuilder pb = new ProcessBuilder(allCommand);
             pb.redirectErrorStream(true);
             Process p = pb.start();
-            p.waitFor();
             BufferedReader in = new BufferedReader(new InputStreamReader(p.getInputStream()));
             String _temp = null;
             List<String> line = new ArrayList<String>();

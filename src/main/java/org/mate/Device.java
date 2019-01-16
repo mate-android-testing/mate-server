@@ -93,7 +93,7 @@ public class Device {
     }
 
     public List<String> getSourceLines() {
-        String cmd = "./getSourceLines " + packageName;
+        String cmd = "./getSourceLines.py " + packageName;
         return ADB.runCommand(cmd);
     }
 
@@ -126,20 +126,14 @@ public class Device {
         return response;
     }
 
-    public String getLineCoveredPercentage(String chromosome, String line) {
-        String response="unknown";
+    public List<String> getLineCoveredPercentage(String chromosome, String line) {
         String cmd = "./getLineCoveredPercentage.py " + packageName + " " + chromosome + " " + line;
-        List<String> result = ADB.runCommand(cmd);
-        if (result != null && result.size() > 0)
-            response = result.get(result.size() - 1);
-        System.out.println("Line (" + line + ") covered percentage: " + response);
-
-        return response;
+        return ADB.runCommand(cmd);
     }
 
-    public String getCombinedCoverage() {
+    public String getCombinedCoverage(String chromosomes) {
         String response="unknown";
-        String cmd = "./getCombinedCoverage.py " + packageName;
+        String cmd = "./getCombinedCoverage.py " + packageName + " " + chromosomes;
         List<String> result = ADB.runCommand(cmd);
         if (result != null && result.size() > 0)
             response = result.get(result.size() - 1);

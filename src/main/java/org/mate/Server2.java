@@ -229,13 +229,17 @@ public class Server2 {
         String chromosome = parts[2];
         String line = parts[3];
         Device device = Device.devices.get(deviceID);
-        return device.getLineCoveredPercentage(chromosome, line);
+        return String.join("\n", device.getLineCoveredPercentage(chromosome, line));
     }
 
     public static String getCombinedCoverage(String cmdStr) {
         String parts[] = cmdStr.split(":");
         String deviceID = parts[1];
         Device device = Device.devices.get(deviceID);
-        return device.getCombinedCoverage();
+        String chromosomes = "all";
+        if (parts.length > 2) {
+            chromosomes = parts[2];
+        }
+        return device.getCombinedCoverage(chromosomes);
     }
 }
