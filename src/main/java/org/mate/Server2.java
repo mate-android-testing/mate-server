@@ -86,56 +86,59 @@ public class Server2 {
     private static String handleRequest(String cmdStr) {
         System.out.println(cmdStr);
 
-        if (cmdStr.contains("getActivity"))
+        if (cmdStr.startsWith("clearApp"))
+            return clearApp(cmdStr);
+
+        if (cmdStr.startsWith("getActivity"))
             return getActivity(cmdStr);
 
-        if (cmdStr.contains("getSourceLines"))
+        if (cmdStr.startsWith("getSourceLines"))
             return getSourceLines(cmdStr);
 
-        if (cmdStr.contains("storeCoverageData"))
+        if (cmdStr.startsWith("storeCoverageData"))
             return storeCoverageData(cmdStr);
 
-        if (cmdStr.contains("copyCoverageData"))
+        if (cmdStr.startsWith("copyCoverageData"))
             return copyCoverageData(cmdStr);
 
-        if (cmdStr.contains("getActivities"))
+        if (cmdStr.startsWith("getActivities"))
             return getActivities(cmdStr);
 
-        if (cmdStr.contains("getEmulator"))
+        if (cmdStr.startsWith("getEmulator"))
             return Device.allocateDevice(cmdStr);
 
-        if (cmdStr.contains("releaseEmulator"))
+        if (cmdStr.startsWith("releaseEmulator"))
             return Device.releaseDevice(cmdStr);
 
-        if (cmdStr.contains("getCoverage"))
+        if (cmdStr.startsWith("getCoverage"))
             return getCoverage(cmdStr);
 
-        if (cmdStr.contains("getLineCoveredPercentage"))
+        if (cmdStr.startsWith("getLineCoveredPercentage"))
             return getLineCoveredPercentage(cmdStr);
 
-        if (cmdStr.contains("getCombinedCoverage"))
+        if (cmdStr.startsWith("getCombinedCoverage"))
             return getCombinedCoverage(cmdStr);
 
         //format commands
-        if (cmdStr.contains("screenshot"))
+        if (cmdStr.startsWith("screenshot"))
             return ImageHandler.takeScreenshot(cmdStr);
 
-        if (cmdStr.contains("mark-image") && generatePDFReport)
+        if (cmdStr.startsWith("mark-image") && generatePDFReport)
             return ImageHandler.markImage(cmdStr);
 
-        if (cmdStr.contains("contrastratio"))
+        if (cmdStr.startsWith("contrastratio"))
             return ImageHandler.calculateConstratRatio(cmdStr);
 
-        if (cmdStr.contains("rm emulator"))
+        if (cmdStr.startsWith("rm emulator"))
             return "";
 
-        if (cmdStr.contains("timeout"))
+        if (cmdStr.startsWith("timeout"))
             return String.valueOf(timeout);
 
-        if (cmdStr.contains("randomlength"))
+        if (cmdStr.startsWith("randomlength"))
             return String.valueOf(length);
 
-        if (cmdStr.contains("FINISH") && generatePDFReport) {
+        if (cmdStr.startsWith("FINISH") && generatePDFReport) {
             try {
                 Report.generateReport(cmdStr);
             } catch (Exception e) {
@@ -241,5 +244,12 @@ public class Server2 {
             chromosomes = parts[2];
         }
         return device.getCombinedCoverage(chromosomes);
+    }
+
+    public static String clearApp(String cmdStr) {
+        String parts[] = cmdStr.split(":");
+        String deviceID = parts[1];
+        Device device = Device.devices.get(deviceID);
+        return device.clearApp();
     }
 }

@@ -1,6 +1,11 @@
 package org.mate;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Hashtable;
 import java.util.List;
 
@@ -97,6 +102,13 @@ public class Device {
         return ADB.runCommand(cmd);
     }
 
+    public String clearApp() {
+        String cmd = "./clearApp.py " + deviceID + " " + packageName;
+        List<String> response = ADB.runCommand(cmd);
+
+        return String.join("\n", response);
+    }
+
     public String storeCoverageData(String chromosome, String entity) {
         System.out.println("Storing coverage data");
         String cmd = "./storeCoverageData.py " + deviceID + " " + packageName + " " + chromosome;
@@ -127,8 +139,29 @@ public class Device {
     }
 
     public List<String> getLineCoveredPercentage(String chromosome, String line) {
-        String cmd = "./getLineCoveredPercentage.py " + packageName + " " + chromosome + " " + line;
-        return ADB.runCommand(cmd);
+        String cmd = "./getLineCoveredPercentage.py " + packageName + " " + chromosome;
+        try {
+            ProcessBuilder pb = new ProcessBuilder(Arrays.asList("bash", "-c", cmd));
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            BufferedWriter br = new BufferedWriter(new OutputStreamWriter(p.getOutputStream()));
+            br.write(line);
+            br.flush();
+            br.close();
+            BufferedReader in = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            String _temp;
+            List<String> result = new ArrayList<>();
+            while ((_temp = in.readLine()) != null) {
+                result.add(_temp);
+            }
+
+            System.out.println("result after command: " + result);
+            return result;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 
     public String getCombinedCoverage(String chromosomes) {
