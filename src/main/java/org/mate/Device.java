@@ -100,7 +100,13 @@ public class Device {
     }
 
     public List<String> getActivities() {
-        String cmd = "aapt dump xmltree " + packageName + ".apk AndroidManifest.xml | ./getActivityNames.py";
+        String cmd = "";
+        if (ADB.isWin) {
+            System.out.println("Running windows get source lines command!");
+            cmd = "powershell -command " + "\"aapt dump xmltree " + packageName + ".apk AndroidManifest.xml | python getActivityNames.py" + "\"";
+        } else {
+            cmd = "aapt dump xmltree " + packageName + ".apk AndroidManifest.xml | ./getActivityNames.py";
+        }
         List<String> response = ADB.runCommand(cmd);
         System.out.println("activities:");
         for (String activity : response) {
@@ -110,20 +116,37 @@ public class Device {
     }
 
     public List<String> getSourceLines() {
-        String cmd = "./getSourceLines.py " + packageName;
+        String cmd = "";
+        if (ADB.isWin) {
+            System.out.println("Running windows get source lines command!");
+            cmd = "powershell -command " + "\"python getSourceLines.py " + packageName + "\"";
+        } else {
+            cmd = "./getSourceLines.py " + packageName;
+        }
         return ADB.runCommand(cmd);
     }
 
     public String clearApp() {
-        String cmd = "./clearApp.py " + deviceID + " " + packageName;
+        String cmd = "";
+        if (ADB.isWin) {
+            System.out.println("Running windows clear app command!");
+            cmd = "powershell -command " + "\"python clearApp.py " + deviceID + " " + packageName + "\"";
+        } else {
+            cmd = "./clearApp.py " + deviceID + " " + packageName;
+        }
         List<String> response = ADB.runCommand(cmd);
-
         return String.join("\n", response);
     }
 
     public String storeCoverageData(String chromosome, String entity) {
         System.out.println("Storing coverage data");
-        String cmd = "./storeCoverageData.py " + deviceID + " " + packageName + " " + chromosome;
+        String cmd = "";
+        if (ADB.isWin) {
+            System.out.println("Running windows storing coverage command!");
+            cmd = "powershell -command " + "\"python storeCoverageData.py " + deviceID + " " + packageName + " " + chromosome + "\"";
+        } else {
+            cmd = "./storeCoverageData.py " + deviceID + " " + packageName + " " + chromosome;
+        }
         if (entity != null) {
             cmd += " " + entity;
         }
@@ -133,7 +156,14 @@ public class Device {
 
     public String copyCoverageData(String chromosome_source, String chromosome_target, String entities) {
         System.out.println("Copying coverage data");
-        String cmd = "./copyCoverageData.py " + packageName + " " + chromosome_source + " " + chromosome_target + " " + entities;
+        String cmd = "";
+        if (ADB.isWin) {
+            System.out.println("Running windows copy coverage command!");
+            cmd = "powershell -command " + "\"python copyCoverageData.py " + packageName + " " + chromosome_source
+                    + " " + chromosome_target + " " + entities + "\"";
+        } else {
+            cmd = "./copyCoverageData.py " + packageName + " " + chromosome_source + " " + chromosome_target + " " + entities;
+        }
         List<String> response = ADB.runCommand(cmd);
         return String.join("\n", response);
     }
@@ -141,7 +171,13 @@ public class Device {
 
     public String getCoverage(String chromosome) {
         String response="unknown";
-        String cmd = "./getCoverage.py " + packageName + " " + chromosome;
+        String cmd = "";
+        if (ADB.isWin) {
+            System.out.println("Running windows get coverage command!");
+            cmd = "powershell -command " + "\"python getCoverage.py " + packageName + " " + chromosome + "\"";
+        } else {
+            cmd = "./getCoverage.py " + packageName + " " + chromosome;
+        }
         List<String> result = ADB.runCommand(cmd);
         if (result != null && result.size() > 0)
             response = result.get(result.size() - 1);
@@ -151,8 +187,15 @@ public class Device {
     }
 
     public List<String> getLineCoveredPercentage(String chromosome, String line) {
-        String cmd = "./getLineCoveredPercentage.py " + packageName + " " + chromosome;
+        String cmd = "";
+        if (ADB.isWin) {
+            System.out.println("Running windows get line coverage command!");
+            cmd = "powershell -command " + "\"python getLineCoveredPercentage.py " + packageName + " " + chromosome + "\"";
+        } else {
+            cmd = "./getLineCoveredPercentage.py " + packageName + " " + chromosome;
+        }
         try {
+            // TODO: refactor and use ProcessRunner.runProces() (no Windows support yet)
             ProcessBuilder pb = new ProcessBuilder(Arrays.asList("bash", "-c", cmd));
             pb.redirectErrorStream(true);
             Process p = pb.start();
@@ -178,7 +221,13 @@ public class Device {
 
     public String getCombinedCoverage(String chromosomes) {
         String response="unknown";
-        String cmd = "./getCombinedCoverage.py " + packageName + " " + chromosomes;
+        String cmd = "";
+        if (ADB.isWin) {
+            System.out.println("Running windows get combined coverage command!");
+            cmd = "powershell -command " + "\"python getCombinedCoverage.py " + packageName + " " + chromosomes + "\"";
+        } else {
+            cmd = "./getCombinedCoverage.py " + packageName + " " + chromosomes;
+        }
         List<String> result = ADB.runCommand(cmd);
         if (result != null && result.size() > 0)
             response = result.get(result.size() - 1);
