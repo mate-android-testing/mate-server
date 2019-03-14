@@ -72,11 +72,23 @@ public class Device {
         String response="unknown";
         String cmd = "adb -s " + deviceID +" shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
         if (getAPIVersion()==23 || getAPIVersion()==25){
-            cmd = "adb -s " + deviceID +" shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
+            if (ADB.isWin) {
+                cmd = "powershell -command " + "\"$focused = adb -s " + deviceID + " shell dumpsys activity activities "
+                        + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[5]\"";
+                System.out.println(cmd);
+            } else {
+                cmd = "adb -s " + deviceID + " shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
+            }
         }
 
         if (getAPIVersion()==26 || getAPIVersion()==27 || getAPIVersion()==28){
-            cmd = "adb -s " + deviceID +" shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
+            if (ADB.isWin) {
+                cmd = "powershell -command " + "\"$focused = adb -s " + deviceID + " shell dumpsys activity activities "
+                        + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[7]\"";
+                System.out.println(cmd);
+            } else {
+                cmd = "adb -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
+            }
         }
 
         List<String> result = ADB.runCommand(cmd);
