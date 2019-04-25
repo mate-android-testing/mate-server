@@ -138,6 +138,12 @@ public class Device {
         return String.join("\n", response);
     }
 
+    public String storeCurrentTraceFile() {
+        System.out.println("Storing coverage data");
+        String cmd = "./storeCurrentTraceFile.py " + deviceID + " " + packageName;
+        return String.join("\n", ADB.runCommand(cmd));
+    }
+
     public String storeCoverageData(String chromosome, String entity) {
         System.out.println("Storing coverage data");
         String cmd = "";

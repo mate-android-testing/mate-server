@@ -95,6 +95,9 @@ public class Server2 {
         if (cmdStr.startsWith("getSourceLines"))
             return getSourceLines(cmdStr);
 
+        if (cmdStr.startsWith("storeCurrentTraceFile"))
+            return storeCurrentTraceFile(cmdStr);
+
         if (cmdStr.startsWith("storeCoverageData"))
             return storeCoverageData(cmdStr);
 
@@ -179,6 +182,13 @@ public class Server2 {
         String deviceID = parts[1];
         Device device = Device.devices.get(deviceID);
         return device.getCurrentActivity();
+    }
+
+    public static String storeCurrentTraceFile(String cmdStr) {
+        String parts[] = cmdStr.split(":");
+        String deviceID = parts[1];
+        Device device = Device.devices.get(deviceID);
+        return device.storeCurrentTraceFile();
     }
 
     public static String storeCoverageData(String cmdStr) {
