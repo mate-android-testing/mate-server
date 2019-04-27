@@ -81,10 +81,29 @@ public class Device {
             }
         }
 
-        if (getAPIVersion()==26 || getAPIVersion()==27 || getAPIVersion()==28){
+        if (getAPIVersion()==26 || getAPIVersion()==27){
             if (ADB.isWin) {
                 cmd = "powershell -command " + "\"$focused = adb -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[7]\"";
+                System.out.println(cmd);
+            } else {
+                cmd = "adb -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
+            }
+        }
+
+        /*
+        * 27.04.2019
+        *
+        * The record 'mFocusedActivity' is not available anymore under Windows for API Level 28 (tested on Nexus5 and PixelC),
+        * although it is available still under Linux (tested on Nexus5), which is somewhat strange.
+        * Instead, we need to search for the 'realActivity' record, pick the second one (seems to be the current active Activity)
+        * and split on '='.
+         */
+        if (getAPIVersion() == 28) {
+            if (ADB.isWin) {
+                cmd = "powershell -command " + "\"$activity = adb -s " + deviceID + " shell dumpsys activity activities "
+                       + "| select-string \"realActivity\" ; $focused = $activity[1] ; $final = $focused -split '=' ; echo $final[1]\"";
+                        // Alternatively use: "$focused.Line.split(=)[1] \"";
                 System.out.println(cmd);
             } else {
                 cmd = "adb -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
@@ -139,8 +158,13 @@ public class Device {
     }
 
     public String storeCurrentTraceFile() {
-        System.out.println("Storing coverage data");
-        String cmd = "./storeCurrentTraceFile.py " + deviceID + " " + packageName;
+        System.out.println("Storing current Trace file!");
+        String cmd = "";
+        if (ADB.isWin) {
+            cmd = "powershell -command " + "\"python storeCurrentTraceFile.py" + " " + deviceID + " " + packageName + "\"";
+        } else {
+            cmd = "./storeCurrentTraceFile.py " + deviceID + " " + packageName;
+        }
         return String.join("\n", ADB.runCommand(cmd));
     }
 
