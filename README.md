@@ -1,6 +1,6 @@
 # MATE-Server
 The MATE-Server is part of the MATE project for automated Android testing. The server
-runs on the host machine and is responsible for some analysis that can not be performed
+runs on the host machine and is responsible for some functionality that can not be performed
 from within the instrumentation tests.
 
 ## How to run the MATE-Server
@@ -23,13 +23,19 @@ PATH=~/Android/Sdk/platform-tools:$PATH
 
 You will need to log out and log back in again in order for the changes to take place.
 
+### Scripts and Jacoco
+Currently MATE-Server some functionality (mostly coverage related) depends on the python scripts
+that are located in the `scripts` subdirectory. Therefore a working Python 3 installation is
+needed. Furthermore the python scripts need to be placed in the working of MATE-Server. For the
+coverage calculation the jacococli is also needed in the working directory of MATE-Server with
+the following path: `bin/jacococli.jar`.
 
 ### Installing and running MATE
 
 #### a) IntelliJ IDEA (for Developers)
 
 Open IntelliJ. Select "Check out project from Version Control" and click through the wizard
-(use git with url https://gitlab.infosun.fim.uni-passau.de/fraser/mate-server.git). When asked
+(use git with url https://github.com/mate-android-testing/mate-server.git). When asked
 if you would like to open settings.gradle say yes. Traverse the project directory to
 `src->main->java->org.mate` right click Server2 and click on `Run 'Server2.main()'`.
 
@@ -38,7 +44,7 @@ if you would like to open settings.gradle say yes. Traverse the project director
 Clone the git repository
 
 ```
-git clone https://gitlab.infosun.fim.uni-passau.de/fraser/mate-server.git
+git clone https://github.com/mate-android-testing/mate-server.git
 ```
 
 Navigate to the project folder
