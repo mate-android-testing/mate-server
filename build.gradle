@@ -41,6 +41,13 @@ repositories {
 
 dependencies {
     compile fileTree(dir: 'lib', include: ['*.jar'])
+    testImplementation 'junit:junit:4.12'
+}
+
+test {
+    useJUnit()
+
+    maxHeapSize = '1G'
 }
 
 spotbugs {
