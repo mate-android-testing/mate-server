@@ -3,15 +3,14 @@ package org.mate;
 import com.itextpdf.text.*;
 import com.itextpdf.text.pdf.PdfWriter;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.FileReader;
+import java.io.*;
 
 /**
  * Created by marceloeler on 14/09/18.
  */
 public class Report {
+    public static String reportDir;
+
     public static void generateReport(String cmdStr) throws Exception{
 
         System.out.println(cmdStr);
@@ -32,7 +31,6 @@ public class Report {
 
             document.add(chunk);
 
-
             document.add(new Paragraph(""));
 
             Image img = Image.getInstance(readLine.split(",")[0]);
@@ -45,5 +43,92 @@ public class Report {
 
 
         document.close();
+    }
+
+    public static String addFlaw(String cmdStr){
+
+        System.out.println ("add flaw::");
+
+        String parts[] = cmdStr.split(":");
+        String deviceID = parts[1];
+        String packageName = parts[2];
+        String activityName = parts[3];
+        String screenId = parts[4];
+        String flawType = parts[5];
+        String widgetType = parts[6];
+        String widgetId = parts[7];
+        String widgetText = parts[8];
+        String extraInfo = parts[9];
+        String x1 = parts[10];
+        String y1 = parts[11];
+        String x2 = parts[12];
+        String y2 = parts[13];
+
+        Device device = Device.getDevice(deviceID);
+
+        String flawDetails = "";
+        flawDetails += packageName+",";
+        flawDetails += activityName+",";
+        flawDetails += screenId+",";
+        flawDetails += flawType+",";
+        flawDetails += widgetType+",";
+        flawDetails += widgetId+",";
+        flawDetails += widgetText+",";
+        flawDetails += extraInfo+",";
+        flawDetails += x1+",";
+        flawDetails += y1+",";
+        flawDetails += x2+",";
+        flawDetails += y2+",";
+
+
+        flawDetails += device.getCurrentScreenShotLocation()+",";
+
+
+        int ix1 = Integer.valueOf(x1);
+        int ix2 = Integer.valueOf(x2);
+        int iy1 = Integer.valueOf(y1);
+        int iy2 = Integer.valueOf(y2);
+
+
+        String newImagePath = ImageHandler.markImage(device.getCurrentScreenShotLocation(),ix1,iy1,ix2,iy2);
+
+        flawDetails +=newImagePath;
+
+        String reportFile = reportDir+deviceID+"-"+packageName+".csv";
+
+
+        FileWriter fw = null;
+        try {
+            fw = new FileWriter(reportFile, true);
+            BufferedWriter bw = new BufferedWriter(fw);
+            PrintWriter out = new PrintWriter(bw);
+            out.println(flawDetails);
+            out.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return "ok";
+    }
+
+    public static void createHeader(String deviceID,String packageName) {
+
+        String reportFile = reportDir+deviceID+"-"+packageName+".csv";
+        File tempFile = new File( reportFile);
+        boolean exists = tempFile.exists();
+        if (exists)
+            return;
+
+
+        FileWriter fw = null;
+        try {
+            fw = new FileWriter(reportFile, true);
+            BufferedWriter bw = new BufferedWriter(fw);
+            PrintWriter out = new PrintWriter(bw);
+            out.println("App,activity,screen,flaw,widget_type,widget_id,widget_text,extra-info,x1,y1,x2,y2,imgpath,marked_imgpath");
+            out.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
