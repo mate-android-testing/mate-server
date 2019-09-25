@@ -20,12 +20,21 @@ public class Device {
     private String packageName;
     private boolean busy;
     private int APIVersion;
+    private String currentScreenShotLocation;
 
     public Device(String deviceID){
         this.deviceID = deviceID;
         this.packageName = "";
         this.busy = false;
         APIVersion = this.getAPIVersionFromADB();
+    }
+
+    public String getCurrentScreenShotLocation(){
+        return currentScreenShotLocation;
+    }
+
+    public void setCurrentScreenShotLocation(String currentScreenShotLocation){
+        this.currentScreenShotLocation = currentScreenShotLocation;
     }
 
     public String getDeviceID() {
@@ -330,6 +339,10 @@ public class Device {
                 response="";
         }*/
         //response = "4f60d1bb";
+
+        Report.createHeader(deviceID,packageName);
+        ImageHandler.createPicturesFolder(deviceID,packageName);
+
         return deviceID;
     }
 
@@ -362,4 +375,10 @@ public class Device {
         }
         return response;
     }
+
+    public static Device getDevice(String deviceId){
+        return devices.get(deviceId);
+    }
+
+
 }

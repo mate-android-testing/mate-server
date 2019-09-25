@@ -16,20 +16,50 @@ public class ImageHandler {
 
     public static String screenShotDir;
 
+    public static int contImg = 0;
+
     public static String takeScreenshot(String cmdStr) {
+
+        String targetFolder = screenShotDir + cmdStr.split("_")[1];
+        System.out.println("target folder: " + targetFolder);
+
         String[] parts = cmdStr.split(":");
         String emulator = parts[1];
-
-        int index = parts[2].lastIndexOf("_");
-        //String packageName = parts[1].substring(0,index-1);
-        cmdStr = "adb -s " + emulator+" shell screencap -p /sdcard/" + parts[2] + " && adb -s "+ parts[1] + " pull /sdcard/" + parts[2];
         String imgPath = parts[2];
+        int index = imgPath.lastIndexOf("_");
+        //String packageName = parts[1].substring(0,index-1);
+        cmdStr = "adb -s " + emulator+" shell screencap -p /sdcard/" + imgPath + " && adb -s "+ emulator + " pull /sdcard/" + parts[2] + " " + targetFolder;
+
         System.out.println(cmdStr);
         ADB.runCommand(cmdStr);
+
+        Device device = Device.getDevice(emulator);
+        device.setCurrentScreenShotLocation(targetFolder+"/"+imgPath);
 
         return imgPath;
     }
 
+    public static String markImage(String originalImgPath,int x1, int y1, int x2, int y2) {
+
+        System.out.println("MARK IMAGE");
+        contImg++;
+        String newImagePath = originalImgPath.replace(".png","_"+contImg+".png");
+
+        try {
+
+            BufferedImage img = ImageIO.read(new File(originalImgPath));
+            Graphics2D g2d = img.createGraphics();
+            g2d.setColor(Color.RED);
+            g2d.setStroke(new BasicStroke(5));
+            g2d.drawRect(x1, y1, x2-x1, y2-y1);
+            ImageIO.write(img, "PNG", new File(newImagePath));
+            g2d.dispose();
+        }catch (Exception e){
+            System.out.println("EXCEPTION --->" + e.getMessage());
+        }
+
+        return newImagePath;
+    }
 
     public static String markImage(String cmdStr) {
 
@@ -75,11 +105,18 @@ public class ImageHandler {
 
         String response = "21";
         try {
+
+
             System.out.println(cmdStr);
             String[] parts = cmdStr.split(":");
             String packageName = parts[1];
+
+            String targetFolder = screenShotDir+packageName.split("_")[1];
+
             String stateId = parts[2];
             String coord = parts[3];
+
+
 
             String[] positions = coord.split(",");
             int x1 = Integer.valueOf(positions[0]);
@@ -87,7 +124,7 @@ public class ImageHandler {
             int x2 = Integer.valueOf(positions[2]);
             int y2 = Integer.valueOf(positions[3]);
 
-            String fileName = screenShotDir + packageName + "_" + stateId + ".png";
+            String fileName = targetFolder+ "/"+packageName + "_" + stateId + ".png";
             System.out.println(fileName);
             System.out.println(coord);
             double contrastRatio = AccessibilityUtils.getContrastRatio(fileName, x1, y1, x2, y2);
@@ -98,5 +135,13 @@ public class ImageHandler {
             response = "21";
         }
         return response;
+    }
+
+    public static void createPicturesFolder(String deviceID, String packageName) {
+        try {
+            new File(screenShotDir+packageName).mkdir();
+        } catch(Exception e){
+        }
+
     }
 }

@@ -27,6 +27,8 @@ public class Server2 {
 
     public static void main(String[] args) throws DocumentException {
 
+        createFolders();
+
         showImagesOnTheFly = true;
 
         //Check OS (windows or linux)
@@ -38,7 +40,7 @@ public class Server2 {
         ADB.isWin = isWin;
 
         //read arguments and set default values otherwise
-        timeout = 1;
+        timeout = 5;
         length = 1000;
         port = 12345;
         if (args.length > 0) {
@@ -53,7 +55,7 @@ public class Server2 {
         if (args.length > 3) {
             emuName = args[3];
         }
-        ImageHandler.screenShotDir = "";
+
 
         //ProcessRunner.runProcess(isWin, "rm *.png");
         try {
@@ -88,8 +90,31 @@ public class Server2 {
         }
     }
 
+    private static void createFolders() {
+        String workingDir = System.getProperty("user.dir");
+        System.out.println(workingDir);
+        try {
+            new File(workingDir+"/csvs").mkdir();
+        } catch(Exception e){
+
+        }
+
+        try {
+            new File(workingDir+"/pictures").mkdir();
+        } catch(Exception e){
+        }
+
+        ImageHandler.screenShotDir = workingDir+"/pictures/";
+        Report.reportDir = workingDir+"/csvs/";
+    }
+
     private static String handleRequest(String cmdStr) {
+        System.out.println();
         System.out.println(cmdStr);
+
+        if (cmdStr.startsWith("reportFlaw")){
+            return Report.addFlaw(cmdStr);
+        }
 
         if (cmdStr.startsWith("clearApp"))
             return clearApp(cmdStr);
@@ -156,6 +181,13 @@ public class Server2 {
             }
             return "Finished PDF report";
         }
+
+        if (cmdStr.startsWith("reportAccFlaw")){
+
+            return "ok";
+        }
+
+
 
         List<String> result = ADB.runCommand(cmdStr);
         String response = "";

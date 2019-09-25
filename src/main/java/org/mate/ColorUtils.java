@@ -83,10 +83,15 @@ public class ColorUtils {
             int ycolor = y1;
             for (int y=0; y<y2-y1; y++){
                 ycolor = y1+y;
+                //if (y1==63)
+                  //  System.out.println();
                 for (int x=0; x<x2-x1; x++){
                     xcolor = x1+x;
                     int grayValue = fb.getGray(y,x);
                     int rgbColor = image.getRGB(xcolor,ycolor);
+                    //if (y1==63){
+                      //  System.out.print(rgbColor+ " ");
+                    //}
                     if (grayValue < o){
                         if (freqLow.get(rgbColor)==null){
                             freqLow.put(rgbColor,1);
@@ -114,6 +119,9 @@ public class ColorUtils {
             ex.printStackTrace();
         }
 
+        if (freqHigh.size()==0 || freqLow.size()==0)
+            return 0;
+
         int maxHigh = 0;
         int colorHigh = 0;
 
@@ -135,6 +143,11 @@ public class ColorUtils {
                 colorLow = key;
             }
         }
+
+       // if (y1==63) {
+         //   System.out.println(maxHigh);
+           // System.out.println(maxLow);
+        //}
 
         Color cHigh = new Color(colorHigh);
         Color cLow = new Color(colorLow);
