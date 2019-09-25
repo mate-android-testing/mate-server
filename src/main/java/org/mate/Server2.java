@@ -1,6 +1,8 @@
 package org.mate;
 
 import com.itextpdf.text.*;
+import de.uni_passau.fim.auermich.Main;
+import de.uni_passau.fim.auermich.graphs.cfg.BaseCFG;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -19,6 +21,9 @@ public class Server2 {
     public static long length;
     public static String emuName;
     public static int port;
+
+    // graph instance needed for branch distance computation
+    public static BaseCFG interCFG = null;
 
     public static void main(String[] args) throws DocumentException {
 
@@ -122,6 +127,8 @@ public class Server2 {
         if (cmdStr.startsWith("getCombinedCoverage"))
             return getCombinedCoverage(cmdStr);
 
+        if (cmdStr.startsWith("initCFG"))
+            return initCFG(cmdStr);
         //format commands
         if (cmdStr.startsWith("screenshot"))
             return ImageHandler.takeScreenshot(cmdStr);
@@ -175,6 +182,15 @@ public class Server2 {
         }
 
         return response;
+    }
+
+    public static String initCFG(String cmdStr) {
+        try {
+            interCFG = Main.computeInterCFGWithBasicBlocks(cmdStr);
+        } catch (IOException e) {
+            return "failure";
+        }
+        return "success";
     }
 
     public static String getActivity(String cmdStr) {
