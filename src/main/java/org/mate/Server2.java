@@ -2,7 +2,10 @@ package org.mate;
 
 import com.itextpdf.text.*;
 import de.uni_passau.fim.auermich.Main;
+import de.uni_passau.fim.auermich.graphs.Vertex;
 import de.uni_passau.fim.auermich.graphs.cfg.BaseCFG;
+import de.uni_passau.fim.auermich.statement.BasicStatement;
+import de.uni_passau.fim.auermich.statement.BlockStatement;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -92,7 +95,7 @@ public class Server2 {
 
     private static void createFolders() {
         String workingDir = System.getProperty("user.dir");
-        System.out.println(workingDir);
+        // System.out.println(workingDir);
         try {
             new File(workingDir+"/csvs").mkdir();
         } catch(Exception e){
@@ -154,6 +157,10 @@ public class Server2 {
 
         if (cmdStr.startsWith("initCFG"))
             return initCFG(cmdStr);
+
+        if (cmdStr.startsWith("getBranches"))
+            return getBranches(cmdStr);
+
         //format commands
         if (cmdStr.startsWith("screenshot"))
             return ImageHandler.takeScreenshot(cmdStr);
@@ -216,13 +223,45 @@ public class Server2 {
         return response;
     }
 
-    public static String initCFG(String cmdStr) {
-        try {
-            interCFG = Main.computeInterCFGWithBasicBlocks(cmdStr);
-        } catch (IOException e) {
-            return "failure";
+    public static String getBranches(String cmdStr) {
+
+        List<String> branchIDs = new LinkedList<>();
+
+        if (interCFG != null) {
+
+            List<Vertex> branches = interCFG.getBranches();
+
+            for (Vertex branch : branches) {
+                Integer branchID = null;
+                if (branch.getStatement() instanceof BasicStatement) {
+                    branchID = ((BasicStatement) branch.getStatement()).getInstructionIndex();
+                } else if (branch.getStatement() instanceof BlockStatement) {
+                    branchID = ((BasicStatement) ((BlockStatement) branch.getStatement()).getFirstStatement()).getInstructionIndex();
+                }
+
+                if (branchID != null) {
+                    branchIDs.add(branch.getMethod() + "->" + branchID);
+                }
+            }
         }
-        return "success";
+        return String.join("\n", branchIDs);
+    }
+
+    public static String initCFG(String cmdStr) {
+
+        // limit is required to avoid splitting a Windows path
+        String[] parts = cmdStr.split(":", 2);
+        String apkPath = parts[1];
+
+        System.out.print("APK path: " + apkPath);
+
+        try {
+            interCFG = Main.computeInterCFGWithBasicBlocks(apkPath);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "false";
+        }
+        return "true";
     }
 
     public static String getActivity(String cmdStr) {
