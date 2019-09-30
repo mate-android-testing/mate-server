@@ -76,6 +76,37 @@ public class Device {
         return 23;
     }
 
+    public boolean pullTraceFile() {
+
+        // check whether traces.txt file exists on emulator
+        String checkFileCmd = "adb -s " + deviceID + " shell " + "\"run-as " + packageName + " ls\"";
+        List<String> files = ADB.runCommand(checkFileCmd);
+        System.out.println("Files: " + files);
+
+        if (!files.stream().anyMatch(str -> str.trim().equals("traces.txt"))) {
+            return false;
+        }
+
+        // use the working directory (MATE-COMMANDER HOME) as output directory for trace file
+        String workingDir = System.getProperty("user.dir");
+
+        String cmd = "adb -s " + deviceID + " shell " + "\"run-as " + packageName + " cat ";
+
+        if (ADB.isWin) {
+            // no leading slash on windows (seems to be not really dependent on OS, may on emulator version)
+            cmd += "/data/data/" + packageName + "/traces.txt\" > " + "\"" + workingDir + "\\traces.txt\"";
+        } else {
+            cmd += "/data/data/" + packageName + "/traces.txt\" > " + "\"" + workingDir + "/traces.txt\"";
+        }
+
+        System.out.println("Pull-Command: " + cmd);
+
+        List<String> result = ADB.runCommand(cmd);
+
+        // expect empty response in case of success
+        return result.size() == 0;
+    }
+
     public String getCurrentActivity(){
 
         String response="unknown";

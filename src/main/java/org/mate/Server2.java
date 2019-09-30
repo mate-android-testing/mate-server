@@ -10,8 +10,12 @@ import de.uni_passau.fim.auermich.statement.BlockStatement;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Created by marceloeler on 14/03/17.
@@ -161,6 +165,9 @@ public class Server2 {
         if (cmdStr.startsWith("getBranches"))
             return getBranches(cmdStr);
 
+        if (cmdStr.startsWith("getBranchDistanceVector"))
+            return getBranchDistanceVector(cmdStr);
+
         //format commands
         if (cmdStr.startsWith("screenshot"))
             return ImageHandler.takeScreenshot(cmdStr);
@@ -223,6 +230,13 @@ public class Server2 {
         return response;
     }
 
+    /**
+     * Returns the list of branches contained in the CFG,
+     * where each branch is composed of class->method->branchID.
+     *
+     * @param cmdStr The command string.
+     * @return Returns the string representation of the branches.
+     */
     public static String getBranches(String cmdStr) {
 
         List<String> branchIDs = new LinkedList<>();
@@ -247,6 +261,125 @@ public class Server2 {
         return String.join("\n", branchIDs);
     }
 
+    /**
+     * Computes the branch distance vector for a given test case
+     * and a given list of branches.
+     *
+     * @param cmdStr The command string containing a test case
+     *               and the list of branches.
+     * @return Returns the branch distance vector.
+     */
+    public static String getBranchDistanceVector(String cmdStr) {
+
+        String parts[] = cmdStr.split(":");
+        String deviceID = parts[1];
+        String chromosome = parts[2];
+        // String branches = parts[3];
+
+        String tracesDir = System.getProperty("user.dir");
+        File traces = new File(tracesDir, "traces.txt");
+
+        Device device = Device.devices.get(deviceID);
+
+        if (!device.pullTraceFile() || !traces.exists()) {
+            // traces.txt was not accessible/found on emulator
+            System.out.println("Couldn't find traces.txt!");
+            return null;
+            /*
+            List<String> maxDistanceVector
+                    = Collections.nCopies(interCFG.getBranches().size(), "0");
+            return String.join("\n", maxDistanceVector);
+            */
+        }
+
+        List<String> executionPath = new ArrayList<>();
+
+        try (Stream<String> stream = Files.lines(traces.toPath(), StandardCharsets.UTF_8)) {
+            executionPath = stream.collect(Collectors.toList());
+        }
+        catch (IOException e) {
+            System.out.println("Reading traces.txt failed!");
+            e.printStackTrace();
+            return null;
+        }
+
+        // remove first line, since it contains some time stamp information
+        executionPath.remove(0);
+
+        System.out.println("Visited Vertices: " + executionPath);
+
+        // we need to mark vertices we visit
+        List<Vertex> visitedVertices = new ArrayList<>();
+
+        // look up each pathNode (vertex) in the CFG
+        for (String pathNode : executionPath) {
+
+            // get full-qualified method name + type (entry,exit,instructionID)
+            int index = pathNode.lastIndexOf("->");
+            String method = pathNode.substring(0, index);
+            String type = pathNode.substring(index+2);
+
+            System.out.println("PathNode: " + pathNode);
+
+            if (type.equals("entry")) {
+                Vertex entry = interCFG.getVertices().stream().filter(v -> v.isEntryVertex()
+                        && v.getMethod().equals(method)).findFirst().get();
+                visitedVertices.add(entry);
+            } else if (type.equals("exit")) {
+                Vertex exit = interCFG.getVertices().stream().filter(v -> v.isExitVertex()
+                        && v.getMethod().equals(method)).findFirst().get();
+                visitedVertices.add(exit);
+            } else {
+                // must be the instruction id of a branch
+                int id = Integer.parseInt(type);
+                Vertex branch = interCFG.getVertices().stream().filter(v ->
+                        v.containsInstruction(method,id)).findFirst().get();
+                visitedVertices.add(branch);
+            }
+        }
+
+        // evaluate against all branches
+        List<Vertex> branches = interCFG.getBranches();
+
+        // stores the fitness value for a given test case (execution path) evaluated against each branch
+        List<String> branchDistanceVector = new LinkedList<>();
+
+        for (Vertex branch : branches) {
+
+            // the minimal distance between a execution path and a given branch
+            int min = Integer.MAX_VALUE;
+
+            // the execution path (visited vertices) represent a single test case
+            for (Vertex visitedVertex : visitedVertices) {
+                // find the shortest distance between a branch and the execution path
+                int distance = interCFG.getShortestDistance(visitedVertex, branch);
+                System.out.println("Distance: " + distance);
+                if (distance < min && distance != -1) {
+                    // found shorter path
+                    min = distance;
+                }
+            }
+
+            // we need to normalise approach level / branch distance to the range [0,1] where 1 is best
+            if (min == Integer.MAX_VALUE) {
+                // branch not reachable by execution path
+                branchDistanceVector.add(String.valueOf(0));
+            } else {
+                branchDistanceVector.add(String.valueOf(1 - ((double) min / (min + 1))));
+            }
+        }
+
+        System.out.println("Branch Distance Vector: " + branchDistanceVector);
+        return String.join("\n", branchDistanceVector);
+    }
+
+    /**
+     * Initialises the CFG based on given APK file.
+     *
+     * @param cmdStr The command string containing the APK path.
+     * @return Returns the string {@code true} if the CFG
+     *      has been initialised successfully, otherwise {@code false}.
+     */
     public static String initCFG(String cmdStr) {
 
         // limit is required to avoid splitting a Windows path
