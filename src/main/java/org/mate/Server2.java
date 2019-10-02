@@ -6,6 +6,7 @@ import de.uni_passau.fim.auermich.graphs.Vertex;
 import de.uni_passau.fim.auermich.graphs.cfg.BaseCFG;
 import de.uni_passau.fim.auermich.statement.BasicStatement;
 import de.uni_passau.fim.auermich.statement.BlockStatement;
+import org.mate.graphs.CFG;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -30,7 +31,7 @@ public class Server2 {
     public static int port;
 
     // graph instance needed for branch distance computation
-    public static BaseCFG interCFG = null;
+    public static CFG graph = null;
 
     public static void main(String[] args) throws DocumentException {
 
@@ -162,6 +163,9 @@ public class Server2 {
         if (cmdStr.startsWith("initCFG"))
             return initCFG(cmdStr);
 
+        if (cmdStr.startsWith("getBranchCoverage"))
+            return getBranchCoverage(cmdStr);
+
         if (cmdStr.startsWith("getBranches"))
             return getBranches(cmdStr);
 
@@ -241,9 +245,9 @@ public class Server2 {
 
         List<String> branchIDs = new LinkedList<>();
 
-        if (interCFG != null) {
+        if (graph != null) {
 
-            List<Vertex> branches = interCFG.getBranches();
+            List<Vertex> branches = graph.getBranches();
 
             for (Vertex branch : branches) {
                 Integer branchID = null;
@@ -262,19 +266,40 @@ public class Server2 {
     }
 
     /**
+     * Returns the branch coverage either for a given test case,
+     * or if no test case is specified in the command string, the
+     * global branch coverage is returned.
+     *
+     * @param cmdStr The command string specifying the branch coverage
+     *               either for a single test case, or the global one.
+     * @return Returns the branch coverage.
+     */
+    public static String getBranchCoverage(String cmdStr) {
+
+        double branchCoverage;
+
+        if (cmdStr.contains(":")) {
+            String testCase = cmdStr.split(":", 2)[1];
+            branchCoverage = graph.getBranchCoverage(testCase);
+        } else {
+            branchCoverage = graph.getBranchCoverage();
+        }
+
+        return String.valueOf(branchCoverage);
+    }
+
+    /**
      * Computes the branch distance vector for a given test case
      * and a given list of branches.
      *
-     * @param cmdStr The command string containing a test case
-     *               and the list of branches.
+     * @param cmdStr The command string containing a test case.
      * @return Returns the branch distance vector.
      */
     public static String getBranchDistanceVector(String cmdStr) {
 
         String parts[] = cmdStr.split(":");
         String deviceID = parts[1];
-        String chromosome = parts[2];
-        // String branches = parts[3];
+        String testCase = parts[2];
 
         String tracesDir = System.getProperty("user.dir");
         File traces = new File(tracesDir, "traces.txt");
@@ -309,7 +334,12 @@ public class Server2 {
         System.out.println("Visited Vertices: " + executionPath);
 
         // we need to mark vertices we visit
-        List<Vertex> visitedVertices = new ArrayList<>();
+        Set<Vertex> visitedVertices = new HashSet<>();
+
+        // we need to track covered branch vertices for branch coverage
+        Set<Vertex> coveredBranches = new HashSet<>();
+
+        Set<Vertex> vertices = graph.getVertices();
 
         // look up each pathNode (vertex) in the CFG
         for (String pathNode : executionPath) {
@@ -322,24 +352,29 @@ public class Server2 {
             System.out.println("PathNode: " + pathNode);
 
             if (type.equals("entry")) {
-                Vertex entry = interCFG.getVertices().stream().filter(v -> v.isEntryVertex()
+                Vertex entry = vertices.stream().filter(v -> v.isEntryVertex()
                         && v.getMethod().equals(method)).findFirst().get();
                 visitedVertices.add(entry);
             } else if (type.equals("exit")) {
-                Vertex exit = interCFG.getVertices().stream().filter(v -> v.isExitVertex()
+                Vertex exit = vertices.stream().filter(v -> v.isExitVertex()
                         && v.getMethod().equals(method)).findFirst().get();
                 visitedVertices.add(exit);
             } else {
                 // must be the instruction id of a branch
                 int id = Integer.parseInt(type);
-                Vertex branch = interCFG.getVertices().stream().filter(v ->
+                Vertex branch = vertices.stream().filter(v ->
                         v.containsInstruction(method,id)).findFirst().get();
                 visitedVertices.add(branch);
+                coveredBranches.add(branch);
             }
         }
 
         // evaluate against all branches
-        List<Vertex> branches = interCFG.getBranches();
+        List<Vertex> branches = graph.getBranches();
+
+        // track covered branches for coverage measurement
+        graph.addCoveredBranches(coveredBranches);
+        graph.addCoveredBranches(testCase, coveredBranches);
 
         // stores the fitness value for a given test case (execution path) evaluated against each branch
         List<String> branchDistanceVector = new LinkedList<>();
@@ -352,7 +387,7 @@ public class Server2 {
             // the execution path (visited vertices) represent a single test case
             for (Vertex visitedVertex : visitedVertices) {
                 // find the shortest distance between a branch and the execution path
-                int distance = interCFG.getShortestDistance(visitedVertex, branch);
+                int distance = graph.getShortestDistance(visitedVertex, branch);
                 System.out.println("Distance: " + distance);
                 if (distance < min && distance != -1) {
                     // found shorter path
@@ -389,7 +424,7 @@ public class Server2 {
         System.out.print("APK path: " + apkPath);
 
         try {
-            interCFG = Main.computeInterCFGWithBasicBlocks(apkPath);
+            graph = new CFG(Main.computeInterCFGWithBasicBlocks(apkPath));
         } catch (IOException e) {
             e.printStackTrace();
             return "false";
