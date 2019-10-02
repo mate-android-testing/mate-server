@@ -13,6 +13,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.time.Instant;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -160,6 +161,9 @@ public class Server2 {
         if (cmdStr.startsWith("getCombinedCoverage"))
             return getCombinedCoverage(cmdStr);
 
+        if (cmdStr.startsWith("storeBranchCoverage"))
+            return storeBranchCoverage(cmdStr);
+
         if (cmdStr.startsWith("initCFG"))
             return initCFG(cmdStr);
 
@@ -263,6 +267,44 @@ public class Server2 {
             }
         }
         return String.join("\n", branchIDs);
+    }
+
+    public static String storeBranchCoverage(String cmdStr) {
+
+        int lastDelimiter = cmdStr.lastIndexOf(':');
+        String deviceID = cmdStr.substring(lastDelimiter + 1);
+        String branchCoverage = getBranchCoverage(cmdStr.substring(0,lastDelimiter));
+        String packageName = Device.getDevice(deviceID).getPackageName();
+
+        // name of chromosome or 'total'
+        String fileName = "total";
+
+        if (cmdStr.chars().filter(ch -> ch == ':').count() > 1) {
+            // the chromosome name
+            fileName = cmdStr.split(":")[1];
+        }
+
+        // add timestamp to name
+        fileName += Instant.now();
+        // remove unallowed characters from file name
+        fileName = fileName.replaceAll(":", "-");
+
+        String workingDir = System.getProperty("user.dir");
+        File dir = new File(workingDir, packageName + ".coverage");
+
+        // create coverage directory
+        if (!dir.exists()) {
+            dir.mkdir();
+        }
+
+        File file = new File(dir, fileName);
+        try {
+            Files.write(file.toPath(), branchCoverage.getBytes());
+        } catch (IOException e) {
+            System.err.println("Couldn't write branch coverage information!");
+            e.printStackTrace();
+        }
+        return "";
     }
 
     /**
