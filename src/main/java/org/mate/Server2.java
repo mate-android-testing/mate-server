@@ -176,7 +176,10 @@ public class Server2 {
         if (cmdStr.startsWith("getBranchDistanceVector"))
             return getBranchDistanceVector(cmdStr);
 
-        //format commands
+        if (cmdStr.startsWith("getBranchDistance"))
+            return getBranchDistance(cmdStr);
+
+            //format commands
         if (cmdStr.startsWith("screenshot"))
             return ImageHandler.takeScreenshot(cmdStr);
 
@@ -331,6 +334,120 @@ public class Server2 {
     }
 
     /**
+     * Returns the branch distance for a given test case evaluated
+     * against a pre-defined target vertex. That is, we evaluate
+     * a given execution path (sequence of vertices) against a single
+     * pre-defined target vertex.
+     *
+     * @param cmdStr The command string specifying the test case.
+     * @return Returns the branch distance for a given test case.
+     */
+    public static String getBranchDistance(String cmdStr) {
+
+        String parts[] = cmdStr.split(":");
+        String deviceID = parts[1];
+        String testCase = parts[2];
+
+        String tracesDir = System.getProperty("user.dir");
+        File traces = new File(tracesDir, "traces.txt");
+
+        Device device = Device.devices.get(deviceID);
+
+        if (!device.pullTraceFile() || !traces.exists()) {
+            // traces.txt was not accessible/found on emulator
+            System.out.println("Couldn't find traces.txt!");
+            return null;
+        }
+
+        List<String> executionPath = new ArrayList<>();
+
+        try (Stream<String> stream = Files.lines(traces.toPath(), StandardCharsets.UTF_8)) {
+            executionPath = stream.collect(Collectors.toList());
+        }
+        catch (IOException e) {
+            System.out.println("Reading traces.txt failed!");
+            e.printStackTrace();
+            return null;
+        }
+
+        // remove first line, since it contains some time stamp information
+        executionPath.remove(0);
+
+        System.out.println("Visited Vertices: " + executionPath);
+
+        // we need to mark vertices we visit
+        Set<Vertex> visitedVertices = new HashSet<>();
+
+        // we need to track covered branch vertices for branch coverage
+        Set<Vertex> coveredBranches = new HashSet<>();
+
+        Set<Vertex> vertices = graph.getVertices();
+
+        // look up each pathNode (vertex) in the CFG
+        for (String pathNode : executionPath) {
+
+            // get full-qualified method name + type (entry,exit,instructionID)
+            int index = pathNode.lastIndexOf("->");
+            String method = pathNode.substring(0, index);
+            String type = pathNode.substring(index+2);
+
+            System.out.println("PathNode: " + pathNode);
+
+            if (type.equals("entry")) {
+                Vertex entry = vertices.stream().filter(v -> v.isEntryVertex()
+                        && v.getMethod().equals(method)).findFirst().get();
+                visitedVertices.add(entry);
+            } else if (type.equals("exit")) {
+                Vertex exit = vertices.stream().filter(v -> v.isExitVertex()
+                        && v.getMethod().equals(method)).findFirst().get();
+                visitedVertices.add(exit);
+            } else {
+                // must be the instruction id of a branch
+                int id = Integer.parseInt(type);
+                Vertex branch = vertices.stream().filter(v ->
+                        v.containsInstruction(method,id)).findFirst().get();
+                visitedVertices.add(branch);
+                coveredBranches.add(branch);
+            }
+        }
+
+        // track covered branches for coverage measurement
+        graph.addCoveredBranches(coveredBranches);
+        graph.addCoveredBranches(testCase, coveredBranches);
+
+        // evaluate against a pre-defined target vertex
+        Vertex targetVertex = graph.getVertices().stream().filter(v -> v.isEntryVertex()
+                && v.getMethod().equals("Lcom/zola/bmi/BMIMain;->onStart()V")).findFirst().get();
+
+        // the minimal distance between a execution path and a given branch
+        int min = Integer.MAX_VALUE;
+
+        // the execution path (visited vertices) represent a single test case
+        for (Vertex visitedVertex : visitedVertices) {
+            // find the shortest distance between a branch and the execution path
+            int distance = graph.getShortestDistance(visitedVertex, targetVertex);
+            System.out.println("Distance: " + distance);
+            if (distance < min && distance != -1) {
+                // found shorter path
+                min = distance;
+            }
+        }
+
+        String branchDistance = null;
+
+        // we need to normalise approach level / branch distance to the range [0,1] where 1 is best
+        if (min == Integer.MAX_VALUE) {
+            // branch not reachable by execution path
+            branchDistance = String.valueOf(0);
+        } else {
+            branchDistance = String.valueOf(1 - ((double) min / (min + 1)));
+        }
+
+        System.out.println("Branch Distance: " + branchDistance);
+        return branchDistance;
+    }
+
+    /**
      * Computes the branch distance vector for a given test case
      * and a given list of branches.
      *
@@ -466,7 +583,7 @@ public class Server2 {
         System.out.print("APK path: " + apkPath);
 
         try {
-            graph = new CFG(Main.computeInterCFGWithBasicBlocks(apkPath));
+            graph = new CFG(Main.computerInterCFGWithBB(apkPath));
         } catch (IOException e) {
             e.printStackTrace();
             return "false";
