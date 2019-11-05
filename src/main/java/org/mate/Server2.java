@@ -415,17 +415,13 @@ public class Server2 {
         graph.addCoveredBranches(coveredBranches);
         graph.addCoveredBranches(testCase, coveredBranches);
 
-        // evaluate against a pre-defined target vertex
-        Vertex targetVertex = graph.getVertices().stream().filter(v -> v.isEntryVertex()
-                && v.getMethod().equals("Lcom/zola/bmi/BMIMain;->onStart()V")).findFirst().get();
-
-        // the minimal distance between a execution path and a given branch
+        // the minimal distance between a execution path and a chosen target vertex
         int min = Integer.MAX_VALUE;
 
         // the execution path (visited vertices) represent a single test case
         for (Vertex visitedVertex : visitedVertices) {
-            // find the shortest distance between a branch and the execution path
-            int distance = graph.getShortestDistance(visitedVertex, targetVertex);
+            // find the shortest distance between the selected target vertex and the execution path
+            int distance = graph.getShortestDistance(visitedVertex, graph.getTargetVertex());
             System.out.println("Distance: " + distance);
             if (distance < min && distance != -1) {
                 // found shorter path
@@ -433,6 +429,7 @@ public class Server2 {
             }
         }
 
+        // we maximise branch distance in contradiction to its meaning, that means a branch distance of 1 is the best
         String branchDistance = null;
 
         // we need to normalise approach level / branch distance to the range [0,1] where 1 is best
@@ -580,7 +577,7 @@ public class Server2 {
         String[] parts = cmdStr.split(":", 2);
         String apkPath = parts[1];
 
-        System.out.print("APK path: " + apkPath);
+        System.out.println("APK path: " + apkPath);
 
         try {
             graph = new CFG(Main.computerInterCFGWithBB(apkPath));
