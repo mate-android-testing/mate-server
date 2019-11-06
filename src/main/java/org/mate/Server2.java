@@ -441,6 +441,15 @@ public class Server2 {
         }
 
         System.out.println("Branch Distance: " + branchDistance);
+
+        /*
+        // update target vertex
+        if (branchDistance.equals("1.0")) {
+            graph.updateCoveredTargetVertices();
+            graph.selectTargetVertex(false);
+        }
+        */
+
         return branchDistance;
     }
 

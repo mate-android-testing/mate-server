@@ -12,6 +12,8 @@ public class CFG {
 
     private Vertex targetVertex;
 
+    private Set<Vertex> coveredTargetVertices = new HashSet<>();
+
     // TODO: may use int -> for coverage sufficient
     private Set<Vertex> coveredBranches = new HashSet<>();
 
@@ -21,7 +23,7 @@ public class CFG {
     public CFG(BaseCFG interCFG) {
         this.interCFG = interCFG;
         numberOfBranches = interCFG.getBranches().size();
-        targetVertex = selectTargetVertex();
+        selectTargetVertex(true);
     }
 
     /*
@@ -33,40 +35,55 @@ public class CFG {
     * a maximal number of tries, which causes the re-selection of a target vertex
     * when being reached.
      */
-    private Vertex selectTargetVertex() {
 
-        // TODO: provide access to intra-CFGs
-        //  entry vertices are not modified, thus always identical to the vertices of the intra-CFGs
+    /**
+     * Selects a new target vertex in either a purely random fashion or
+     * a yet uncovered target vertex.
+     *
+     * @param random Whether to perform the selection purely random.
+     */
+    public void selectTargetVertex(boolean random) {
 
-        int instructionIndex = 17;
-        String targetMethod = "Lcom/zola/bmi/BMIMain;->interpretBMI(D)Ljava/lang/String;";
-        // Vertex entryVertex = interCFG.getIntraCFG(targetMethod);
+        if (random) {
+            targetVertex = selectRandomTargetVertex();
+        } else {
 
-        Vertex entryVertex = getVertices().stream().filter(v -> v.isEntryVertex()
-                && v.getMethod().equals(targetMethod))
-                .findFirst().get();
-
-        Vertex targetVertex;
-
-        /*
-        while (true) {
-
-            if (entryVertex.containsInstruction(targetMethod,17)) {
-                targetVertex = entryVertex;
-                break;
-            } else {
-                // TODO: this should be actually a recursive call, since multiple outgoing edges are present
-                entryVertex = interCFG.getOutgoingEdges(entryVertex).iterator().next().getTarget();
+            // select a yet uncovered target vertex
+            while (true) {
+                Vertex vertex = selectRandomTargetVertex();
+                if (!coveredTargetVertices.contains(vertex)) {
+                    targetVertex = vertex;
+                    break;
+                }
             }
-
         }
-        */
+        System.out.println("Selected Target Vertex: " + targetVertex);
+    }
 
-        // evaluate against a pre-defined target vertex
-        targetVertex = getVertices().stream().filter(v -> v.isEntryVertex()
-                && v.getMethod().equals("Lcom/zola/bmi/BMIMain;->onStart()V")).findFirst().get();
+    /**
+     * Marks the currently selected target vertex as covered.
+     */
+    public void updateCoveredTargetVertices() {
+        coveredTargetVertices.add(targetVertex);
+    }
 
-        return targetVertex;
+    /**
+     * Selects randomly a target vertex from the set of vertices.
+     *
+     * @return Returns a randomly selected target vertex.
+     */
+    private Vertex selectRandomTargetVertex() {
+
+        Set<Vertex> vertices = getVertices();
+
+        Random rand = new Random(System.currentTimeMillis());
+        int index = rand.nextInt(vertices.size());
+        Iterator<Vertex> iter = vertices.iterator();
+        for (int i = 0; i < index; i++) {
+            iter.next();
+        }
+
+        return iter.next();
     }
 
     public Vertex getTargetVertex() {
