@@ -589,7 +589,7 @@ public class Server2 {
         System.out.println("APK path: " + apkPath);
 
         try {
-            graph = new CFG(Main.computerInterCFGWithBB(apkPath));
+            graph = new CFG(Main.computerInterCFGWithBB(apkPath,true));
         } catch (IOException e) {
             e.printStackTrace();
             return "false";

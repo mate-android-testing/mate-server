@@ -75,15 +75,24 @@ public class CFG {
     private Vertex selectRandomTargetVertex() {
 
         Set<Vertex> vertices = getVertices();
+        Vertex entryVertex = interCFG.getEntry();
 
-        Random rand = new Random(System.currentTimeMillis());
-        int index = rand.nextInt(vertices.size());
-        Iterator<Vertex> iter = vertices.iterator();
-        for (int i = 0; i < index; i++) {
-            iter.next();
+        while (true) {
+
+            Random rand = new Random(System.currentTimeMillis());
+            int index = rand.nextInt(vertices.size());
+            Iterator<Vertex> iter = vertices.iterator();
+            for (int i = 0; i < index; i++) {
+                iter.next();
+            }
+
+            Vertex targetVertex = iter.next();
+
+            // check if target vertex is reachable from global entry point
+            if (getShortestDistance(entryVertex, targetVertex) != -1) {
+                return targetVertex;
+            }
         }
-
-        return iter.next();
     }
 
     public Vertex getTargetVertex() {
