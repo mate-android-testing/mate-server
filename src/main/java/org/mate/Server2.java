@@ -373,7 +373,8 @@ public class Server2 {
         // remove first line, since it contains some time stamp information
         executionPath.remove(0);
 
-        System.out.println("Visited Vertices: " + executionPath);
+        // System.out.println("Visited Vertices: " + executionPath);
+        System.out.println("Number of visited vertices: " + executionPath.size());
 
         // we need to mark vertices we visit
         Set<Vertex> visitedVertices = new HashSet<>();
@@ -386,12 +387,15 @@ public class Server2 {
         // look up each pathNode (vertex) in the CFG
         for (String pathNode : executionPath) {
 
+            // TODO: there seems be corrupted trace files, e.g. the last line of it
+            // suspecting that issue is related to size of trace file, copying or reset of app
+
             // get full-qualified method name + type (entry,exit,instructionID)
             int index = pathNode.lastIndexOf("->");
             String method = pathNode.substring(0, index);
             String type = pathNode.substring(index+2);
 
-            System.out.println("PathNode: " + pathNode);
+            // System.out.println("PathNode: " + pathNode);
 
             if (type.equals("entry")) {
                 Vertex entry = vertices.stream().filter(v -> v.isEntryVertex()
