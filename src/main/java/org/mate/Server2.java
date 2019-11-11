@@ -277,7 +277,7 @@ public class Server2 {
         int lastDelimiter = cmdStr.lastIndexOf(':');
         String deviceID = cmdStr.substring(lastDelimiter + 1);
         String branchCoverage = getBranchCoverage(cmdStr.substring(0,lastDelimiter));
-        String packageName = Device.getDevice(deviceID).getPackageName();
+        String packageName = graph.getPackageName();
 
         // name of chromosome or 'total'
         String fileName = "total";
@@ -353,7 +353,7 @@ public class Server2 {
 
         Device device = Device.devices.get(deviceID);
 
-        if (!device.pullTraceFile() || !traces.exists()) {
+        if (!device.pullTraceFile(graph.getPackageName()) || !traces.exists()) {
             // traces.txt was not accessible/found on emulator
             System.out.println("Couldn't find traces.txt!");
             return null;
@@ -475,7 +475,7 @@ public class Server2 {
 
         Device device = Device.devices.get(deviceID);
 
-        if (!device.pullTraceFile() || !traces.exists()) {
+        if (!device.pullTraceFile(graph.getPackageName()) || !traces.exists()) {
             // traces.txt was not accessible/found on emulator
             System.out.println("Couldn't find traces.txt!");
             return null;
@@ -587,13 +587,15 @@ public class Server2 {
     public static String initCFG(String cmdStr) {
 
         // limit is required to avoid splitting a Windows path
-        String[] parts = cmdStr.split(":", 2);
-        String apkPath = parts[1];
+        String[] parts = cmdStr.split(":", 3);
+        String packageName = parts[1];
+        String apkPath = parts[2];
 
+        System.out.println("Package Name: " + packageName);
         System.out.println("APK path: " + apkPath);
 
         try {
-            graph = new CFG(Main.computerInterCFGWithBB(apkPath,true));
+            graph = new CFG(Main.computerInterCFGWithBB(apkPath,true), packageName);
         } catch (IOException e) {
             e.printStackTrace();
             return "false";

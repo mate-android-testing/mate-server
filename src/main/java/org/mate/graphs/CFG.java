@@ -9,6 +9,7 @@ public class CFG {
 
     private final BaseCFG interCFG;
     private final int numberOfBranches;
+    private final String packageName;
 
     private Vertex targetVertex;
 
@@ -20,9 +21,10 @@ public class CFG {
     // track branch coverage per test case (key: test case id, value: covered branches)
     private Map<String, Set<Vertex>> testCaseBranchCoverage = new HashMap<>();
 
-    public CFG(BaseCFG interCFG) {
+    public CFG(BaseCFG interCFG, String packageName) {
         this.interCFG = interCFG;
         numberOfBranches = interCFG.getBranches().size();
+        this.packageName = packageName;
         selectTargetVertex(true);
     }
 
@@ -129,5 +131,9 @@ public class CFG {
 
     public double getBranchCoverage(String testCase) {
         return ((double) testCaseBranchCoverage.get(testCase).size()) / numberOfBranches;
+    }
+
+    public String getPackageName() {
+        return packageName;
     }
 }

@@ -76,7 +76,7 @@ public class Device {
         return 23;
     }
 
-    public boolean pullTraceFile() {
+    public boolean pullTraceFile(String packageName) {
 
         // check whether traces.txt file exists on emulator
         String checkFileCmd = "adb -s " + deviceID + " shell " + "\"run-as " + packageName + " ls\"";
