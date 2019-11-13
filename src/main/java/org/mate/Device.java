@@ -1,9 +1,6 @@
 package org.mate;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Hashtable;
@@ -79,7 +76,11 @@ public class Device {
     public boolean pullTraceFile(String packageName) {
 
         // check whether traces.txt file exists on emulator
-        String checkFileCmd = "adb -s " + deviceID + " shell " + "\"run-as " + packageName + " ls\"";
+        // String tracesDir = "storage/emulated/0/Download/" + packageName;
+        String tracesDir = "storage/emulated/0/" + packageName;
+        // String checkFileCmd = "adb -s " + deviceID + " shell " + "\"run-as " + packageName + " ls\"";
+        String checkFileCmd = "adb -s " + deviceID + " shell ls " + tracesDir;
+
         List<String> files = ADB.runCommand(checkFileCmd);
         System.out.println("Files: " + files);
 
@@ -90,13 +91,19 @@ public class Device {
         // use the working directory (MATE-COMMANDER HOME) as output directory for trace file
         String workingDir = System.getProperty("user.dir");
 
-        String cmd = "adb -s " + deviceID + " shell " + "\"run-as " + packageName + " cat ";
+        // String cmd = "adb -s " + deviceID + " shell cat " + tracesDir + "/traces.txt > ";
+        String cmd = "adb -s " + deviceID + " pull " + tracesDir + "/traces.txt ";
+
+        // String cmd = "adb -s " + deviceID + " shell " + "\"run-as " + packageName + " cat ";
 
         if (ADB.isWin) {
             // no leading slash on windows (seems to be not really dependent on OS, may on emulator version)
-            cmd += "/data/data/" + packageName + "/traces.txt\" > " + "\"" + workingDir + "\\traces.txt\"";
+            // cmd += "/data/data/" + packageName + "/traces.txt\" > " + "\"" + workingDir + "\\traces.txt\"";
+            cmd += workingDir + File.separator + "traces.txt";
+            // cmd += "\"" + workingDir + "\\traces.txt\"";
         } else {
-            cmd += "/data/data/" + packageName + "/traces.txt\" > " + "\"" + workingDir + "/traces.txt\"";
+            // cmd += "/data/data/" + packageName + "/traces.txt\" > " + "\"" + workingDir + "/traces.txt\"";
+            cmd += "\"" + workingDir + "/traces.txt\"";
         }
 
         System.out.println("Pull-Command: " + cmd);
@@ -104,7 +111,8 @@ public class Device {
         List<String> result = ADB.runCommand(cmd);
 
         // expect empty response in case of success
-        return result.size() == 0;
+        // return result.size() == 0;
+        return true;
     }
 
     public String getCurrentActivity(){
