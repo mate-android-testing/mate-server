@@ -108,7 +108,10 @@ public class Device {
 
         System.out.println("Pull-Command: " + cmd);
 
+        // cmd = "./pullTraces.sh " + deviceID + " " + packageName;
+
         List<String> result = ADB.runCommand(cmd);
+        System.out.println("Result: " + result);
 
         // expect empty response in case of success
         // return result.size() == 0;
