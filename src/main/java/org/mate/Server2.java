@@ -348,10 +348,23 @@ public class Server2 {
         String deviceID = parts[1];
         String testCase = parts[2];
 
+        Device device = Device.devices.get(deviceID);
+
+        // check whether writing traces has been completed yet
+        while(!completedWritingTraces(deviceID)) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                System.out.println("sleeping failed!");
+                e.printStackTrace();
+                return null;
+            }
+        }
+
+        System.out.println("Waiting done!");
+
         String tracesDir = System.getProperty("user.dir");
         File traces = new File(tracesDir, "traces.txt");
-
-        Device device = Device.devices.get(deviceID);
 
         if (!device.pullTraceFile(graph.getPackageName()) || !traces.exists()) {
             // traces.txt was not accessible/found on emulator
@@ -382,6 +395,26 @@ public class Server2 {
         // we need to track covered branch vertices for branch coverage
         Set<Vertex> coveredBranches = new HashSet<>();
 
+        Map<String, Vertex> vertexMap = graph.getVertexMap();
+
+        for (String pathNode : executionPath) {
+
+            int index = pathNode.lastIndexOf("->");
+            String type = pathNode.substring(index+2);
+
+            System.out.println("PathNode: " + pathNode);
+
+            Vertex visitedVertex = vertexMap.get(pathNode);
+            visitedVertices.add(visitedVertex);
+
+            if (!type.equals("entry") && !type.equals("exit")) {
+                // must be a branch
+                coveredBranches.add(visitedVertex);
+            }
+        }
+
+        /*
+
         Set<Vertex> vertices = graph.getVertices();
 
         // look up each pathNode (vertex) in the CFG
@@ -395,7 +428,7 @@ public class Server2 {
             String method = pathNode.substring(0, index);
             String type = pathNode.substring(index+2);
 
-            // System.out.println("PathNode: " + pathNode);
+            System.out.println("PathNode: " + pathNode);
 
             if (type.equals("entry")) {
                 Vertex entry = vertices.stream().filter(v -> v.isEntryVertex()
@@ -414,6 +447,7 @@ public class Server2 {
                 coveredBranches.add(branch);
             }
         }
+        */
 
         // track covered branches for coverage measurement
         graph.addCoveredBranches(coveredBranches);
@@ -421,7 +455,19 @@ public class Server2 {
 
         // the minimal distance between a execution path and a chosen target vertex
         int min = Integer.MAX_VALUE;
+        Map<Vertex, Double> branchDistances = graph.getBranchDistances();
 
+        for (Vertex visitedVertex : visitedVertices) {
+            // find the shortest distance between the selected target vertex and the execution path
+            int distance = branchDistances.get(visitedVertex).intValue();
+            System.out.println("Distance: " + distance);
+            if (distance < min && distance != -1) {
+                // found shorter path
+                min = distance;
+            }
+        }
+
+        /*
         // the execution path (visited vertices) represent a single test case
         for (Vertex visitedVertex : visitedVertices) {
             // find the shortest distance between the selected target vertex and the execution path
@@ -432,6 +478,7 @@ public class Server2 {
                 min = distance;
             }
         }
+        */
 
         // we maximise branch distance in contradiction to its meaning, that means a branch distance of 1 is the best
         String branchDistance = null;
@@ -457,6 +504,16 @@ public class Server2 {
         return branchDistance;
     }
 
+    private static boolean completedWritingTraces(String deviceID) {
+
+        String checkFileCmd = "adb -s " + deviceID + " shell " + "\"run-as " + graph.getPackageName() + " ls\"";
+
+        List<String> files = ADB.runCommand(checkFileCmd);
+        System.out.println("Files: " + files);
+
+        return files.stream().anyMatch(str -> str.trim().equals("info.txt"));
+    }
+
     /**
      * Computes the branch distance vector for a given test case
      * and a given list of branches.
@@ -470,10 +527,22 @@ public class Server2 {
         String deviceID = parts[1];
         String testCase = parts[2];
 
+        Device device = Device.devices.get(deviceID);
+
+        // check whether writing traces has been completed yet
+        while(!completedWritingTraces(deviceID)) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                System.out.println("sleeping failed!");
+                e.printStackTrace();
+                return null;
+            }
+        }
+
         String tracesDir = System.getProperty("user.dir");
         File traces = new File(tracesDir, "traces.txt");
 
-        Device device = Device.devices.get(deviceID);
 
         if (!device.pullTraceFile(graph.getPackageName()) || !traces.exists()) {
             // traces.txt was not accessible/found on emulator

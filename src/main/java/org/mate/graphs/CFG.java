@@ -1,7 +1,15 @@
 package org.mate.graphs;
 
+import de.uni_passau.fim.auermich.graphs.Edge;
 import de.uni_passau.fim.auermich.graphs.Vertex;
 import de.uni_passau.fim.auermich.graphs.cfg.BaseCFG;
+import de.uni_passau.fim.auermich.statement.BasicStatement;
+import de.uni_passau.fim.auermich.statement.BlockStatement;
+import de.uni_passau.fim.auermich.statement.Statement;
+import org.jgrapht.GraphPath;
+import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
+import org.jgrapht.alg.shortestpath.AllDirectedPaths;
+import org.jgrapht.alg.shortestpath.DijkstraShortestPath;
 
 import java.util.*;
 
@@ -12,6 +20,11 @@ public class CFG {
     private final String packageName;
 
     private Vertex targetVertex;
+
+    private Map<String, Vertex> vertexMap = new HashMap<>();
+
+    // pre-compute distances to target vertex
+    private Map<Vertex, Double> branchDistances = new HashMap<>();
 
     private Set<Vertex> coveredTargetVertices = new HashSet<>();
 
@@ -26,6 +39,59 @@ public class CFG {
         numberOfBranches = interCFG.getBranches().size();
         this.packageName = packageName;
         selectTargetVertex(true);
+        init();
+    }
+
+    private void init() {
+
+        // pre-compute dijkstra
+        ShortestPathAlgorithm<Vertex, Edge> dijkstra = interCFG.initDijkstraAlgorithm();
+
+        Set<Vertex> vertices = interCFG.getVertices();
+
+        for (Vertex vertex : vertices) {
+
+            GraphPath<Vertex, Edge> path = dijkstra.getPath(vertex, targetVertex);
+
+            int distance;
+
+            if (path != null) {
+                distance = path.getLength();
+            } else {
+                distance = -1;
+            }
+
+            // pre-compute branch distance
+            branchDistances.put(vertex, Double.valueOf(distance));
+
+            if (vertex.isEntryVertex()) {
+                vertexMap.put(vertex.getMethod() + "->entry", vertex);
+            } else if (vertex.isExitVertex()) {
+                vertexMap.put(vertex.getMethod() + "->exit", vertex);
+            } else if (vertex.isBranchVertex()) {
+                // get instruction id of first stmt
+                Statement statement = vertex.getStatement();
+
+                if (statement.getType() == Statement.StatementType.BASIC_STATEMENT) {
+                    BasicStatement basicStmt = (BasicStatement) statement;
+                    vertexMap.put(vertex.getMethod() + "->" + basicStmt.getInstructionIndex(), vertex);
+                } else {
+                    // should be a block stmt, other stmt types shouldn't be branch targets
+                    BlockStatement blockStmt = (BlockStatement) statement;
+                    BasicStatement basicStmt = (BasicStatement) blockStmt.getFirstStatement();
+                    vertexMap.put(vertex.getMethod() + "->" + basicStmt.getInstructionIndex(), vertex);
+                }
+            }
+        }
+        System.out.println("Size of VertexMap: " + vertexMap.size());
+    }
+
+    public Map<Vertex, Double> getBranchDistances() {
+        return branchDistances;
+    }
+
+    public Map<String, Vertex> getVertexMap() {
+        return vertexMap;
     }
 
     /*
