@@ -42,15 +42,52 @@ public class CFG {
         init();
     }
 
+    private void precompute(ShortestPathAlgorithm<Vertex, Edge> dijkstra) {
+        long start = System.currentTimeMillis();
+
+        ShortestPathAlgorithm.SingleSourcePaths paths = dijkstra.getPaths(targetVertex);
+
+        Set<Vertex> vertices = interCFG.getVertices();
+        int counter = 0;
+
+        start = System.currentTimeMillis();
+
+        for (Vertex vertex : vertices) {
+
+            GraphPath<Vertex, Edge> path = paths.getPath(vertex);
+
+            int distance;
+
+            if (path != null) {
+                distance = path.getLength();
+                counter++;
+            } else {
+                distance = -1;
+            }
+
+            // pre-compute branch distance
+            branchDistances.put(vertex, Double.valueOf(distance));
+
+        }
+
+        long end = System.currentTimeMillis();
+        System.out.println("Dijkstra pre-construction took: " + (end - start));
+        System.out.println("Number of paths: " + counter);
+    }
+
     private void init() {
 
         // pre-compute dijkstra
         ShortestPathAlgorithm<Vertex, Edge> dijkstra = interCFG.initDijkstraAlgorithm();
+        precompute(dijkstra);
 
         Set<Vertex> vertices = interCFG.getVertices();
 
+        long start = System.currentTimeMillis();
+
         for (Vertex vertex : vertices) {
 
+            /*
             GraphPath<Vertex, Edge> path = dijkstra.getPath(vertex, targetVertex);
 
             int distance;
@@ -63,6 +100,7 @@ public class CFG {
 
             // pre-compute branch distance
             branchDistances.put(vertex, Double.valueOf(distance));
+            */
 
             if (vertex.isEntryVertex()) {
                 vertexMap.put(vertex.getMethod() + "->entry", vertex);
@@ -84,6 +122,8 @@ public class CFG {
             }
         }
         System.out.println("Size of VertexMap: " + vertexMap.size());
+        long end = System.currentTimeMillis();
+        System.out.println("Vertex map construction took: " + (end - start));
     }
 
     public Map<Vertex, Double> getBranchDistances() {
@@ -125,7 +165,7 @@ public class CFG {
                 }
             }
         }
-        System.out.println("Selected Target Vertex: " + targetVertex);
+        System.out.println("Selected Target Vertex: " + targetVertex + " " + targetVertex.getMethod());
     }
 
     /**

@@ -383,6 +383,8 @@ public class Server2 {
             return null;
         }
 
+        System.out.println("Reading traces done!");
+
         // remove first line, since it contains some time stamp information
         executionPath.remove(0);
 
