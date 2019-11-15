@@ -23,13 +23,15 @@ public class CFG {
 
     private Map<String, Vertex> vertexMap = new HashMap<>();
 
-    // pre-compute distances to target vertex
+    // cache computed branch distances to target vertex (single objective case)
     private Map<Vertex, Double> branchDistances = new HashMap<>();
 
     private Set<Vertex> coveredTargetVertices = new HashSet<>();
 
     // TODO: may use int -> for coverage sufficient
     private Set<Vertex> coveredBranches = new HashSet<>();
+
+    private ShortestPathAlgorithm<Vertex, Edge> dijkstra;
 
     // track branch coverage per test case (key: test case id, value: covered branches)
     private Map<String, Set<Vertex>> testCaseBranchCoverage = new HashMap<>();
@@ -42,65 +44,22 @@ public class CFG {
         init();
     }
 
-    private void precompute(ShortestPathAlgorithm<Vertex, Edge> dijkstra) {
-        long start = System.currentTimeMillis();
-
-        ShortestPathAlgorithm.SingleSourcePaths paths = dijkstra.getPaths(targetVertex);
-
-        Set<Vertex> vertices = interCFG.getVertices();
-        int counter = 0;
-
-        start = System.currentTimeMillis();
-
-        for (Vertex vertex : vertices) {
-
-            GraphPath<Vertex, Edge> path = paths.getPath(vertex);
-
-            int distance;
-
-            if (path != null) {
-                distance = path.getLength();
-                counter++;
-            } else {
-                distance = -1;
-            }
-
-            // pre-compute branch distance
-            branchDistances.put(vertex, Double.valueOf(distance));
-
-        }
-
-        long end = System.currentTimeMillis();
-        System.out.println("Dijkstra pre-construction took: " + (end - start));
-        System.out.println("Number of paths: " + counter);
-    }
-
+    /**
+     * Initialises the dijkstra algorithm and constructs a vertex map, which
+     * basically maps each entry, exit and branch vertex to a unique id. This
+     * speeds up the mapping process of a collected trace entry.
+     * Since traces only contain entry, exit and branch vertices, we can ommit
+     * other vertex types.
+     */
     private void init() {
 
-        // pre-compute dijkstra
-        ShortestPathAlgorithm<Vertex, Edge> dijkstra = interCFG.initDijkstraAlgorithm();
-        precompute(dijkstra);
+        // init dijkstra
+        dijkstra = interCFG.initBidirectionalDijkstraAlgorithm();
 
         Set<Vertex> vertices = interCFG.getVertices();
 
-        long start = System.currentTimeMillis();
-
+        // map each vertex to a unique id, only entry, exit and branch targets are relevant
         for (Vertex vertex : vertices) {
-
-            /*
-            GraphPath<Vertex, Edge> path = dijkstra.getPath(vertex, targetVertex);
-
-            int distance;
-
-            if (path != null) {
-                distance = path.getLength();
-            } else {
-                distance = -1;
-            }
-
-            // pre-compute branch distance
-            branchDistances.put(vertex, Double.valueOf(distance));
-            */
 
             if (vertex.isEntryVertex()) {
                 vertexMap.put(vertex.getMethod() + "->entry", vertex);
@@ -116,14 +75,14 @@ public class CFG {
                 } else {
                     // should be a block stmt, other stmt types shouldn't be branch targets
                     BlockStatement blockStmt = (BlockStatement) statement;
+                    // a branch target can only be the first instruction in a basic block since it has to be a leader
                     BasicStatement basicStmt = (BasicStatement) blockStmt.getFirstStatement();
+                    // identify a basic block by its first instruction (the branch target)
                     vertexMap.put(vertex.getMethod() + "->" + basicStmt.getInstructionIndex(), vertex);
                 }
             }
         }
         System.out.println("Size of VertexMap: " + vertexMap.size());
-        long end = System.currentTimeMillis();
-        System.out.println("Vertex map construction took: " + (end - start));
     }
 
     public Map<Vertex, Double> getBranchDistances() {
@@ -201,6 +160,10 @@ public class CFG {
                 return targetVertex;
             }
         }
+    }
+
+    public ShortestPathAlgorithm<Vertex, Edge> getDijkstra() {
+        return dijkstra;
     }
 
     public Vertex getTargetVertex() {

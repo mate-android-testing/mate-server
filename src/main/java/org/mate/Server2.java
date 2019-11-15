@@ -2,10 +2,13 @@ package org.mate;
 
 import com.itextpdf.text.*;
 import de.uni_passau.fim.auermich.Main;
+import de.uni_passau.fim.auermich.graphs.Edge;
 import de.uni_passau.fim.auermich.graphs.Vertex;
 import de.uni_passau.fim.auermich.graphs.cfg.BaseCFG;
 import de.uni_passau.fim.auermich.statement.BasicStatement;
 import de.uni_passau.fim.auermich.statement.BlockStatement;
+import org.jgrapht.GraphPath;
+import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.mate.graphs.CFG;
 
 import java.io.*;
@@ -361,12 +364,10 @@ public class Server2 {
             }
         }
 
-        System.out.println("Waiting done!");
-
         String tracesDir = System.getProperty("user.dir");
         File traces = new File(tracesDir, "traces.txt");
 
-        if (!device.pullTraceFile(graph.getPackageName()) || !traces.exists()) {
+        if (!device.pullTraceFile() || !traces.exists()) {
             // traces.txt was not accessible/found on emulator
             System.out.println("Couldn't find traces.txt!");
             return null;
@@ -383,12 +384,6 @@ public class Server2 {
             return null;
         }
 
-        System.out.println("Reading traces done!");
-
-        // remove first line, since it contains some time stamp information
-        executionPath.remove(0);
-
-        // System.out.println("Visited Vertices: " + executionPath);
         System.out.println("Number of visited vertices: " + executionPath.size());
 
         // we need to mark vertices we visit
@@ -399,12 +394,11 @@ public class Server2 {
 
         Map<String, Vertex> vertexMap = graph.getVertexMap();
 
+        // map trace to vertex
         for (String pathNode : executionPath) {
 
             int index = pathNode.lastIndexOf("->");
             String type = pathNode.substring(index+2);
-
-            System.out.println("PathNode: " + pathNode);
 
             Vertex visitedVertex = vertexMap.get(pathNode);
             visitedVertices.add(visitedVertex);
@@ -415,72 +409,44 @@ public class Server2 {
             }
         }
 
-        /*
-
-        Set<Vertex> vertices = graph.getVertices();
-
-        // look up each pathNode (vertex) in the CFG
-        for (String pathNode : executionPath) {
-
-            // TODO: there seems be corrupted trace files, e.g. the last line of it
-            // suspecting that issue is related to size of trace file, copying or reset of app
-
-            // get full-qualified method name + type (entry,exit,instructionID)
-            int index = pathNode.lastIndexOf("->");
-            String method = pathNode.substring(0, index);
-            String type = pathNode.substring(index+2);
-
-            System.out.println("PathNode: " + pathNode);
-
-            if (type.equals("entry")) {
-                Vertex entry = vertices.stream().filter(v -> v.isEntryVertex()
-                        && v.getMethod().equals(method)).findFirst().get();
-                visitedVertices.add(entry);
-            } else if (type.equals("exit")) {
-                Vertex exit = vertices.stream().filter(v -> v.isExitVertex()
-                        && v.getMethod().equals(method)).findFirst().get();
-                visitedVertices.add(exit);
-            } else {
-                // must be the instruction id of a branch
-                int id = Integer.parseInt(type);
-                Vertex branch = vertices.stream().filter(v ->
-                        v.containsInstruction(method,id)).findFirst().get();
-                visitedVertices.add(branch);
-                coveredBranches.add(branch);
-            }
-        }
-        */
-
         // track covered branches for coverage measurement
         graph.addCoveredBranches(coveredBranches);
         graph.addCoveredBranches(testCase, coveredBranches);
 
         // the minimal distance between a execution path and a chosen target vertex
         int min = Integer.MAX_VALUE;
+
+        // cache already computed branch distances
         Map<Vertex, Double> branchDistances = graph.getBranchDistances();
 
-        for (Vertex visitedVertex : visitedVertices) {
-            // find the shortest distance between the selected target vertex and the execution path
-            int distance = branchDistances.get(visitedVertex).intValue();
-            System.out.println("Distance: " + distance);
-            if (distance < min && distance != -1) {
-                // found shorter path
-                min = distance;
-            }
-        }
+        // use bidirectional dijkstra
+        ShortestPathAlgorithm<Vertex, Edge> dijkstra = graph.getDijkstra();
 
-        /*
-        // the execution path (visited vertices) represent a single test case
         for (Vertex visitedVertex : visitedVertices) {
-            // find the shortest distance between the selected target vertex and the execution path
-            int distance = graph.getShortestDistance(visitedVertex, graph.getTargetVertex());
-            System.out.println("Distance: " + distance);
+
+            int distance = -1;
+
+            if (branchDistances.containsKey(visitedVertex)) {
+                distance = branchDistances.get(visitedVertex).intValue();
+            } else {
+                GraphPath<Vertex, Edge> path = dijkstra.getPath(visitedVertex, graph.getTargetVertex());
+                if (path != null) {
+                    distance = path.getLength();
+                    // update branch distance map
+                    branchDistances.put(visitedVertex, Double.valueOf(distance));
+                } else {
+                    // update branch distance map
+                    branchDistances.put(visitedVertex, Double.valueOf(-1));
+                }
+            }
+
+            // int distance = branchDistances.get(visitedVertex).intValue();
             if (distance < min && distance != -1) {
                 // found shorter path
                 min = distance;
+                System.out.println("Current min distance: " + distance);
             }
         }
-        */
 
         // we maximise branch distance in contradiction to its meaning, that means a branch distance of 1 is the best
         String branchDistance = null;
@@ -506,6 +472,14 @@ public class Server2 {
         return branchDistance;
     }
 
+    /**
+     * Checks whether writing the collected traces onto the external storage has been completed.
+     * This is done by checking if an info.txt file exists in the app-internal storage.
+     *
+     * @param deviceID The id of the emulator.
+     * @return Returns {@code true} if the writing process has been finished,
+     *          otherwise {@code false}.
+     */
     private static boolean completedWritingTraces(String deviceID) {
 
         String checkFileCmd = "adb -s " + deviceID + " shell " + "\"run-as " + graph.getPackageName() + " ls\"";
@@ -546,15 +520,10 @@ public class Server2 {
         File traces = new File(tracesDir, "traces.txt");
 
 
-        if (!device.pullTraceFile(graph.getPackageName()) || !traces.exists()) {
+        if (!device.pullTraceFile() || !traces.exists()) {
             // traces.txt was not accessible/found on emulator
             System.out.println("Couldn't find traces.txt!");
             return null;
-            /*
-            List<String> maxDistanceVector
-                    = Collections.nCopies(interCFG.getBranches().size(), "0");
-            return String.join("\n", maxDistanceVector);
-            */
         }
 
         List<String> executionPath = new ArrayList<>();
@@ -568,9 +537,6 @@ public class Server2 {
             return null;
         }
 
-        // remove first line, since it contains some time stamp information
-        executionPath.remove(0);
-
         System.out.println("Visited Vertices: " + executionPath);
 
         // we need to mark vertices we visit
@@ -579,33 +545,20 @@ public class Server2 {
         // we need to track covered branch vertices for branch coverage
         Set<Vertex> coveredBranches = new HashSet<>();
 
-        Set<Vertex> vertices = graph.getVertices();
+        Map<String, Vertex> vertexMap = graph.getVertexMap();
 
-        // look up each pathNode (vertex) in the CFG
+        // map trace to vertex
         for (String pathNode : executionPath) {
 
-            // get full-qualified method name + type (entry,exit,instructionID)
             int index = pathNode.lastIndexOf("->");
-            String method = pathNode.substring(0, index);
             String type = pathNode.substring(index+2);
 
-            System.out.println("PathNode: " + pathNode);
+            Vertex visitedVertex = vertexMap.get(pathNode);
+            visitedVertices.add(visitedVertex);
 
-            if (type.equals("entry")) {
-                Vertex entry = vertices.stream().filter(v -> v.isEntryVertex()
-                        && v.getMethod().equals(method)).findFirst().get();
-                visitedVertices.add(entry);
-            } else if (type.equals("exit")) {
-                Vertex exit = vertices.stream().filter(v -> v.isExitVertex()
-                        && v.getMethod().equals(method)).findFirst().get();
-                visitedVertices.add(exit);
-            } else {
-                // must be the instruction id of a branch
-                int id = Integer.parseInt(type);
-                Vertex branch = vertices.stream().filter(v ->
-                        v.containsInstruction(method,id)).findFirst().get();
-                visitedVertices.add(branch);
-                coveredBranches.add(branch);
+            if (!type.equals("entry") && !type.equals("exit")) {
+                // must be a branch
+                coveredBranches.add(visitedVertex);
             }
         }
 
@@ -619,16 +572,27 @@ public class Server2 {
         // stores the fitness value for a given test case (execution path) evaluated against each branch
         List<String> branchDistanceVector = new LinkedList<>();
 
+        // use bidirectional dijkstra
+        ShortestPathAlgorithm<Vertex, Edge> dijkstra = graph.getDijkstra();
+
+        // evaluate fitness value for each single branch
         for (Vertex branch : branches) {
 
             // the minimal distance between a execution path and a given branch
             int min = Integer.MAX_VALUE;
 
-            // the execution path (visited vertices) represent a single test case
+            // find the shortest distance for the single branch
             for (Vertex visitedVertex : visitedVertices) {
-                // find the shortest distance between a branch and the execution path
-                int distance = graph.getShortestDistance(visitedVertex, branch);
-                System.out.println("Distance: " + distance);
+
+                // TODO: cache computed branch distances as in single objective case
+
+                int distance = -1;
+                GraphPath<Vertex, Edge> path = dijkstra.getPath(visitedVertex, branch);
+
+                if (path != null) {
+                    distance = path.getLength();
+                }
+
                 if (distance < min && distance != -1) {
                     // found shorter path
                     min = distance;

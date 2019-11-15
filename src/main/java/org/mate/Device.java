@@ -73,17 +73,23 @@ public class Device {
         return 23;
     }
 
-    public boolean pullTraceFile(String packageName) {
+    /**
+     * Pulls the traces.txt file from the external storage (sd card) if present.
+     * The file is stored in the working directory, that is the mate-commander directory by default.
+     *
+     * @return Returns {@code true} if the trace file could be pulled,
+     *              otherwise {@code false}.
+     */
+    public boolean pullTraceFile() {
 
-        // check whether traces.txt file exists on emulator
-        // String tracesDir = "storage/emulated/0/Download/" + packageName;
-        String tracesDir = "storage/emulated/0/" + packageName;
+        // traces are stored on the sd card (external storage)
+        String tracesDir = "storage/emulated/0"; // + packageName;
         // String checkFileCmd = "adb -s " + deviceID + " shell " + "\"run-as " + packageName + " ls\"";
         String checkFileCmd = "adb -s " + deviceID + " shell ls " + tracesDir;
 
         List<String> files = ADB.runCommand(checkFileCmd);
-        System.out.println("Files: " + files);
 
+        // check whether there is some traces file
         if (!files.stream().anyMatch(str -> str.trim().equals("traces.txt"))) {
             return false;
         }
@@ -107,14 +113,8 @@ public class Device {
         }
 
         System.out.println("Pull-Command: " + cmd);
+        ADB.runCommand(cmd);
 
-        // cmd = "./pullTraces.sh " + deviceID + " " + packageName;
-
-        List<String> result = ADB.runCommand(cmd);
-        System.out.println("Result: " + result);
-
-        // expect empty response in case of success
-        // return result.size() == 0;
         return true;
     }
 
