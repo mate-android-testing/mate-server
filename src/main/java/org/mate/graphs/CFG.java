@@ -12,6 +12,7 @@ import org.jgrapht.alg.shortestpath.AllDirectedPaths;
 import org.jgrapht.alg.shortestpath.DijkstraShortestPath;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class CFG {
 
@@ -21,10 +22,10 @@ public class CFG {
 
     private Vertex targetVertex;
 
-    private Map<String, Vertex> vertexMap = new HashMap<>();
+    private Map<String, Vertex> vertexMap = new ConcurrentHashMap<>();
 
     // cache computed branch distances to target vertex (single objective case)
-    private Map<Vertex, Double> branchDistances = new HashMap<>();
+    private Map<Vertex, Double> branchDistances = new ConcurrentHashMap<>();
 
     private Set<Vertex> coveredTargetVertices = new HashSet<>();
 
@@ -40,27 +41,24 @@ public class CFG {
         this.interCFG = interCFG;
         numberOfBranches = interCFG.getBranches().size();
         this.packageName = packageName;
+        // init dijkstra
+        dijkstra = interCFG.initBidirectionalDijkstraAlgorithm();
         selectTargetVertex(true);
         init();
     }
 
     /**
-     * Initialises the dijkstra algorithm and constructs a vertex map, which
-     * basically maps each entry, exit and branch vertex to a unique id. This
-     * speeds up the mapping process of a collected trace entry.
+     * Initialises a vertex map, which basically maps each entry,
+     * exit and branch vertex to a unique id. This speeds up the
+     * mapping process of a collected trace entry.
      * Since traces only contain entry, exit and branch vertices, we can ommit
      * other vertex types.
      */
     private void init() {
 
-        // init dijkstra
-        dijkstra = interCFG.initBidirectionalDijkstraAlgorithm();
+        long start = System.currentTimeMillis();
 
-        Set<Vertex> vertices = interCFG.getVertices();
-
-        // map each vertex to a unique id, only entry, exit and branch targets are relevant
-        for (Vertex vertex : vertices) {
-
+        interCFG.getVertices().parallelStream().forEach(vertex -> {
             if (vertex.isEntryVertex()) {
                 vertexMap.put(vertex.getMethod() + "->entry", vertex);
             } else if (vertex.isExitVertex()) {
@@ -81,7 +79,10 @@ public class CFG {
                     vertexMap.put(vertex.getMethod() + "->" + basicStmt.getInstructionIndex(), vertex);
                 }
             }
-        }
+        });
+
+        long end = System.currentTimeMillis();
+        System.out.println("Concurrent VertexMap construction took: " + (end-start));
         System.out.println("Size of VertexMap: " + vertexMap.size());
     }
 
@@ -92,16 +93,6 @@ public class CFG {
     public Map<String, Vertex> getVertexMap() {
         return vertexMap;
     }
-
-    /*
-    * TODO: enhance target vertex selection
-    * Initially, we should probably start with a random selected target vertex. Whenever
-    * the target vertex has been covered by some test, i.e. an execution path, a new
-    * target vertex has to be chosen. To deeper explore the AUT, we should select a
-    * yet uncovered vertex. In addition, we should integrate some upper bound, e.g.
-    * a maximal number of tries, which causes the re-selection of a target vertex
-    * when being reached.
-     */
 
     /**
      * Selects a new target vertex in either a purely random fashion or
@@ -191,7 +182,11 @@ public class CFG {
     }
 
     public int getShortestDistance(Vertex src, Vertex dest) {
-        return interCFG.getShortestDistance(src, dest);
+
+        assert dijkstra != null;
+
+        GraphPath<Vertex, Edge> path = dijkstra.getPath(src, dest);
+        return path != null ? path.getLength() : -1;
     }
 
     public double getBranchCoverage() {
