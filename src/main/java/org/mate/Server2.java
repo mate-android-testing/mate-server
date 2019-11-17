@@ -430,6 +430,9 @@ public class Server2 {
         // use bidirectional dijkstra
         ShortestPathAlgorithm<Vertex, Edge> dijkstra = graph.getDijkstra();
 
+        // we have a fixed target vertex
+        Vertex targetVertex = graph.getTargetVertex();
+
         start = System.currentTimeMillis();
 
         visitedVertices.parallelStream().forEach(visitedVertex -> {
@@ -441,7 +444,7 @@ public class Server2 {
             if (branchDistances.containsKey(visitedVertex)) {
                 distance = branchDistances.get(visitedVertex).intValue();
             } else {
-                GraphPath<Vertex, Edge> path = dijkstra.getPath(visitedVertex, graph.getTargetVertex());
+                GraphPath<Vertex, Edge> path = dijkstra.getPath(visitedVertex, targetVertex);
                 if (path != null) {
                     distance = path.getLength();
                     // update branch distance map
@@ -578,6 +581,9 @@ public class Server2 {
         // use bidirectional dijkstra
         ShortestPathAlgorithm<Vertex, Edge> dijkstra = graph.getDijkstra();
 
+        // we have a fixed target vertex
+        Vertex targetVertex = graph.getTargetVertex();
+
         for (Vertex visitedVertex : visitedVertices) {
 
             int distance = -1;
@@ -585,7 +591,7 @@ public class Server2 {
             if (branchDistances.containsKey(visitedVertex)) {
                 distance = branchDistances.get(visitedVertex).intValue();
             } else {
-                GraphPath<Vertex, Edge> path = dijkstra.getPath(visitedVertex, graph.getTargetVertex());
+                GraphPath<Vertex, Edge> path = dijkstra.getPath(visitedVertex, targetVertex);
                 if (path != null) {
                     distance = path.getLength();
                     // update branch distance map
