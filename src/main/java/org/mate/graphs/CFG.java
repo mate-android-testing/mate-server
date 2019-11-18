@@ -32,7 +32,8 @@ public class CFG {
     // TODO: may use int -> for coverage sufficient
     private Set<Vertex> coveredBranches = new HashSet<>();
 
-    private ShortestPathAlgorithm<Vertex, Edge> dijkstra;
+    // private ShortestPathAlgorithm<Vertex, Edge> dijkstra;
+    private ShortestPathAlgorithm<Vertex, Edge> bfs;
 
     // track branch coverage per test case (key: test case id, value: covered branches)
     private Map<String, Set<Vertex>> testCaseBranchCoverage = new HashMap<>();
@@ -42,7 +43,8 @@ public class CFG {
         numberOfBranches = interCFG.getBranches().size();
         this.packageName = packageName;
         // init dijkstra
-        dijkstra = interCFG.initBidirectionalDijkstraAlgorithm();
+        // dijkstra = interCFG.initBidirectionalDijkstraAlgorithm();
+        bfs = interCFG.initBFSAlgorithm();
         selectTargetVertex(true);
         init();
     }
@@ -153,9 +155,13 @@ public class CFG {
         }
     }
 
+    /*
     public ShortestPathAlgorithm<Vertex, Edge> getDijkstra() {
         return dijkstra;
     }
+    */
+
+    public ShortestPathAlgorithm<Vertex, Edge> getBFS() { return bfs; }
 
     public Vertex getTargetVertex() {
         return targetVertex;
@@ -183,9 +189,9 @@ public class CFG {
 
     public int getShortestDistance(Vertex src, Vertex dest) {
 
-        assert dijkstra != null;
+        assert bfs != null;
 
-        GraphPath<Vertex, Edge> path = dijkstra.getPath(src, dest);
+        GraphPath<Vertex, Edge> path = bfs.getPath(src, dest);
         return path != null ? path.getLength() : -1;
     }
 

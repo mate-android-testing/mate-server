@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.time.Instant;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -393,10 +394,12 @@ public class Server2 {
         System.out.println("Number of visited vertices: " + executionPath.size());
 
         // we need to mark vertices we visit
-        Set<Vertex> visitedVertices = new HashSet<>();
+        Set<Vertex> visitedVertices = Collections.newSetFromMap(new ConcurrentHashMap<Vertex, Boolean>());
+        // Set<Vertex> visitedVertices = new HashSet<>();
 
         // we need to track covered branch vertices for branch coverage
-        Set<Vertex> coveredBranches = new HashSet<>();
+        Set<Vertex> coveredBranches = Collections.newSetFromMap(new ConcurrentHashMap<Vertex, Boolean>());
+        // Set<Vertex> coveredBranches = new HashSet<>();
 
         Map<String, Vertex> vertexMap = graph.getVertexMap();
 
@@ -407,6 +410,11 @@ public class Server2 {
             String type = pathNode.substring(index+2);
 
             Vertex visitedVertex = vertexMap.get(pathNode);
+
+            if (visitedVertex == null) {
+                System.out.println("Couldn't derive vertex for trace entry: " + pathNode);
+            }
+
             // TODO: may need to be synchronized
             visitedVertices.add(visitedVertex);
 
@@ -428,7 +436,7 @@ public class Server2 {
         Map<Vertex, Double> branchDistances = graph.getBranchDistances();
 
         // use bidirectional dijkstra
-        ShortestPathAlgorithm<Vertex, Edge> dijkstra = graph.getDijkstra();
+        ShortestPathAlgorithm<Vertex, Edge> bfs = graph.getBFS();
 
         // we have a fixed target vertex
         Vertex targetVertex = graph.getTargetVertex();
@@ -444,7 +452,7 @@ public class Server2 {
             if (branchDistances.containsKey(visitedVertex)) {
                 distance = branchDistances.get(visitedVertex).intValue();
             } else {
-                GraphPath<Vertex, Edge> path = dijkstra.getPath(visitedVertex, targetVertex);
+                GraphPath<Vertex, Edge> path = bfs.getPath(visitedVertex, targetVertex);
                 if (path != null) {
                     distance = path.getLength();
                     // update branch distance map
@@ -579,7 +587,7 @@ public class Server2 {
         Map<Vertex, Double> branchDistances = graph.getBranchDistances();
 
         // use bidirectional dijkstra
-        ShortestPathAlgorithm<Vertex, Edge> dijkstra = graph.getDijkstra();
+        ShortestPathAlgorithm<Vertex, Edge> bfs = graph.getBFS();
 
         // we have a fixed target vertex
         Vertex targetVertex = graph.getTargetVertex();
@@ -591,7 +599,7 @@ public class Server2 {
             if (branchDistances.containsKey(visitedVertex)) {
                 distance = branchDistances.get(visitedVertex).intValue();
             } else {
-                GraphPath<Vertex, Edge> path = dijkstra.getPath(visitedVertex, targetVertex);
+                GraphPath<Vertex, Edge> path = bfs.getPath(visitedVertex, targetVertex);
                 if (path != null) {
                     distance = path.getLength();
                     // update branch distance map
@@ -735,7 +743,7 @@ public class Server2 {
         List<String> branchDistanceVector = new LinkedList<>();
 
         // use bidirectional dijkstra
-        ShortestPathAlgorithm<Vertex, Edge> dijkstra = graph.getDijkstra();
+        ShortestPathAlgorithm<Vertex, Edge> bfs = graph.getBFS();
 
         // evaluate fitness value for each single branch
         for (Vertex branch : branches) {
@@ -749,7 +757,7 @@ public class Server2 {
                 // TODO: cache computed branch distances as in single objective case
 
                 int distance = -1;
-                GraphPath<Vertex, Edge> path = dijkstra.getPath(visitedVertex, branch);
+                GraphPath<Vertex, Edge> path = bfs.getPath(visitedVertex, branch);
 
                 if (path != null) {
                     distance = path.getLength();
