@@ -200,7 +200,11 @@ public class CFG {
     }
 
     public double getBranchCoverage(String testCase) {
-        return ((double) testCaseBranchCoverage.get(testCase).size()) / numberOfBranches;
+        if (!testCaseBranchCoverage.containsKey(testCase)) {
+            return 0;
+        } else {
+            return ((double) testCaseBranchCoverage.get(testCase).size()) / numberOfBranches;
+        }
     }
 
     public String getPackageName() {

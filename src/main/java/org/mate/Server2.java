@@ -330,6 +330,7 @@ public class Server2 {
 
         if (cmdStr.contains(":")) {
             String testCase = cmdStr.split(":", 2)[1];
+            System.out.println("TestCase: " + testCase);
             branchCoverage = graph.getBranchCoverage(testCase);
         } else {
             branchCoverage = graph.getBranchCoverage();
@@ -415,12 +416,10 @@ public class Server2 {
                 System.out.println("Couldn't derive vertex for trace entry: " + pathNode);
             }
 
-            // TODO: may need to be synchronized
             visitedVertices.add(visitedVertex);
 
             if (!type.equals("entry") && !type.equals("exit")) {
                 // must be a branch
-                // TODO: may need to be synchronized
                 coveredBranches.add(visitedVertex);
             }
         });
