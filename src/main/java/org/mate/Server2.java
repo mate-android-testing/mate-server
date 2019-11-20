@@ -166,6 +166,9 @@ public class Server2 {
         if (cmdStr.startsWith("getCombinedCoverage"))
             return getCombinedCoverage(cmdStr);
 
+        if (cmdStr.startsWith("grantPermissions"))
+            return grantPermissions(cmdStr);
+
         if (cmdStr.startsWith("storeBranchCoverage"))
             return storeBranchCoverage(cmdStr);
 
@@ -247,6 +250,24 @@ public class Server2 {
     }
 
     /**
+     * Grants runtime permission to a given app.
+     *
+     * @param cmdStr The command string.
+     * @return Returns the string "true" if the permissions
+     *      could be granted, otherwise the string "false".
+     */
+    public static String grantPermissions(String cmdStr) {
+
+        String parts[] = cmdStr.split(":");
+        String packageName = parts[1];
+        String deviceID = parts[2];
+
+        Device device = Device.devices.get(deviceID);
+        boolean granted = device.grantPermissions(packageName);
+        return String.valueOf(granted);
+    }
+
+    /**
      * Returns the list of branches contained in the CFG,
      * where each branch is composed of class->method->branchID.
      *
@@ -277,6 +298,12 @@ public class Server2 {
         return String.join("\n", branchIDs);
     }
 
+    /**
+     * Stores the branch coverage information into a file.
+     *
+     * @param cmdStr The command string.
+     * @return Returns an empty response.
+     */
     public static String storeBranchCoverage(String cmdStr) {
 
         int lastDelimiter = cmdStr.lastIndexOf(':');

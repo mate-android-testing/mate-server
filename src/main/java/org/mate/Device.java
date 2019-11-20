@@ -74,6 +74,28 @@ public class Device {
     }
 
     /**
+     * Grants read and write permission for external storage to the given app.
+     *
+     * @param packageName The package name of the app.
+     * @return Returns {@code true} if the permissions could be granted,
+     *          otherwise {@code false}.
+     */
+    public boolean grantPermissions(String packageName) {
+
+        String cmdRead = "adb -s " + deviceID + " shell pm grant " + packageName + " android.permission.READ_EXTERNAL_STORAGE";
+        String cmdWrite = "adb -s " + deviceID + " shell pm grant " + packageName + " android.permission.WRITE_EXTERNAL_STORAGE";
+
+        System.out.println(cmdRead);
+        System.out.println(cmdWrite);
+
+        List<String> responseRead = ADB.runCommand(cmdRead);
+        List<String> responseWrite = ADB.runCommand(cmdWrite);
+
+        // empty repsonse should signal no failure
+        return responseRead.isEmpty() && responseWrite.isEmpty();
+    }
+
+    /**
      * Pulls the traces.txt file from the external storage (sd card) if present.
      * The file is stored in the working directory, that is the mate-commander directory by default.
      *
