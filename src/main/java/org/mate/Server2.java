@@ -197,6 +197,9 @@ public class Server2 {
         if (cmdStr.startsWith("contrastratio"))
             return ImageHandler.calculateConstratRatio(cmdStr);
 
+        if (cmdStr.startsWith("luminance"))
+            return ImageHandler.calculateLuminance(cmdStr);
+
         if (cmdStr.startsWith("rm emulator"))
             return "";
 
