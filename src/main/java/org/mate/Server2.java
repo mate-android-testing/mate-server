@@ -455,6 +455,15 @@ public class Server2 {
         graph.addCoveredBranches(coveredBranches);
         graph.addCoveredBranches(testCase, coveredBranches);
 
+        // draw the graph if the size is not too big
+        if (graph.getVertices().size() < 700) {
+            System.out.println("Drawing graph now...");
+            File output = new File(System.getProperty("user.dir"),
+                    "graph" + graph.branchDistanceRetrievalCounter + ".png");
+            graph.branchDistanceRetrievalCounter++;
+            graph.drawGraph(visitedVertices, output);
+        }
+
         // the minimal distance between a execution path and a chosen target vertex
         AtomicInteger min = new AtomicInteger(Integer.MAX_VALUE);
 

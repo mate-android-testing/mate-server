@@ -11,6 +11,8 @@ import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.jgrapht.alg.shortestpath.AllDirectedPaths;
 import org.jgrapht.alg.shortestpath.DijkstraShortestPath;
 
+import java.io.File;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -19,6 +21,9 @@ public class CFG {
     private final BaseCFG interCFG;
     private final int numberOfBranches;
     private final String packageName;
+
+    // tracks how often branch distance is queried
+    public static int branchDistanceRetrievalCounter = 0;
 
     private Vertex targetVertex;
 
@@ -209,5 +214,9 @@ public class CFG {
 
     public String getPackageName() {
         return packageName;
+    }
+
+    public void drawGraph(Set<Vertex> visitedVertices, File outputPath) {
+        interCFG.drawGraph(visitedVertices, targetVertex, outputPath);
     }
 }
