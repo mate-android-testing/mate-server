@@ -5,6 +5,7 @@ import de.uni_passau.fim.auermich.graphs.Vertex;
 import de.uni_passau.fim.auermich.graphs.cfg.BaseCFG;
 import de.uni_passau.fim.auermich.statement.BasicStatement;
 import de.uni_passau.fim.auermich.statement.BlockStatement;
+import de.uni_passau.fim.auermich.statement.ExitStatement;
 import de.uni_passau.fim.auermich.statement.Statement;
 import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
@@ -15,6 +16,7 @@ import java.io.File;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class CFG {
 
@@ -50,8 +52,78 @@ public class CFG {
         // init dijkstra
         // dijkstra = interCFG.initBidirectionalDijkstraAlgorithm();
         bfs = interCFG.initBFSAlgorithm();
-        selectTargetVertex(true);
+
+        targetVertex = interCFG.getVertices().stream().filter(v
+                -> v.containsInstruction("Lcom/zola/bmi/BMIMain;->interpretBMI(D)Ljava/lang/String;", 8)).findFirst().get();
+
+        System.out.println("Selected Target Vertex: " + targetVertex);
+
+        // selectTargetVertex(true);
         init();
+    }
+
+    public void markIntermediatePathVertices(Vertex entry, Vertex exit, Set<Vertex> visitedVertices) {
+
+        /*
+        *
+        * current_vertex = entry;
+        *
+        * while not reached exit vertex (current_vertex != exit)
+        *
+        *   if entered new method (reached entry vertex with different method name)
+        *       // check outgoing edges of corresponding exit vertex to return to original method
+        *       current_vertex = return_vertex;
+        *       visitedVertices.add(current_vertex);
+        *       // should be inherently done as each entry vertex is part of the traces
+        *       call recursively markIntermediatePathVertices(..) for new method
+        *       continue;
+        *
+        *   if outgoingEdges(current_vertex) == 1
+        *       current_vertex = successor(current_vertex);
+        *       visitedVertices.add(current_vertex);
+        *   else
+        *       // assuming there are no try catch blocks (for termination we need a boolean which
+        *       // indicates whether we found a branch vertex, otherwise we need to abort)
+        *       for succ in successors(current_vertex):
+        *           if visitedVertices.contain(succ) // this branch was taken
+        *               call recursively markIntermediatePathVertices(..) with succ as entry vertex
+         */
+
+        Vertex currentVertex = entry;
+
+        while (!currentVertex.equals(exit)) {
+
+            Set<Edge> outgoingEdges = interCFG.getOutgoingEdges(currentVertex);
+
+            if (outgoingEdges.size() == 1) {
+                // single successors -> follow the path
+                currentVertex = outgoingEdges.stream().findFirst().get().getTarget();
+            } else {
+
+                outgoingEdges.forEach(e -> {
+                    Vertex targetVertex = e.getTarget();
+                    if (targetVertex.isBranchVertex()
+                            && visitedVertices.contains(targetVertex)) {
+                        markIntermediatePathVertices(targetVertex, exit, visitedVertices);
+                    }
+                });
+                break;
+            }
+
+            if (!entry.getMethod().equals(currentVertex.getMethod())) {
+                // we entered a new method
+
+                // search for return vertex, which must be a successor of the method's exit vertex
+                Vertex exitVertex = new Vertex(new ExitStatement(currentVertex.getMethod()));
+
+                // TODO: there might be several return statements that could be applicable
+                currentVertex = interCFG.getOutgoingEdges(exitVertex).stream().filter(edge ->
+                        edge.getTarget().getMethod().equals(entry.getMethod())).findFirst()
+                        .get().getTarget();
+            }
+
+            visitedVertices.add(currentVertex);
+        }
     }
 
     /**

@@ -7,6 +7,7 @@ import de.uni_passau.fim.auermich.graphs.Vertex;
 import de.uni_passau.fim.auermich.graphs.cfg.BaseCFG;
 import de.uni_passau.fim.auermich.statement.BasicStatement;
 import de.uni_passau.fim.auermich.statement.BlockStatement;
+import de.uni_passau.fim.auermich.statement.ExitStatement;
 import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.mate.graphs.CFG;
@@ -429,13 +430,13 @@ public class Server2 {
         Set<Vertex> coveredBranches = Collections.newSetFromMap(new ConcurrentHashMap<Vertex, Boolean>());
         // Set<Vertex> coveredBranches = new HashSet<>();
 
+        // we need to track entry vertices separately
+        Set<Vertex> entryVertices = Collections.newSetFromMap(new ConcurrentHashMap<Vertex, Boolean>());
+
         Map<String, Vertex> vertexMap = graph.getVertexMap();
 
         // map trace to vertex
         executionPath.parallelStream().forEach(pathNode -> {
-
-            int index = pathNode.lastIndexOf("->");
-            String type = pathNode.substring(index+2);
 
             Vertex visitedVertex = vertexMap.get(pathNode);
 
@@ -445,10 +446,20 @@ public class Server2 {
 
             visitedVertices.add(visitedVertex);
 
-            if (!type.equals("entry") && !type.equals("exit")) {
+            if (visitedVertex.isEntryVertex()) {
+                entryVertices.add(visitedVertex);
+            }
+
+            if (!visitedVertex.isEntryVertex() && !visitedVertex.isExitVertex()) {
                 // must be a branch
                 coveredBranches.add(visitedVertex);
             }
+        });
+
+        // mark the intermediate path nodes that are between branches we visited
+        entryVertices.forEach(entry -> {
+            Vertex exit = new Vertex(new ExitStatement(entry.getMethod()));
+            graph.markIntermediatePathVertices(entry, exit, visitedVertices);
         });
 
         // track covered branches for coverage measurement
