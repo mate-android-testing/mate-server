@@ -442,24 +442,29 @@ public class Server2 {
 
             if (visitedVertex == null) {
                 System.out.println("Couldn't derive vertex for trace entry: " + pathNode);
-            }
+            } else {
 
-            visitedVertices.add(visitedVertex);
+                visitedVertices.add(visitedVertex);
 
-            if (visitedVertex.isEntryVertex()) {
-                entryVertices.add(visitedVertex);
-            }
+                if (visitedVertex.isEntryVertex()) {
+                    entryVertices.add(visitedVertex);
+                }
 
-            if (!visitedVertex.isEntryVertex() && !visitedVertex.isExitVertex()) {
-                // must be a branch
-                coveredBranches.add(visitedVertex);
+                if (!visitedVertex.isEntryVertex() && !visitedVertex.isExitVertex()) {
+                    // must be a branch
+                    coveredBranches.add(visitedVertex);
+                }
             }
         });
 
+        System.out.println("Marking intermediate path nodes now...");
+
         // mark the intermediate path nodes that are between branches we visited
-        entryVertices.forEach(entry -> {
+        entryVertices.parallelStream().forEach(entry -> {
             Vertex exit = new Vertex(new ExitStatement(entry.getMethod()));
-            graph.markIntermediatePathVertices(entry, exit, visitedVertices);
+            if (visitedVertices.contains(entry) && visitedVertices.contains(exit)) {
+                graph.markIntermediatePathVertices(entry, exit, visitedVertices);
+            }
         });
 
         // track covered branches for coverage measurement
@@ -482,7 +487,8 @@ public class Server2 {
         Map<Vertex, Double> branchDistances = graph.getBranchDistances();
 
         // use bidirectional dijkstra
-        ShortestPathAlgorithm<Vertex, Edge> bfs = graph.getBFS();
+        ShortestPathAlgorithm<Vertex, Edge> dijkstra = graph.getDijkstra();
+        // ShortestPathAlgorithm<Vertex, Edge> bfs = graph.getBFS();
 
         // we have a fixed target vertex
         Vertex targetVertex = graph.getTargetVertex();
@@ -498,7 +504,7 @@ public class Server2 {
             if (branchDistances.containsKey(visitedVertex)) {
                 distance = branchDistances.get(visitedVertex).intValue();
             } else {
-                GraphPath<Vertex, Edge> path = bfs.getPath(visitedVertex, targetVertex);
+                GraphPath<Vertex, Edge> path = dijkstra.getPath(visitedVertex, targetVertex);
                 if (path != null) {
                     distance = path.getLength();
                     // update branch distance map

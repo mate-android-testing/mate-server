@@ -39,7 +39,7 @@ public class CFG {
     // TODO: may use int -> for coverage sufficient
     private Set<Vertex> coveredBranches = new HashSet<>();
 
-    // private ShortestPathAlgorithm<Vertex, Edge> dijkstra;
+    private ShortestPathAlgorithm<Vertex, Edge> dijkstra;
     private ShortestPathAlgorithm<Vertex, Edge> bfs;
 
     // track branch coverage per test case (key: test case id, value: covered branches)
@@ -50,15 +50,15 @@ public class CFG {
         numberOfBranches = interCFG.getBranches().size();
         this.packageName = packageName;
         // init dijkstra
-        // dijkstra = interCFG.initBidirectionalDijkstraAlgorithm();
-        bfs = interCFG.initBFSAlgorithm();
+        dijkstra = interCFG.initBidirectionalDijkstraAlgorithm();
+        // bfs = interCFG.initBFSAlgorithm();
 
+        /*
         targetVertex = interCFG.getVertices().stream().filter(v
                 -> v.containsInstruction("Lcom/zola/bmi/BMIMain;->interpretBMI(D)Ljava/lang/String;", 8)).findFirst().get();
+        */
 
-        System.out.println("Selected Target Vertex: " + targetVertex);
-
-        // selectTargetVertex(true);
+        selectTargetVertex(true);
         init();
     }
 
@@ -100,7 +100,7 @@ public class CFG {
                 currentVertex = outgoingEdges.stream().findFirst().get().getTarget();
             } else {
 
-                outgoingEdges.forEach(e -> {
+                outgoingEdges.parallelStream().forEach(e -> {
                     Vertex targetVertex = e.getTarget();
                     if (targetVertex.isBranchVertex()
                             && visitedVertices.contains(targetVertex)) {
@@ -232,11 +232,9 @@ public class CFG {
         }
     }
 
-    /*
     public ShortestPathAlgorithm<Vertex, Edge> getDijkstra() {
         return dijkstra;
     }
-    */
 
     public ShortestPathAlgorithm<Vertex, Edge> getBFS() { return bfs; }
 
@@ -266,9 +264,10 @@ public class CFG {
 
     public int getShortestDistance(Vertex src, Vertex dest) {
 
-        assert bfs != null;
+        // assert bfs != null;
+        assert dijkstra != null;
 
-        GraphPath<Vertex, Edge> path = bfs.getPath(src, dest);
+        GraphPath<Vertex, Edge> path = dijkstra.getPath(src, dest);
         return path != null ? path.getLength() : -1;
     }
 
