@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 public class CFG {
 
@@ -115,15 +116,91 @@ public class CFG {
 
                 // search for return vertex, which must be a successor of the method's exit vertex
                 Vertex exitVertex = new Vertex(new ExitStatement(currentVertex.getMethod()));
-
-                // TODO: there might be several return statements that could be applicable
-                currentVertex = interCFG.getOutgoingEdges(exitVertex).stream().filter(edge ->
-                        edge.getTarget().getMethod().equals(entry.getMethod())).findFirst()
-                        .get().getTarget();
+                currentVertex = getReturnVertex(currentVertex, exitVertex, visitedVertices);
             }
 
             visitedVertices.add(currentVertex);
         }
+    }
+
+    /**
+     * Searches for the return vertex belonging to the invocation stmt included in the
+     * given vertex.
+     *
+     * @param vertex The vertex including the invocation stmt.
+     * @param exit The exit vertex of the invoked method.
+     * @param visitedVertices The set of currently visited vertices. Needs to be updated
+     *                        as a side effect in case no basic blocks are used.
+     * @return Returns the corresponding return vertex. In case no basic blocks are used,
+     *          the appropriate successor vertex is returned.
+     * @throws IllegalStateException If the return vertex couldn't be found.
+     */
+    private Vertex getReturnVertex(Vertex vertex, Vertex exit, Set<Vertex> visitedVertices) {
+
+        // the vertex contains an invoke instruction as last statement
+        Statement stmt = vertex.getStatement();
+
+        // we need to know instruction index of the invoke stmt
+        int index = -1;
+
+        if (stmt.getType() == Statement.StatementType.BASIC_STATEMENT) {
+            BasicStatement basicStatement = (BasicStatement) stmt;
+            index = basicStatement.getInstructionIndex();
+        } else if (stmt.getType() == Statement.StatementType.BLOCK_STATEMENT) {
+            BlockStatement blockStatement = (BlockStatement) stmt;
+            BasicStatement basicStatement = (BasicStatement) blockStatement.getLastStatement();
+            index = basicStatement.getInstructionIndex();
+        }
+
+        // find the return vertices that return to the original method
+        List<Vertex> returnVertices = interCFG.getOutgoingEdges(exit).stream().filter(edge ->
+                edge.getTarget().getMethod().equals(vertex.getMethod())).map(Edge::getTarget)
+                .collect(Collectors.toList());
+
+        // the return vertex that has index + 1 as next instruction index is the right one
+        for (Vertex returnVertex : returnVertices) {
+
+            // the vertex contains an invoke instruction as last statement
+            Statement returnStmt = returnVertex.getStatement();
+
+            // we need to know instruction index of the invoke stmt
+            int nextIndex = -1;
+
+            if (returnStmt.getType() == Statement.StatementType.BASIC_STATEMENT) {
+
+                // we need to inspect the successor vertices since the return stmt is shared
+                List<Vertex> successors = interCFG.getOutgoingEdges(returnVertex).stream().
+                        map(Edge::getTarget).collect(Collectors.toList());
+
+                for (Vertex successor : successors) {
+                    // each successor is a basic stmt
+                    BasicStatement basicStatement = (BasicStatement) successor.getStatement();
+                    nextIndex = basicStatement.getInstructionIndex();
+
+                    if (nextIndex == index + 1) {
+
+                        // we can't return the return stmt, but we need to mark it as visited as a side effect
+                        visitedVertices.add(returnVertex);
+
+                        // here we return the successor of the return vertex directly
+                        // otherwise we don't know again which is the actual successor
+                        return successor;
+                    }
+                }
+            } else if (returnStmt.getType() == Statement.StatementType.BLOCK_STATEMENT) {
+
+                BlockStatement blockStatement = (BlockStatement) returnStmt;
+
+                // the stmt after the return stmt is the next actual instruction stmt
+                BasicStatement basicStatement = (BasicStatement) blockStatement.getStatements().get(1);
+                index = basicStatement.getInstructionIndex();
+            }
+
+            if (nextIndex == index + 1) {
+                return returnVertex;
+            }
+        }
+        throw new IllegalStateException("Couldn't find corresponding return vertex for " + vertex);
     }
 
     /**
