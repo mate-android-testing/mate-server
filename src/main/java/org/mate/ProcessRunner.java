@@ -51,7 +51,7 @@ public class ProcessRunner {
             }
 
             //if (command[0].contains("pull"))
-                System.out.println("result after command: " + line);
+                //System.out.println("result after command: " + line);
             return line;
 
         } catch (Exception e) {

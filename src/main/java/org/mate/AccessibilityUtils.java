@@ -53,4 +53,32 @@ public class AccessibilityUtils {
 
         return contrastRatio;
     }
+
+    public static String getLuminance(String imagePath,int x1, int y1, int x2, int y2){
+        String path = imagePath;
+        if (!imagePath.equals(lastImagePath)){
+            if (image!=null)
+                image.flush();
+            image=null;
+
+            File file= new File(path);
+            try {
+                System.out.println("load img: " + path);
+                image = ImageIO.read(file);
+            } catch (IOException e) {
+                System.out.println("image not found: "+path);
+                image = null;
+            }
+        }
+        lastImagePath = imagePath;
+
+        String luminance = "0,0";
+        if (image!=null) {
+            luminance = ColorUtils.calculateLuminance(image, x1, y1, x2, y2);
+        }
+        else
+            System.out.println("img: null");
+
+        return luminance;
+    }
 }

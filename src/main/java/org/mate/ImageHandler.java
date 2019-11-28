@@ -101,6 +101,40 @@ public class ImageHandler {
         return "";
     }
 
+    public static String calculateLuminance(String cmdStr){
+        String response = "0";
+        try {
+
+            System.out.println(cmdStr);
+            String[] parts = cmdStr.split(":");
+            String packageName = parts[1];
+
+            String targetFolder = screenShotDir+packageName.split("_")[1];
+
+            String stateId = parts[2];
+            String coord = parts[3];
+
+
+
+            String[] positions = coord.split(",");
+            int x1 = Integer.valueOf(positions[0]);
+            int y1 = Integer.valueOf(positions[1]);
+            int x2 = Integer.valueOf(positions[2]);
+            int y2 = Integer.valueOf(positions[3]);
+
+            String fileName = targetFolder+ "/"+packageName + "_" + stateId + ".png";
+            System.out.println(fileName);
+            System.out.println(coord);
+            String luminances = AccessibilityUtils.getLuminance(fileName, x1, y1, x2, y2);
+            System.out.println("luminance: " + luminances);
+            response = luminances;
+        } catch (Exception e) {
+            System.out.println("PROBLEMS CALCULATING LUMINANCE");
+            response = "0,0";
+        }
+        return response;
+    }
+
     public static String calculateConstratRatio(String cmdStr) {
 
         String response = "21";
