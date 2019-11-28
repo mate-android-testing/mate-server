@@ -26,7 +26,7 @@ You will need to log out and log back in again in order for the changes to take 
 ### Scripts and Jacoco
 Currently MATE-Server some functionality (mostly coverage related) depends on the python scripts
 that are located in the `scripts` subdirectory. Therefore a working Python 3 installation is
-needed. Furthermore the python scripts need to be placed in the working of MATE-Server. For the
+needed. Furthermore the python scripts need to be placed in the working directory of MATE-Server. For the
 coverage calculation the jacococli is also needed in the working directory of MATE-Server with
 the following path: `bin/jacococli.jar`.
 
