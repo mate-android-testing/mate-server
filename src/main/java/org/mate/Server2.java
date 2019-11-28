@@ -7,6 +7,7 @@ import de.uni_passau.fim.auermich.graphs.Vertex;
 import de.uni_passau.fim.auermich.graphs.cfg.BaseCFG;
 import de.uni_passau.fim.auermich.statement.BasicStatement;
 import de.uni_passau.fim.auermich.statement.BlockStatement;
+import de.uni_passau.fim.auermich.statement.ExitStatement;
 import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.mate.graphs.CFG;
@@ -435,31 +436,55 @@ public class Server2 {
         Set<Vertex> coveredBranches = Collections.newSetFromMap(new ConcurrentHashMap<Vertex, Boolean>());
         // Set<Vertex> coveredBranches = new HashSet<>();
 
+        // we need to track entry vertices separately
+        Set<Vertex> entryVertices = Collections.newSetFromMap(new ConcurrentHashMap<Vertex, Boolean>());
+
         Map<String, Vertex> vertexMap = graph.getVertexMap();
 
         // map trace to vertex
         executionPath.parallelStream().forEach(pathNode -> {
 
-            int index = pathNode.lastIndexOf("->");
-            String type = pathNode.substring(index+2);
-
             Vertex visitedVertex = vertexMap.get(pathNode);
 
             if (visitedVertex == null) {
                 System.out.println("Couldn't derive vertex for trace entry: " + pathNode);
+            } else {
+
+                visitedVertices.add(visitedVertex);
+
+                if (visitedVertex.isEntryVertex()) {
+                    entryVertices.add(visitedVertex);
+                }
+
+                if (!visitedVertex.isEntryVertex() && !visitedVertex.isExitVertex()) {
+                    // must be a branch
+                    coveredBranches.add(visitedVertex);
+                }
             }
+        });
 
-            visitedVertices.add(visitedVertex);
+        System.out.println("Marking intermediate path nodes now...");
 
-            if (!type.equals("entry") && !type.equals("exit")) {
-                // must be a branch
-                coveredBranches.add(visitedVertex);
+        // mark the intermediate path nodes that are between branches we visited
+        entryVertices.parallelStream().forEach(entry -> {
+            Vertex exit = new Vertex(new ExitStatement(entry.getMethod()));
+            if (visitedVertices.contains(entry) && visitedVertices.contains(exit)) {
+                graph.markIntermediatePathVertices(entry, exit, visitedVertices);
             }
         });
 
         // track covered branches for coverage measurement
         graph.addCoveredBranches(coveredBranches);
         graph.addCoveredBranches(testCase, coveredBranches);
+
+        // draw the graph if the size is not too big
+        if (graph.getVertices().size() < 700) {
+            System.out.println("Drawing graph now...");
+            File output = new File(System.getProperty("user.dir"),
+                    "graph" + graph.branchDistanceRetrievalCounter + ".png");
+            graph.branchDistanceRetrievalCounter++;
+            graph.drawGraph(visitedVertices, output);
+        }
 
         // the minimal distance between a execution path and a chosen target vertex
         AtomicInteger min = new AtomicInteger(Integer.MAX_VALUE);
@@ -468,7 +493,8 @@ public class Server2 {
         Map<Vertex, Double> branchDistances = graph.getBranchDistances();
 
         // use bidirectional dijkstra
-        ShortestPathAlgorithm<Vertex, Edge> bfs = graph.getBFS();
+        ShortestPathAlgorithm<Vertex, Edge> dijkstra = graph.getDijkstra();
+        // ShortestPathAlgorithm<Vertex, Edge> bfs = graph.getBFS();
 
         // we have a fixed target vertex
         Vertex targetVertex = graph.getTargetVertex();
@@ -484,7 +510,7 @@ public class Server2 {
             if (branchDistances.containsKey(visitedVertex)) {
                 distance = branchDistances.get(visitedVertex).intValue();
             } else {
-                GraphPath<Vertex, Edge> path = bfs.getPath(visitedVertex, targetVertex);
+                GraphPath<Vertex, Edge> path = dijkstra.getPath(visitedVertex, targetVertex);
                 if (path != null) {
                     distance = path.getLength();
                     // update branch distance map
