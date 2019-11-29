@@ -15,8 +15,10 @@ import java.util.List;
 public class MessageTest {
     Message message;
     Message message2;
+    Message message3;
     String subject;
     String subject2;
+    String subject3;
     String k1;
     String k2;
     String k3;
@@ -28,6 +30,7 @@ public class MessageTest {
     public void setup() {
         subject = "sub\\;~";
         subject2 = "message2";
+        subject3 = "sub3\\;~";
         k1 = "k1";
         k2 = "k2";
         k3 = "k3";
@@ -43,6 +46,8 @@ public class MessageTest {
         message2 = new Message(subject2);
         message2.addParameter(k1, v1);
         message2.addParameter(k3, v3);
+
+        message3 = new Message(subject3);
     }
     @Test
     public void test_MessageBuilder() {
@@ -82,7 +87,8 @@ public class MessageTest {
     public void test_MessageRoundTrip() {
         byte[] serializedMessage = Serializer.serialize(message);
         byte[] serializedMessage2 = Serializer.serialize(message2);
-        byte[] combined = new byte[serializedMessage.length + serializedMessage2.length];
+        byte[] serializedMessage3 = Serializer.serialize(message3);
+        byte[] combined = new byte[serializedMessage.length + serializedMessage2.length + serializedMessage3.length];
 
         int i = 0;
         for (byte b : serializedMessage) {
@@ -94,13 +100,20 @@ public class MessageTest {
             i++;
         }
 
+        for (byte b : serializedMessage3) {
+            combined[i] = b;
+            i++;
+        }
+
         InputStream inputStream = new ByteArrayInputStream(combined);
 
         Parser parser = new Parser(inputStream);
         Message parsedMessage = parser.nextMessage();
         Message parsedMessage2 = parser.nextMessage();
+        Message parsedMessage3 = parser.nextMessage();
 
         Assert.assertEquals(message, parsedMessage);
         Assert.assertEquals(message2, parsedMessage2);
+        Assert.assertEquals(message3, parsedMessage3);
     }
 }
