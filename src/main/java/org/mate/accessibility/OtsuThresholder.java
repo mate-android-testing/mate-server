@@ -1,8 +1,5 @@
-package org.mate;
+package org.mate.accessibility;
 
-/**
- * Created by marceloeler on 19/02/17.
- */
 public class OtsuThresholder {
     private int histData[];
     private int maxLevelValue;

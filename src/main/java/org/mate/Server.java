@@ -4,16 +4,19 @@ import com.itextpdf.text.*;
 import de.uni_passau.fim.auermich.Main;
 import de.uni_passau.fim.auermich.graphs.Edge;
 import de.uni_passau.fim.auermich.graphs.Vertex;
-import de.uni_passau.fim.auermich.graphs.cfg.BaseCFG;
 import de.uni_passau.fim.auermich.statement.BasicStatement;
 import de.uni_passau.fim.auermich.statement.BlockStatement;
 import de.uni_passau.fim.auermich.statement.ExitStatement;
 import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
+import org.mate.accessibility.ImageHandler;
 import org.mate.graphs.CFG;
+import org.mate.io.ADB;
+import org.mate.io.Device;
 import org.mate.message.Message;
 import org.mate.message.serialization.Parser;
 import org.mate.message.serialization.Serializer;
+import pdf.Report;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -28,10 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-/**
- * Created by marceloeler on 14/03/17.
- */
-public class Server2 {
+public class Server {
 
     public static boolean generatePDFReport;
     public static boolean showImagesOnTheFly;

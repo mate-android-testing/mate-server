@@ -1,4 +1,7 @@
-package org.mate;
+package org.mate.accessibility;
+
+import org.mate.io.ADB;
+import org.mate.io.Device;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -7,11 +10,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.Writer;
-import java.util.List;
 
-/**
- * Created by marceloeler on 21/09/18.
- */
 public class ImageHandler {
 
     public static String screenShotDir;

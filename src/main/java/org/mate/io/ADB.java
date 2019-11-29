@@ -1,10 +1,7 @@
-package org.mate;
+package org.mate.io;
 
 import java.util.List;
 
-/**
- * Created by marceloeler on 21/09/18.
- */
 public class ADB {
 
     public static boolean isWin = System.getProperty("os.name")

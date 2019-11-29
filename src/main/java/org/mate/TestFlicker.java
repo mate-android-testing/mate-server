@@ -1,9 +1,12 @@
 package org.mate;
 
+import org.mate.accessibility.AccessibilityUtils;
+import org.mate.io.ADB;
+
 public class TestFlicker {
 
     public static void main(String[] args){
-        String screenShotDir = "/home/marceloeler/";
+        String screenShotDir = "/home/marceloeler/"; //TODO: remove hardcoded file path
         String targetFolder = screenShotDir;
         System.out.println("target folder: " + targetFolder);
 

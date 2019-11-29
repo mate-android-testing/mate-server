@@ -1,4 +1,4 @@
-package org.mate;
+package org.mate.io;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -6,11 +6,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static java.util.Arrays.*;
-
-/**
- * Created by marceloe on 04/01/17.
- */
 public class ProcessRunner {
     private static final String[] WIN_RUNTIME = { "cmd.exe", "/C" };
     private static final String[] OS_LINUX_RUNTIME = { "/bin/bash", "-c" };
