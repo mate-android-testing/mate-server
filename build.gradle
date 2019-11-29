@@ -28,7 +28,7 @@ sourceCompatibility = 1.8
 task fatJar(type: Jar) {
     manifest {
         attributes 'Implementation-Version': version,
-                   'Main-Class': 'org.mate.Server2'
+                   'Main-Class': 'org.mate.Server'
     }
     baseName = project.name + '-all'
     from {configurations.compile.collect{it.isDirectory() ? it : zipTree(it)}}

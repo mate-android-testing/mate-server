@@ -1,6 +1,6 @@
 package org.mate.io;
 
-import pdf.Report;
+import org.mate.pdf.Report;
 import org.mate.Server;
 import org.mate.accessibility.ImageHandler;
 
