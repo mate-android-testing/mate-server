@@ -7,7 +7,13 @@ public class Router {
     private final TreeMap<String, Endpoint> routes;
 
     public Router() {
-        routes = new TreeMap<>((s1, s2) -> Integer.compare(s2.length(), s1.length()));
+        routes = new TreeMap<>((s1, s2) -> {
+            int compare = Integer.compare(s2.length(), s1.length());
+            if (compare == 0) {
+                return s1.compareTo(s2);
+            }
+            return compare;
+        });
     }
 
     public void add(String path, Endpoint endpoint) {
