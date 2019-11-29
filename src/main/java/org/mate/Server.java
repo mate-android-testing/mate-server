@@ -1,6 +1,7 @@
 package org.mate;
 
 import org.mate.accessibility.ImageHandler;
+import org.mate.endpoints.CloseEndpoint;
 import org.mate.endpoints.LegacyEndpoint;
 import org.mate.io.ADB;
 import org.mate.io.Device;
@@ -44,6 +45,9 @@ public class Server {
     public void run(long timeout, long length, int port, String emuName) {
         router = new Router();
         router.add("/legacy", new LegacyEndpoint(timeout, length));
+        CloseEndpoint closeEndpoint = new CloseEndpoint();
+        router.add("/close", closeEndpoint);
+
         Server.emuName = emuName;
 
         createFolders();
@@ -80,6 +84,9 @@ public class Server {
                          request = messageParser.nextMessage()) {
                         Message response = router.resolve(request.getSubject()).handle(request);
                         replyMessage(response, client.getOutputStream());
+                        if (closeEndpoint.isClosed()) {
+                            break;
+                        }
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
