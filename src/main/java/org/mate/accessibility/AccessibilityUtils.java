@@ -1,12 +1,10 @@
-package org.mate;
+package org.mate.accessibility;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.util.Date;
-import java.util.Vector;
 
 /**
  * Created by marceloeler on 04/07/17.

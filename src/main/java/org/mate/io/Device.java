@@ -1,4 +1,8 @@
-package org.mate;
+package org.mate.io;
+
+import pdf.Report;
+import org.mate.Server;
+import org.mate.accessibility.ImageHandler;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -6,9 +10,6 @@ import java.util.Arrays;
 import java.util.Hashtable;
 import java.util.List;
 
-/**
- * Created by marceloeler on 14/09/18.
- */
 public class Device {
 
     public static Hashtable<String,Device> devices;
@@ -370,11 +371,11 @@ public class Device {
         String parts[] = cmdStr.split(":");
         String packageName = parts[1];
 
-        if (Server2.emuName != null) {
-            Device device = devices.get(Server2.emuName);
+        if (Server.emuName != null) {
+            Device device = devices.get(Server.emuName);
             device.setPackageName(packageName);
             device.setBusy(true);
-            return Server2.emuName;
+            return Server.emuName;
         }
 
         String deviceID = getDeviceRunningPackage(packageName);

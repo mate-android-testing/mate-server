@@ -1,4 +1,4 @@
-package org.mate;
+package org.mate.accessibility;
 
 import Catalano.Imaging.FastBitmap;
 
@@ -6,9 +6,6 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.Hashtable;
 
-/**
- * Created by marceloeler on 16/02/17.
- */
 public class ColorUtils {
 
 

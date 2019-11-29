@@ -1,13 +1,12 @@
-package org.mate;
+package pdf;
 
 import com.itextpdf.text.*;
 import com.itextpdf.text.pdf.PdfWriter;
+import org.mate.accessibility.ImageHandler;
+import org.mate.io.Device;
 
 import java.io.*;
 
-/**
- * Created by marceloeler on 14/09/18.
- */
 public class Report {
     public static String reportDir;
 
