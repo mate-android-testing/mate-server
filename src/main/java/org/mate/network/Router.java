@@ -1,17 +1,13 @@
 package org.mate.network;
 
-import java.util.*;
+import java.util.Map;
+import java.util.TreeMap;
 
 public class Router {
     private final TreeMap<String, Endpoint> routes;
 
     public Router() {
-        routes = new TreeMap<>(new Comparator<String>() {
-            @Override
-            public int compare(String s1, String s2) {
-                return Integer.compare(s2.length(), s1.length());
-            }
-        });
+        routes = new TreeMap<>((s1, s2) -> Integer.compare(s2.length(), s1.length()));
     }
 
     public void add(String path, Endpoint endpoint) {
@@ -20,7 +16,7 @@ public class Router {
 
     public Endpoint resolve(String path) {
         for (Map.Entry<String, Endpoint> route : routes.entrySet()) {
-            if (route.getKey().equals(path)) {
+            if (path.startsWith(route.getKey())) {
                 return route.getValue();
             }
         }
