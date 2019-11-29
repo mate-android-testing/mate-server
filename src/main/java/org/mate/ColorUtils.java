@@ -277,12 +277,13 @@ public class ColorUtils {
         Color cHigh = new Color(colorHigh);
         Color cLow = new Color(colorLow);
 
+        System.out.println("chigh: " + cHigh.getRed()+"-"+cHigh.getGreen()+" " + cHigh.getBlue());
         buff.flush();
 
         String chighStr = cHigh.getRed()+":"+cHigh.getGreen()+":"+cHigh.getBlue()+":"+rgbToHex(cHigh.getRed(),cHigh.getGreen(),cHigh.getBlue())+":"+getHue(cHigh.getRed(),cHigh.getGreen(),cHigh.getBlue());
         String clowStr = cLow.getRed()+":"+cLow.getGreen()+":"+cLow.getBlue()+":"+rgbToHex(cLow.getRed(),cLow.getGreen(),cLow.getBlue())+":"+getHue(cLow.getRed(),cLow.getGreen(),cLow.getBlue());
 
-        return clowStr+","+chighStr;
+        return clowStr+","+chighStr+"#"+maxLow+","+maxHigh;
     }
 
     private static String rgbToHex(int R,int G,int B) {

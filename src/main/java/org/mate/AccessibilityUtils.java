@@ -81,4 +81,80 @@ public class AccessibilityUtils {
 
         return luminance;
     }
+
+    public static boolean checkFlickering(String targetFolder, String imgPath){
+
+        for (int i=0; i<50; i++){
+            String img = targetFolder+"/"+imgPath.replace(".png","_flicker_"+i+".png");
+            File file= new File(img);
+            try {
+                //System.out.println("load img: " + img);
+                image = ImageIO.read(file);
+            } catch (IOException e) {
+                //System.out.println("image not found: "+img);
+                image = null;
+            }
+
+            int[] histogram = CalculateHist(image);
+
+            int sum = 0;
+            for (int h=0; h<histogram.length; h++){
+                sum+=histogram[h];
+                //System.out.print(histogram[h]+" ");
+            }
+            System.out.println(sum);
+        }
+
+        return false;
+    }
+
+    public static int[] CalculateHist(BufferedImage img) {
+        int k;
+        int pixel[];
+        //array represents the intecity values of the pixels
+        int levels[] = new int[256];
+        for (int i = 0; i < img.getWidth(); i++) {
+            for (int j = 0; j < img.getHeight(); j++) {
+                pixel = img.getRaster().getPixel(i, j, new int[4]);
+                //increase if same pixel appears
+                levels[pixel[0]]++;
+            }
+        }
+
+        return levels;
+    }
+
+
+
+
+    public void histEqualize(BufferedImage img) {
+        //call CalculateHist method to get the histogram
+        int[] h = CalculateHist(img);
+        //calculate total number of pixel
+        int mass = img.getWidth() * img.getHeight();
+        int k = 0;
+        long sum = 0;
+        int pixel[];
+        //calculate the scale factor
+        float scale = (float) 255.0 / mass;
+        //calculte cdf
+        for (int x = 0; x < h.length; x++) {
+            sum += h[x];
+            int value = (int) (scale * sum);
+            if (value > 255) {
+                value = 255;
+            }
+            h[x] = value;
+        }
+        for (int i = 0; i < img.getWidth(); i++) {
+            for (int j = 0; j < img.getHeight(); j++) {
+                pixel = img.getRaster().getPixel(i, j, new int[3]);
+                //set the new value
+                k = h[pixel[0]];
+                Color color = new Color(k, k, k);
+                int rgb = color.getRGB();
+                img.setRGB(i, j, rgb);
+            }
+        }
+    }
 }

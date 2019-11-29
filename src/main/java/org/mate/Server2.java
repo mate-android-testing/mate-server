@@ -60,7 +60,7 @@ public class Server2 {
         //read arguments and set default values otherwise
         timeout = 5;
         length = 1000;
-        port = 12345;
+        port = 12344;
         if (args.length > 0) {
             timeout = Long.valueOf(args[0]);
         }
@@ -214,6 +214,9 @@ public class Server2 {
             //format commands
         if (cmdStr.startsWith("screenshot"))
             return ImageHandler.takeScreenshot(cmdStr);
+
+        if (cmdStr.startsWith("flickerScreenshot"))
+            return ImageHandler.takeFlickerScreenshot(cmdStr);
 
         if (cmdStr.startsWith("mark-image") && generatePDFReport)
             return ImageHandler.markImage(cmdStr);

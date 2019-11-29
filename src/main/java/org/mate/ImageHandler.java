@@ -39,6 +39,36 @@ public class ImageHandler {
         return imgPath;
     }
 
+    public static String takeFlickerScreenshot(String cmdStr) {
+
+        String targetFolder = screenShotDir + cmdStr.split("_")[1];
+        System.out.println("target folder: " + targetFolder);
+
+        String[] parts = cmdStr.split(":");
+        String emulator = parts[1];
+        String imgPath = parts[2];
+        String originalImgPath = imgPath;
+        int index = imgPath.lastIndexOf("_");
+        //String packageName = parts[1].substring(0,index-1);
+
+        for (int i=0; i<20; i++) {
+            imgPath = originalImgPath.replace(".png","_flicker_"+i+".png");
+            cmdStr = "adb -s " + emulator + " shell screencap -p /sdcard/" + imgPath;
+            //System.out.println(cmdStr);
+            ADB.runCommand(cmdStr);
+        }
+        for (int i=0; i<20; i++) {
+            imgPath = originalImgPath.replace(".png","_flicker_"+i+".png");
+            cmdStr = "adb -s " + emulator + " pull /sdcard/" + imgPath + " " + targetFolder;
+            //System.out.println(cmdStr);
+            ADB.runCommand(cmdStr);
+        }
+
+        boolean flickering = AccessibilityUtils.checkFlickering(targetFolder,originalImgPath);
+
+        return imgPath;
+    }
+
     public static String markImage(String originalImgPath,int x1, int y1, int x2, int y2) {
 
         System.out.println("MARK IMAGE");
