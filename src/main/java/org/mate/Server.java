@@ -2,6 +2,7 @@ package org.mate;
 
 import org.mate.accessibility.ImageHandler;
 import org.mate.endpoints.CloseEndpoint;
+import org.mate.endpoints.CrashEndpoint;
 import org.mate.endpoints.LegacyEndpoint;
 import org.mate.io.ADB;
 import org.mate.io.Device;
@@ -47,6 +48,7 @@ public class Server {
         router.add("/legacy", new LegacyEndpoint(timeout, length));
         CloseEndpoint closeEndpoint = new CloseEndpoint();
         router.add("/close", closeEndpoint);
+        router.add("/crash", new CrashEndpoint());
 
         Server.emuName = emuName;
 
