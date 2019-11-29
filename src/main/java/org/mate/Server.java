@@ -23,7 +23,7 @@ public class Server {
         //read arguments and set default values otherwise
         long timeout = 5;
         long length = 1000;
-        int port = 12344;
+        int port = 12345;
         String emuName = null;
         if (args.length > 0) {
             timeout = Long.valueOf(args[0]);
