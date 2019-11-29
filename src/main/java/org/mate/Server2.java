@@ -11,6 +11,9 @@ import de.uni_passau.fim.auermich.statement.ExitStatement;
 import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.mate.graphs.CFG;
+import org.mate.message.Message;
+import org.mate.message.serialization.Parser;
+import org.mate.message.serialization.Serializer;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -74,7 +77,7 @@ public class Server2 {
 
         //ProcessRunner.runProcess(isWin, "rm *.png");
         try {
-            ServerSocket server = new ServerSocket(port, 100000000);
+            ServerSocket server = new ServerSocket(port);
             if (port == 0) {
                 System.out.println(server.getLocalPort());
             }
@@ -88,21 +91,41 @@ public class Server2 {
                 System.out.println("ACCEPT: " + new Date().toGMTString());
                 client = server.accept();
 
-                Scanner cmd = new Scanner(client.getInputStream());
-                String cmdStr = cmd.nextLine();
-                String response = handleRequest(cmdStr);
+                Parser messageParser = new Parser(client.getInputStream());
 
-                PrintWriter out = new PrintWriter(client.getOutputStream(), true);
-                out.println(response);
-                out.close();
-
+                for (Message request = messageParser.nextMessage();
+                     !request.getSubject().equals("close connection");
+                     request = messageParser.nextMessage()) {
+                    try {
+                        switch (request.getSubject()) {
+                            case "wrapped legacy command":
+                                replyMessage(
+                                        new Message.MessageBuilder("wrapped legacy response")
+                                                .withParameter("response",
+                                                        handleRequest(request.getParameter("cmd")))
+                                                .build(),
+                                        client.getOutputStream());
+                                break;
+                            default:
+                                replyMessage(new Message(""), client.getOutputStream());
+                                break;
+                        }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        break;
+                    }
+                }
                 client.close();
-                cmd.close();
             }
 
         } catch (IOException ioe) {
             ioe.printStackTrace();
         }
+    }
+
+    private static void replyMessage(Message response, OutputStream out) throws IOException {
+        out.write(Serializer.serialize(response));
+        out.flush();
     }
 
     private static void createFolders() {
