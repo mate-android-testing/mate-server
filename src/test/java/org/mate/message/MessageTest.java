@@ -31,11 +31,11 @@ public class MessageTest {
         subject = "sub\\;~";
         subject2 = "message2";
         subject3 = "sub3\\;~";
-        k1 = "k1";
+        k1 = "";
         k2 = "k2";
-        k3 = "k3";
+        k3 = ":\\;~";
         v1 = "v;\\~1";
-        v2 = "v2";
+        v2 = "";
         v3 = "t\\@34afad";
 
 
