@@ -9,6 +9,7 @@ import org.mate.io.Device;
 import org.mate.message.Message;
 import org.mate.message.serialization.Parser;
 import org.mate.message.serialization.Serializer;
+import org.mate.network.Endpoint;
 import org.mate.network.Router;
 import org.mate.pdf.Report;
 
@@ -18,6 +19,10 @@ import java.net.Socket;
 import java.util.*;
 
 public class Server {
+    private static final String METADATA_PREFIX = "__meta__";
+    private static final String MESSAGE_PROTOCOL_VERSION = "1.0";
+    private static final String MESSAGE_PROTOCOL_VERSION_KEY = "version";
+
     private Router router;
     public static String emuName = null;
 
@@ -79,14 +84,30 @@ public class Server {
                 client = server.accept();
                 System.out.println("Accepted connection (" + new Date().toGMTString() + ")");
 
+                OutputStream out = client.getOutputStream();
                 Parser messageParser = new Parser(client.getInputStream());
 
                 try {
                     Message request;
                     while (!closeEndpoint.isClosed()) {
                         request = messageParser.nextMessage();
-                        Message response = router.resolve(request.getSubject()).handle(request);
-                        replyMessage(response, client.getOutputStream());
+                        verifyMetadata(request);
+                        stripMetadata(request);
+                        Endpoint endpoint = router.resolve(request.getSubject());
+                        Message response;
+                        if (endpoint == null) {
+                            response = new Message.MessageBuilder("/error")
+                                    .withParameter("info", "Endpoint for message with subject \""
+                                            + request.getSubject()
+                                            + "\" not registered in MATE-Server. Maybe you are "
+                                            + "using an outdated version of the server?")
+                                    .build();
+                        } else {
+                            response = endpoint.handle(request);
+                        }
+                        addMetadata(response);
+                        out.write(Serializer.serialize(response));
+                        out.flush();
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -100,10 +121,35 @@ public class Server {
         }
     }
 
+    private void addMetadata(Message message) {
+        message.addParameter(
+                METADATA_PREFIX + MESSAGE_PROTOCOL_VERSION_KEY, MESSAGE_PROTOCOL_VERSION);
+    }
 
-    private void replyMessage(Message response, OutputStream out) throws IOException {
-        out.write(Serializer.serialize(response));
-        out.flush();
+    private void stripMetadata(Message message) {
+        List<String> metadataKeys = new ArrayList<>();
+        Map<String, String> parameters = message.getParameters();
+        for (String parameterKey: parameters.keySet()) {
+            if (parameterKey.startsWith(METADATA_PREFIX)) {
+                metadataKeys.add(parameterKey);
+            }
+        }
+        for (String metadataKey : metadataKeys) {
+            parameters.remove(metadataKey);
+        }
+    }
+
+    private void verifyMetadata(Message message) {
+        String protocolVersion = message.getParameter(
+                METADATA_PREFIX + MESSAGE_PROTOCOL_VERSION_KEY);
+        if (!protocolVersion.equals(MESSAGE_PROTOCOL_VERSION)) {
+            System.out.println(
+                    "WARNING: Message protocol version used by MATE-Server ("
+                            + MESSAGE_PROTOCOL_VERSION
+                            + ") does not match with the version used by MATE ("
+                            + protocolVersion
+                            + ")");
+        }
     }
 
     private void createFolders() {
