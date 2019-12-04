@@ -4,6 +4,7 @@ import org.mate.accessibility.ImageHandler;
 import org.mate.endpoints.CloseEndpoint;
 import org.mate.endpoints.CrashEndpoint;
 import org.mate.endpoints.LegacyEndpoint;
+import org.mate.endpoints.PropertiesEndpoint;
 import org.mate.io.ADB;
 import org.mate.io.Device;
 import org.mate.message.Message;
@@ -20,7 +21,7 @@ import java.util.*;
 
 public class Server {
     private static final String METADATA_PREFIX = "__meta__";
-    private static final String MESSAGE_PROTOCOL_VERSION = "1.0";
+    private static final String MESSAGE_PROTOCOL_VERSION = "1.1";
     private static final String MESSAGE_PROTOCOL_VERSION_KEY = "version";
 
     private Router router;
@@ -54,6 +55,7 @@ public class Server {
         CloseEndpoint closeEndpoint = new CloseEndpoint();
         router.add("/close", closeEndpoint);
         router.add("/crash", new CrashEndpoint());
+        router.add("/properties", new PropertiesEndpoint());
 
         Server.emuName = emuName;
 
