@@ -73,27 +73,26 @@ public class Server {
             Device.loadActiveDevices();
 
             while (true) {
-
+                closeEndpoint.reset();
                 Device.listActiveDevices();
-                System.out.println("ACCEPT: " + new Date().toGMTString());
+                System.out.println("Waiting for connection (" + new Date().toGMTString() + ")");
                 client = server.accept();
+                System.out.println("Accepted connection (" + new Date().toGMTString() + ")");
 
                 Parser messageParser = new Parser(client.getInputStream());
 
                 try {
-                    for (Message request = messageParser.nextMessage();
-                         !request.getSubject().equals("close connection");
-                         request = messageParser.nextMessage()) {
+                    Message request;
+                    while (!closeEndpoint.isClosed()) {
+                        request = messageParser.nextMessage();
                         Message response = router.resolve(request.getSubject()).handle(request);
                         replyMessage(response, client.getOutputStream());
-                        if (closeEndpoint.isClosed()) {
-                            break;
-                        }
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
                 client.close();
+                System.out.println("Connection closed (" + new Date().toGMTString() + ")");
             }
 
         } catch (IOException ioe) {

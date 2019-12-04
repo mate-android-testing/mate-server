@@ -10,6 +10,10 @@ public class CloseEndpoint implements Endpoint {
         return closed;
     }
 
+    public void reset() {
+        closed = false;
+    }
+
     @Override
     public Message handle(Message request) {
         closed = true;
