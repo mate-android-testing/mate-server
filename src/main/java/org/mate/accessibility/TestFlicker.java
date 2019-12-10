@@ -1,4 +1,4 @@
-package org.mate;
+package org.mate.accessibility;
 
 import org.mate.accessibility.AccessibilityUtils;
 import org.mate.io.ADB;

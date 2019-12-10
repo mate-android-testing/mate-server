@@ -6,10 +6,7 @@ import org.mate.io.Device;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.Writer;
+import java.io.*;
 
 public class ImageHandler {
 
@@ -164,6 +161,42 @@ public class ImageHandler {
         return response;
     }
 
+    public static String matchesSurroundingColor(String cmdStr){
+
+        System.out.println(cmdStr);
+        String response = "false";
+
+        try {
+
+            String[] parts = cmdStr.split(":");
+            String packageName = parts[1];
+
+            String targetFolder = screenShotDir + packageName.split("_")[1];
+
+            String stateId = parts[2];
+            String coord = parts[3];
+
+            String[] positions = coord.split(",");
+            int x1 = Integer.valueOf(positions[0]);
+            int y1 = Integer.valueOf(positions[1]);
+            int x2 = Integer.valueOf(positions[2]);
+            int y2 = Integer.valueOf(positions[3]);
+
+            String fileName = targetFolder + "/" + packageName + "_" + stateId + ".png";
+            //System.out.println(fileName);
+            //System.out.println(coord);
+            double matchesBackground = AccessibilityUtils.matchesSurroundingColor(fileName, x1, y1, x2, y2);
+
+            return String.valueOf(matchesBackground);
+        }
+        catch(Exception e){
+            System.out.println("Problems matching color background");
+            response = "false";
+        }
+
+        return response;
+    }
+
     public static String calculateConstratRatio(String cmdStr) {
 
         String response = "21";
@@ -188,8 +221,7 @@ public class ImageHandler {
             int y2 = Integer.valueOf(positions[3]);
 
             String fileName = targetFolder+ "/"+packageName + "_" + stateId + ".png";
-            System.out.println(fileName);
-            System.out.println(coord);
+
             double contrastRatio = AccessibilityUtils.getContrastRatio(fileName, x1, y1, x2, y2);
             System.out.println("contrast ratio: " + contrastRatio);
             response = String.valueOf(contrastRatio);
