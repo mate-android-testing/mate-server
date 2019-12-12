@@ -349,7 +349,10 @@ public class Device {
             String devID="";
             if (deviceStr.contains("device") && !deviceStr.contains("attached")) {
                 devID = deviceStr.replace("device", "");
+                System.out.println(devID.length());
                 devID = devID.replace(" ", "");
+                System.out.println(devID.length());
+                devID = devID.trim();
                 if (devID.length() > 13)
                     devID = devID.substring(0, devID.length() - 1);
                 if (devices.get(devID) == null) {

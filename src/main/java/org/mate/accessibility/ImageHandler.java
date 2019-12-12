@@ -65,7 +65,7 @@ public class ImageHandler {
         return imgPath;
     }
 
-    public static String markImage(String originalImgPath,int x1, int y1, int x2, int y2) {
+    public static String markImage(String originalImgPath,int x1, int y1, int x2, int y2,String flawType) {
 
         System.out.println("MARK IMAGE");
         contImg++;
@@ -78,6 +78,10 @@ public class ImageHandler {
             g2d.setColor(Color.RED);
             g2d.setStroke(new BasicStroke(5));
             g2d.drawRect(x1, y1, x2-x1, y2-y1);
+            Font currentFont = g2d.getFont();
+            Font newFont = currentFont.deriveFont(Font.PLAIN,40);
+            g2d.setFont(newFont);
+            g2d.drawString(flawType,img.getWidth()/6,img.getHeight()-100);
             ImageIO.write(img, "PNG", new File(newImagePath));
             g2d.dispose();
         }catch (Exception e){

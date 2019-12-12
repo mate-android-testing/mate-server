@@ -15,8 +15,9 @@ public class AccessibilityUtils {
     public static String lastImagePath="";
 
     public static double  getContrastRatio(String imagePath,int x1, int y1, int x2, int y2){
+        System.out.println("get contrast ratio");
         String path = imagePath;
-        if (!imagePath.equals(lastImagePath)){
+        if (true || !imagePath.equals(lastImagePath)){
             if (image!=null)
                 image.flush();
             image=null;
@@ -34,6 +35,7 @@ public class AccessibilityUtils {
 
         double contrastRatio = 21;
         if (image!=null) {
+            System.out.println("here");
             contrastRatio = ColorUtils.calculateContrastRatioForAreaOtsu(image, x1, y1, x2, y2);
 
         }
