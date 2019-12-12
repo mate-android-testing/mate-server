@@ -144,8 +144,6 @@ public class ImageHandler {
             String stateId = parts[2];
             String coord = parts[3];
 
-
-
             String[] positions = coord.split(",");
             int x1 = Integer.valueOf(positions[0]);
             int y1 = Integer.valueOf(positions[1]);
