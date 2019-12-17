@@ -93,6 +93,9 @@ public class LegacyEndpoint implements Endpoint {
         if (cmdStr.startsWith("grantPermissions"))
             return grantPermissions(cmdStr);
 
+        if (cmdStr.startsWith("pushDummyFiles"))
+            return pushDummyFiles(cmdStr);
+
         if (cmdStr.startsWith("storeBranchCoverage"))
             return storeBranchCoverage(cmdStr);
 
@@ -195,6 +198,23 @@ public class LegacyEndpoint implements Endpoint {
         Device device = Device.devices.get(deviceID);
         boolean granted = device.grantPermissions(packageName);
         return String.valueOf(granted);
+    }
+
+    /**
+     * Pushes dummy files for certain data types on the
+     * external storage. This files are used in combination
+     * with intent fuzzing, where the data tag of a component
+     * can refer to a URI, e.g. a file.
+     *
+     * @param cmdStr The command string.
+     */
+    private String pushDummyFiles(String cmdStr) {
+
+        String parts[] = cmdStr.split(":");
+        String deviceID = parts[1];
+
+        Device device = Device.devices.get(deviceID);
+        return String.valueOf(device.pushDummyFiles());
     }
 
     /**

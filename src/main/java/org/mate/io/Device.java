@@ -97,6 +97,22 @@ public class Device {
     }
 
     /**
+     * Pushes dummy files for various data types onto the
+     * external storage.
+     *
+     * @return Returns whether pushing files succeeded.
+     */
+    public boolean pushDummyFiles() {
+
+        String cmd = "./push-mediafiles.sh " + deviceID;
+        System.out.println(cmd);
+
+        // TODO: react to faulty response
+        ADB.runCommand(cmd);
+        return true;
+    }
+
+    /**
      * Pulls the traces.txt file from the external storage (sd card) if present.
      * The file is stored in the working directory, that is the mate-commander directory by default.
      *
