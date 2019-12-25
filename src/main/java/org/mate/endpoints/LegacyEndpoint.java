@@ -93,6 +93,9 @@ public class LegacyEndpoint implements Endpoint {
         if (cmdStr.startsWith("grantPermissions"))
             return grantPermissions(cmdStr);
 
+        if (cmdStr.startsWith("executeSystemEvent"))
+            return executeSystemEvent(cmdStr);
+
         if (cmdStr.startsWith("pushDummyFiles"))
             return pushDummyFiles(cmdStr);
 
@@ -180,6 +183,28 @@ public class LegacyEndpoint implements Endpoint {
         }
 
         return response;
+    }
+
+    /**
+     * Simulates the occurrence of a system event.
+     *
+     * @param cmdStr The command string describing the system event.
+     * @return Returns the string "true" if the system
+     *      event could be simulated, otherwise the string "false".
+     */
+    private String executeSystemEvent(String cmdStr) {
+
+        // executeSystemEvent:package:receiver:event:emulator-id
+        String parts[] = cmdStr.split(":");
+        String packageName = parts[1];
+        String receiver = parts[2];
+        String action = parts[3];
+        String deviceID = parts[4];
+
+        Device device = Device.devices.get(deviceID);
+        boolean success = device.executeSystemEvent(packageName, receiver, action);
+        return String.valueOf(success);
+
     }
 
     /**

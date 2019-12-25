@@ -97,6 +97,24 @@ public class Device {
     }
 
     /**
+     * Broadcasts the notification of a system event to a given receiver.
+     *
+     * @param packageName The package name of the AUT.
+     * @param receiver The broadcast receiver listening for the system event notification.
+     * @param action The actual system event.
+     * @return Returns {@code true} if the system event notification could be successfully
+     *      broad-casted, otherwise {@code false}.
+     */
+    public boolean executeSystemEvent(String packageName, String receiver, String action) {
+
+        String cmd = "adb -s " + deviceID + " shell su root am broadcast -a "
+                + action + " -n " + packageName + "/" + receiver;
+
+        ADB.runCommand(cmd);
+        return true;
+    }
+
+    /**
      * Pushes dummy files for various data types onto the
      * external storage.
      *
