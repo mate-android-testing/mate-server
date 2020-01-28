@@ -124,9 +124,6 @@ public class LegacyEndpoint implements Endpoint {
         if (cmdStr.startsWith("contrastratio"))
             return ImageHandler.calculateConstratRatio(cmdStr);
 
-        if (cmdStr.startsWith("surroundingColor"))
-            return ImageHandler.matchesSurroundingColor(cmdStr);
-
         if (cmdStr.startsWith("luminance"))
             return ImageHandler.calculateLuminance(cmdStr);
 
