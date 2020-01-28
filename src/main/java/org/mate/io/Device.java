@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Hashtable;
 import java.util.List;
+import java.util.regex.Matcher;
 
 public class Device {
 
@@ -102,15 +103,27 @@ public class Device {
      * @param packageName The package name of the AUT.
      * @param receiver The broadcast receiver listening for the system event notification.
      * @param action The actual system event.
+     * @param dynamicReceiver Whether the receiver is a dynamic one.
      * @return Returns {@code true} if the system event notification could be successfully
      *      broad-casted, otherwise {@code false}.
      */
-    public boolean executeSystemEvent(String packageName, String receiver, String action) {
+    public boolean executeSystemEvent(String packageName, String receiver, String action, boolean dynamicReceiver) {
 
-        String cmd = "adb -s " + deviceID + " shell su root am broadcast -a "
-                + action + " -n " + packageName + "/" + receiver;
+        // the inner class seperator '$' needs to be escaped
+        receiver = receiver.replaceAll("\\$", Matcher.quoteReplacement("\\$"));
 
-        ADB.runCommand(cmd);
+        String cmd =  "adb -s " + deviceID + " shell su root am broadcast -a " + action;
+
+        if (dynamicReceiver) {
+            // we can't specify the full component name (solely package) -> dynamic receivers can't be triggered by explicit intents
+            cmd += " -p " + packageName;
+        } else {
+            cmd += " -n " + packageName + "/" + receiver;
+        }
+
+        System.out.println("Command: " + cmd);
+
+        System.out.println("Response: " + ADB.runCommand(cmd));
         return true;
     }
 

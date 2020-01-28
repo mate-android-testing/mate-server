@@ -194,15 +194,16 @@ public class LegacyEndpoint implements Endpoint {
      */
     private String executeSystemEvent(String cmdStr) {
 
-        // executeSystemEvent:package:receiver:event:emulator-id
+        // executeSystemEvent:package:receiver:action:dynamic:emulator-id
         String parts[] = cmdStr.split(":");
         String packageName = parts[1];
         String receiver = parts[2];
         String action = parts[3];
-        String deviceID = parts[4];
+        boolean dynamicReceiver = Boolean.valueOf(parts[4]);
+        String deviceID = parts[5];
 
         Device device = Device.devices.get(deviceID);
-        boolean success = device.executeSystemEvent(packageName, receiver, action);
+        boolean success = device.executeSystemEvent(packageName, receiver, action, dynamicReceiver);
         return String.valueOf(success);
 
     }
