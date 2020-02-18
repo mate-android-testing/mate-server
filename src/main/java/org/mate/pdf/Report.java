@@ -46,9 +46,14 @@ public class Report {
 
     public static String addFlaw(String cmdStr){
 
-        System.out.println ("add flaw::");
+        //System.out.println ("add flaw::");
+
+        System.out.println(cmdStr);
 
         String parts[] = cmdStr.split(":");
+      //  for (int i=0; i<parts.length; i++)
+          //  System.out.println(i+ " - " + parts[i]);
+        System.out.println(parts);
         String deviceID = parts[1];
         String packageName = parts[2];
         String activityName = parts[3];
@@ -83,13 +88,14 @@ public class Report {
         flawDetails += device.getCurrentScreenShotLocation()+",";
 
 
+     //   System.out.println(flawDetails);
         int ix1 = Integer.valueOf(x1);
         int ix2 = Integer.valueOf(x2);
         int iy1 = Integer.valueOf(y1);
         int iy2 = Integer.valueOf(y2);
 
 
-        String newImagePath = ImageHandler.markImage(device.getCurrentScreenShotLocation(),ix1,iy1,ix2,iy2);
+        String newImagePath = ImageHandler.markImage(device.getCurrentScreenShotLocation(),ix1,iy1,ix2,iy2,flawType);
 
         flawDetails +=newImagePath;
 

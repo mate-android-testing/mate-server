@@ -92,7 +92,7 @@ public class OtsuThresholder {
                 ptr ++;
             }
         }
-
+        System.out.println("threshold: " + threshold);
         return threshold;
     }
 }
