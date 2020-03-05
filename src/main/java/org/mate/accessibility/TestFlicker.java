@@ -1,7 +1,6 @@
 package org.mate.accessibility;
 
-import org.mate.accessibility.AccessibilityUtils;
-import org.mate.io.ADB;
+import org.mate.io.ProcessRunner;
 
 public class TestFlicker {
 
@@ -19,15 +18,11 @@ public class TestFlicker {
         String cmdStr = "";
         for (int i=0; i<50; i++) {
             imgPath = originalImgPath.replace(".png","_flicker_"+i+".png");
-            cmdStr = "adb -s " + emulator + " shell screencap -p /sdcard/" + imgPath;
-            //System.out.println(cmdStr);
-            ADB.runCommand(cmdStr);
+            ProcessRunner.runProcess("adb", "-s", emulator, "shell", "screencap", "-p", "/sdcard/" + imgPath);
         }
         for (int i=0; i<50; i++) {
             imgPath = originalImgPath.replace(".png","_flicker_"+i+".png");
-            cmdStr = "adb -s " + emulator + " pull /sdcard/" + imgPath + " " + targetFolder;
-            //System.out.println(cmdStr);
-            ADB.runCommand(cmdStr);
+            ProcessRunner.runProcess("adb", "-s", emulator, "pull", "/sdcard/" + imgPath, targetFolder);
         }
 
          boolean flickering = AccessibilityUtils.checkFlickering(targetFolder,originalImgPath);

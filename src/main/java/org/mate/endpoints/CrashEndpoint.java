@@ -1,6 +1,6 @@
 package org.mate.endpoints;
 
-import org.mate.io.ADB;
+import org.mate.io.ProcessRunner;
 import org.mate.io.Device;
 import org.mate.message.Message;
 import org.mate.network.Endpoint;
@@ -19,9 +19,20 @@ public class CrashEndpoint implements Endpoint {
     }
 
     private String getLatestCrashStackTrace(String deviceID) {
-        String cmd = "adb -s " + deviceID + " exec-out run-as " + Device.getDevice(deviceID).getPackageName() + " logcat -b crash -t 2000 AndroidRuntime:E *:S";
-
-        List<String> response = ADB.runCommand(cmd);
+        List<String> response = ProcessRunner.runProcess(
+                "adb",
+                "-s",
+                deviceID,
+                "exec-out",
+                "run-as",
+                Device.getDevice(deviceID).getPackageName(),
+                "logcat",
+                "-b",
+                "crash",
+                "-t",
+                "2000",
+                "AndroidRuntime:E",
+                "*:S");
 
         for (int i = response.size() - 1; i >= 0; i--) {
             if (response.get(i).contains("E AndroidRuntime: FATAL EXCEPTION: ")) {
