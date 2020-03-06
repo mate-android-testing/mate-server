@@ -64,9 +64,7 @@ public class Device {
     }
 
     private int getAPIVersionFromADB(){
-        String cmd = "adb -s " + deviceID + " shell getprop ro.build.version.sdk";
-        System.out.println(cmd);
-        List<String> result = ADB.runCommand(cmd);
+        List<String> result = ProcessRunner.runProcess("adb", "-s", deviceID, "shell", "getprop", "ro.build.version.sdk");
         if (result != null && result.size() > 0) {
             System.out.println("API consulta: " + result.get(0));
             return Integer.valueOf(result.get(0));
@@ -83,14 +81,8 @@ public class Device {
      */
     public boolean grantPermissions(String packageName) {
 
-        String cmdRead = "adb -s " + deviceID + " shell pm grant " + packageName + " android.permission.READ_EXTERNAL_STORAGE";
-        String cmdWrite = "adb -s " + deviceID + " shell pm grant " + packageName + " android.permission.WRITE_EXTERNAL_STORAGE";
-
-        System.out.println(cmdRead);
-        System.out.println(cmdWrite);
-
-        List<String> responseRead = ADB.runCommand(cmdRead);
-        List<String> responseWrite = ADB.runCommand(cmdWrite);
+        List<String> responseRead = ProcessRunner.runProcess("adb", "-s", deviceID, "shell", "pm", "grant", packageName, "android.permission.READ_EXTERNAL_STORAGE");
+        List<String> responseWrite = ProcessRunner.runProcess("adb", "-s", deviceID, "shell", "pm", "grant", packageName, "android.permission.WRITE_EXTERNAL_STORAGE");
 
         // empty repsonse should signal no failure
         return responseRead.isEmpty() && responseWrite.isEmpty();
@@ -108,9 +100,8 @@ public class Device {
         // traces are stored on the sd card (external storage)
         String tracesDir = "storage/emulated/0"; // + packageName;
         // String checkFileCmd = "adb -s " + deviceID + " shell " + "\"run-as " + packageName + " ls\"";
-        String checkFileCmd = "adb -s " + deviceID + " shell ls " + tracesDir;
 
-        List<String> files = ADB.runCommand(checkFileCmd);
+        List<String> files = ProcessRunner.runProcess("adb", "-s", deviceID, "shell", "ls", tracesDir);
 
         // check whether there is some traces file
         if (!files.stream().anyMatch(str -> str.trim().equals("traces.txt"))) {
@@ -120,23 +111,7 @@ public class Device {
         // use the working directory (MATE-COMMANDER HOME) as output directory for trace file
         String workingDir = System.getProperty("user.dir");
 
-        // String cmd = "adb -s " + deviceID + " shell cat " + tracesDir + "/traces.txt > ";
-        String cmd = "adb -s " + deviceID + " pull " + tracesDir + "/traces.txt ";
-
-        // String cmd = "adb -s " + deviceID + " shell " + "\"run-as " + packageName + " cat ";
-
-        if (ADB.isWin) {
-            // no leading slash on windows (seems to be not really dependent on OS, may on emulator version)
-            // cmd += "/data/data/" + packageName + "/traces.txt\" > " + "\"" + workingDir + "\\traces.txt\"";
-            cmd += workingDir + File.separator + "traces.txt";
-            // cmd += "\"" + workingDir + "\\traces.txt\"";
-        } else {
-            // cmd += "/data/data/" + packageName + "/traces.txt\" > " + "\"" + workingDir + "/traces.txt\"";
-            cmd += "\"" + workingDir + "/traces.txt\"";
-        }
-
-        System.out.println("Pull-Command: " + cmd);
-        ADB.runCommand(cmd);
+        ProcessRunner.runProcess("adb", "-s", deviceID, "pull", tracesDir+"/traces.txt", workingDir + File.separator + "traces.txt");
 
         return true;
     }
@@ -146,9 +121,9 @@ public class Device {
         String response="unknown";
         String cmd = "adb -s " + deviceID +" shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
         if (getAPIVersion()==23 || getAPIVersion()==25){
-            if (ADB.isWin) {
-                cmd = "powershell -command " + "\"$focused = adb -s " + deviceID + " shell dumpsys activity activities "
-                        + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[5]\"";
+            if (ProcessRunner.isWin) {
+                cmd = "$focused = adb -s " + deviceID + " shell dumpsys activity activities "
+                        + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[5]";
                 System.out.println(cmd);
             } else {
                 cmd = "adb -s " + deviceID + " shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
@@ -156,9 +131,9 @@ public class Device {
         }
 
         if (getAPIVersion()==26 || getAPIVersion()==27){
-            if (ADB.isWin) {
-                cmd = "powershell -command " + "\"$focused = adb -s " + deviceID + " shell dumpsys activity activities "
-                        + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[7]\"";
+            if (ProcessRunner.isWin) {
+                cmd = "$focused = adb -s " + deviceID + " shell dumpsys activity activities "
+                        + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[7]";
                 System.out.println(cmd);
             } else {
                 cmd = "adb -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
@@ -174,9 +149,9 @@ public class Device {
         * and split on '='.
          */
         if (getAPIVersion() == 28) {
-            if (ADB.isWin) {
-                cmd = "powershell -command " + "\"$activity = adb -s " + deviceID + " shell dumpsys activity activities "
-                       + "| select-string \"realActivity\" ; $focused = $activity[1] ; $final = $focused -split '=' ; echo $final[1]\"";
+            if (ProcessRunner.isWin) {
+                cmd = "$activity = adb -s " + deviceID + " shell dumpsys activity activities "
+                       + "| select-string \"realActivity\" ; $focused = $activity[1] ; $final = $focused -split '=' ; echo $final[1]";
                         // Alternatively use: "$focused.Line.split(=)[1] \"";
                 System.out.println(cmd);
             } else {
@@ -184,7 +159,12 @@ public class Device {
             }
         }
 
-        List<String> result = ADB.runCommand(cmd);
+        List<String> result;
+        if (ProcessRunner.isWin) {
+            result = ProcessRunner.runProcess("powershell", "-command", cmd);
+        } else {
+            result = ProcessRunner.runProcess("bash", "-c", cmd);
+        }
         if (result != null && result.size() > 0)
             response = result.get(0);
         System.out.println("activity: " + response);
@@ -194,13 +174,15 @@ public class Device {
 
     public List<String> getActivities() {
         String cmd = "";
-        if (ADB.isWin) {
+        List<String> response;
+        if (ProcessRunner.isWin) {
             System.out.println("Running windows get source lines command!");
-            cmd = "powershell -command " + "\"aapt dump xmltree " + packageName + ".apk AndroidManifest.xml | python getActivityNames.py" + "\"";
+            cmd = "aapt dump xmltree " + packageName + ".apk AndroidManifest.xml | python getActivityNames.py" + "";
+            response = ProcessRunner.runProcess("powershell", "-command", cmd);
         } else {
             cmd = "aapt dump xmltree " + packageName + ".apk AndroidManifest.xml | ./getActivityNames.py";
+            response = ProcessRunner.runProcess("bash", "-c", cmd);
         }
-        List<String> response = ADB.runCommand(cmd);
         System.out.println("activities:");
         for (String activity : response) {
             System.out.println("\t" + activity);
@@ -210,65 +192,87 @@ public class Device {
 
     public List<String> getSourceLines() {
         String cmd = "";
-        if (ADB.isWin) {
+        if (ProcessRunner.isWin) {
             System.out.println("Running windows get source lines command!");
-            cmd = "powershell -command " + "\"python getSourceLines.py " + packageName + "\"";
+            cmd = "python3 getSourceLines.py " + packageName;
+            return ProcessRunner.runProcess("powershell", "-command", cmd);
         } else {
             cmd = "./getSourceLines.py " + packageName;
+            return ProcessRunner.runProcess("bash", "-c", cmd);
         }
-        return ADB.runCommand(cmd);
     }
 
     public String clearApp() {
         String cmd = "";
-        if (ADB.isWin) {
+        if (ProcessRunner.isWin) {
             System.out.println("Running windows clear app command!");
-            cmd = "powershell -command " + "\"python clearApp.py " + deviceID + " " + packageName + "\"";
+            cmd = "python3 clearApp.py " + deviceID + " " + packageName;
         } else {
             cmd = "./clearApp.py " + deviceID + " " + packageName;
         }
-        List<String> response = ADB.runCommand(cmd);
+        List<String> response;
+        if (ProcessRunner.isWin) {
+            response = ProcessRunner.runProcess("powershell", "-command", cmd);
+        } else {
+            response = ProcessRunner.runProcess("bash", "-c", cmd);
+        }
         return String.join("\n", response);
     }
 
     public String storeCurrentTraceFile() {
         System.out.println("Storing current Trace file!");
         String cmd = "";
-        if (ADB.isWin) {
-            cmd = "powershell -command " + "\"python storeCurrentTraceFile.py" + " " + deviceID + " " + packageName + "\"";
+        if (ProcessRunner.isWin) {
+            cmd = "python3 storeCurrentTraceFile.py" + " " + deviceID + " " + packageName;
         } else {
             cmd = "./storeCurrentTraceFile.py " + deviceID + " " + packageName;
         }
-        return String.join("\n", ADB.runCommand(cmd));
+        List<String> response;
+        if (ProcessRunner.isWin) {
+            response = ProcessRunner.runProcess("powershell", "-command", cmd);
+        } else {
+            response = ProcessRunner.runProcess("bash", "-c", cmd);
+        }
+        return String.join("\n", response);
     }
 
     public String storeCoverageData(String chromosome, String entity) {
         System.out.println("Storing coverage data");
         String cmd = "";
-        if (ADB.isWin) {
+        if (ProcessRunner.isWin) {
             System.out.println("Running windows storing coverage command!");
-            cmd = "powershell -command " + "\"python storeCoverageData.py " + deviceID + " " + packageName + " " + chromosome + "\"";
+            cmd = "python3 storeCoverageData.py " + deviceID + " " + packageName + " " + chromosome;
         } else {
             cmd = "./storeCoverageData.py " + deviceID + " " + packageName + " " + chromosome;
         }
         if (entity != null) {
             cmd += " " + entity;
         }
-        List<String> response = ADB.runCommand(cmd);
+        List<String> response;
+        if (ProcessRunner.isWin) {
+            response = ProcessRunner.runProcess("powershell", "-command", cmd);
+        } else {
+            response = ProcessRunner.runProcess("bash", "-c", cmd);
+        }
         return String.join("\n", response);
     }
 
     public String copyCoverageData(String chromosome_source, String chromosome_target, String entities) {
         System.out.println("Copying coverage data");
         String cmd = "";
-        if (ADB.isWin) {
+        if (ProcessRunner.isWin) {
             System.out.println("Running windows copy coverage command!");
-            cmd = "powershell -command " + "\"python copyCoverageData.py " + packageName + " " + chromosome_source
-                    + " " + chromosome_target + " " + entities + "\"";
+            cmd = "python3 copyCoverageData.py " + packageName + " " + chromosome_source
+                    + " " + chromosome_target + " " + entities;
         } else {
             cmd = "./copyCoverageData.py " + packageName + " " + chromosome_source + " " + chromosome_target + " " + entities;
         }
-        List<String> response = ADB.runCommand(cmd);
+        List<String> response;
+        if (ProcessRunner.isWin) {
+            response = ProcessRunner.runProcess("powershell", "-command", cmd);
+        } else {
+            response = ProcessRunner.runProcess("bash", "-c", cmd);
+        }
         return String.join("\n", response);
     }
 
@@ -276,13 +280,18 @@ public class Device {
     public String getCoverage(String chromosome) {
         String response="unknown";
         String cmd = "";
-        if (ADB.isWin) {
+        if (ProcessRunner.isWin) {
             System.out.println("Running windows get coverage command!");
-            cmd = "powershell -command " + "\"python getCoverage.py " + packageName + " " + chromosome + "\"";
+            cmd = "python3 getCoverage.py " + packageName + " " + chromosome;
         } else {
             cmd = "./getCoverage.py " + packageName + " " + chromosome;
         }
-        List<String> result = ADB.runCommand(cmd);
+        List<String> result;
+        if (ProcessRunner.isWin) {
+            result = ProcessRunner.runProcess("powershell", "-command", cmd);
+        } else {
+            result = ProcessRunner.runProcess("bash", "-c", cmd);
+        }
         if (result != null && result.size() > 0)
             response = result.get(result.size() - 1);
         System.out.println("coverage: " + response);
@@ -292,9 +301,9 @@ public class Device {
 
     public List<String> getLineCoveredPercentage(String chromosome, String line) {
         String cmd = "";
-        if (ADB.isWin) {
+        if (ProcessRunner.isWin) {
             System.out.println("Running windows get line coverage command!");
-            cmd = "powershell -command " + "\"python getLineCoveredPercentage.py " + packageName + " " + chromosome + "\"";
+            cmd = "python3 getLineCoveredPercentage.py " + packageName + " " + chromosome;
         } else {
             cmd = "./getLineCoveredPercentage.py " + packageName + " " + chromosome;
         }
@@ -326,13 +335,18 @@ public class Device {
     public String getCombinedCoverage(String chromosomes) {
         String response="unknown";
         String cmd = "";
-        if (ADB.isWin) {
+        if (ProcessRunner.isWin) {
             System.out.println("Running windows get combined coverage command!");
-            cmd = "powershell -command " + "\"python getCombinedCoverage.py " + packageName + " " + chromosomes + "\"";
+            cmd = "python3 getCombinedCoverage.py " + packageName + " " + chromosomes;
         } else {
             cmd = "./getCombinedCoverage.py " + packageName + " " + chromosomes;
         }
-        List<String> result = ADB.runCommand(cmd);
+        List<String> result;
+        if (ProcessRunner.isWin) {
+            result = ProcessRunner.runProcess("powershell", "-command", cmd);
+        } else {
+            result = ProcessRunner.runProcess("bash", "-c", cmd);
+        }
         if (result != null && result.size() > 0)
             response = result.get(result.size() - 1);
         System.out.println("combined coverage: " + response);
@@ -343,8 +357,7 @@ public class Device {
     public static void loadActiveDevices(){
         if (devices==null)
             devices = new Hashtable<String,Device>();
-        String cmd = "adb devices";
-        List<String> resultDevices = ADB.runCommand(cmd);
+        List<String> resultDevices = ProcessRunner.runProcess("adb", "devices");
         for (String deviceStr:resultDevices){
             String devID="";
             if (deviceStr.contains("device") && !deviceStr.contains("attached")) {
@@ -414,8 +427,7 @@ public class Device {
 
     public static String getDeviceRunningPackage(String packageName){
         for (String key: devices.keySet()){
-            String cmd = "adb -s " + key + " shell ps " + packageName;
-            List<String> result = ADB.runCommand(cmd);
+            List<String> result = ProcessRunner.runProcess("adb", "-s", key, "shell", "ps", packageName);
             for (String res: result){
                 System.out.println(res);
                 if (res.contains(packageName))

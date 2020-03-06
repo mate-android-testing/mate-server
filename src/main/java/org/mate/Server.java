@@ -2,7 +2,7 @@ package org.mate;
 
 import org.mate.accessibility.ImageHandler;
 import org.mate.endpoints.*;
-import org.mate.io.ADB;
+import org.mate.io.ProcessRunner;
 import org.mate.io.Device;
 import org.mate.message.Message;
 import org.mate.message.serialization.Parser;
@@ -64,7 +64,7 @@ public class Server {
         String os = System.getProperty("os.name");
         if (os != null && os.startsWith("Windows"))
             isWin = true;
-        ADB.isWin = isWin;
+        ProcessRunner.isWin = isWin;
 
 
         //ProcessRunner.runProcess(isWin, "rm *.png");
