@@ -13,11 +13,12 @@ def execCmd(cmd):
     else:
         subprocess.run(["bash", "-c", cmd], stdout=subprocess.PIPE)
 
-def execCmdNoPipe(cmd):
+def execCmdToFile(cmd, fileName):
+    f = open(fileName, "w")
     if platform.system() == "Windows":
-        subprocess.run(["powershell", "-command", cmd])
+        subprocess.run(["powershell", "-command", cmd], stdout=f)
     else:
-        subprocess.run(["bash", "-c", cmd])
+        subprocess.run(["bash", "-c", cmd], stdout=f)
 
 device = sys.argv[1]
 package = sys.argv[2]
@@ -40,5 +41,5 @@ else:
 
 print("Created new coverage file: "  + coverage_file)
 
-pull_file_command = "adb -s " + device + " exec-out run-as " + package + " cat files/coverage.exec > " + coverage_file
-execCmdNoPipe(pull_file_command)
+pull_file_command = "adb -s " + device + " exec-out run-as " + package + " cat files/coverage.exec"
+execCmdToFile(pull_file_command, coverage_file)
