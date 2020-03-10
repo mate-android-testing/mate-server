@@ -9,10 +9,12 @@ import org.mate.message.serialization.Serializer;
 import org.mate.network.Endpoint;
 import org.mate.network.Router;
 import org.mate.pdf.Report;
+import org.mate.util.Log;
 
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
@@ -29,6 +31,7 @@ public class Server {
     private int port;
     private boolean cleanup;
     private Path resultsPath;
+    private Log logger;
     private CloseEndpoint closeEndpoint;
 
     public static String emuName = null;
@@ -62,6 +65,9 @@ public class Server {
         port = 12345;
         cleanup = true;
         resultsPath = Paths.get("results");
+        logger = new Log();
+        logger.doNotLog();
+        Log.registerLogger(logger);
     }
 
     /**
@@ -72,7 +78,7 @@ public class Server {
         try {
             properties.load(new FileReader(new File(MATE_SERVER_PROPERTIES_PATH)));
         } catch (IOException e) {
-            System.out.println("WARNING: Failed to load mate.properties file: " + e.getLocalizedMessage());
+            Log.println("WARNING: failed to load " + MATE_SERVER_PROPERTIES_PATH + " file: " + e.getLocalizedMessage());
         }
 
         timeout = Optional.ofNullable(properties.getProperty("timeout")).map(Long::valueOf).orElse(timeout);
@@ -98,12 +104,20 @@ public class Server {
     }
 
     private void cleanup() {
-        if (!cleanup) {
+        if (!cleanup || !Files.exists(resultsPath)) {
             return;
         }
-        File resultsDir = resultsPath.toFile();
-        if (!resultsDir.delete() && resultsDir.exists()) {
-            //log not able to delete results dir
+
+        try {
+            Files.walk(resultsPath)
+                    .sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(File::delete);
+            if (Files.exists(resultsPath)) {
+                Log.printError("unable to delete old results dir (" + resultsPath + ") during cleanup");
+            }
+        } catch (IOException e) {
+            Log.printError("unable to delete old results dir (" + resultsPath + ") during cleanup: " + e.getLocalizedMessage());
         }
     }
 
@@ -114,6 +128,8 @@ public class Server {
             if (port == 0) {
                 System.out.println(server.getLocalPort());
             }
+            System.out.println(server.getLocalPort());
+            logger.doLog();
             Socket client;
 
             Device.loadActiveDevices();
@@ -121,9 +137,9 @@ public class Server {
             while (true) {
                 closeEndpoint.reset();
                 Device.listActiveDevices();
-                System.out.println("Waiting for connection (" + new Date().toGMTString() + ")");
+                Log.println("waiting for connection");
                 client = server.accept();
-                System.out.println("Accepted connection (" + new Date().toGMTString() + ")");
+                Log.println("accepted connection");
 
                 OutputStream out = client.getOutputStream();
                 Parser messageParser = new Parser(client.getInputStream());
@@ -154,7 +170,7 @@ public class Server {
                     e.printStackTrace();
                 }
                 client.close();
-                System.out.println("Connection closed (" + new Date().toGMTString() + ")");
+                Log.println("connection closed");
             }
 
         } catch (IOException ioe) {
@@ -184,7 +200,7 @@ public class Server {
         String protocolVersion = message.getParameter(
                 METADATA_PREFIX + MESSAGE_PROTOCOL_VERSION_KEY);
         if (!protocolVersion.equals(MESSAGE_PROTOCOL_VERSION)) {
-            System.out.println(
+            Log.println(
                     "WARNING: Message protocol version used by MATE-Server ("
                             + MESSAGE_PROTOCOL_VERSION
                             + ") does not match with the version used by MATE ("
@@ -196,15 +212,15 @@ public class Server {
     private void createFolders() {
         File resultsDir = resultsPath.toFile();
         if (!resultsDir.mkdirs() && !resultsDir.isDirectory()) {
-            //log not created
+            Log.printError("unable to create new results dir (" + resultsDir.getPath() + ")");
         }
         File csvsDir = resultsPath.resolve("csvs").toFile();
         if (!csvsDir.mkdirs() && !csvsDir.isDirectory()) {
-            //log not created
+            Log.printError("unable to create csvs dir (" + csvsDir.getPath() + ")");
         }
         File picturesDir = resultsPath.resolve("pictures").toFile();
         if (!picturesDir.mkdirs() && !picturesDir.isDirectory()) {
-            //log not created
+            Log.printError("unable to create pictures dir (" + picturesDir.getPath() + ")");
         }
 
         Report.reportDir = csvsDir.getPath() + "/";
