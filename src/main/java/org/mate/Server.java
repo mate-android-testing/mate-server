@@ -2,7 +2,6 @@ package org.mate;
 
 import org.mate.accessibility.ImageHandler;
 import org.mate.endpoints.*;
-import org.mate.io.ProcessRunner;
 import org.mate.io.Device;
 import org.mate.message.Message;
 import org.mate.message.serialization.Parser;
@@ -14,59 +13,101 @@ import org.mate.pdf.Report;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 
 public class Server {
     private static final String METADATA_PREFIX = "__meta__";
     private static final String MESSAGE_PROTOCOL_VERSION = "1.2";
     private static final String MESSAGE_PROTOCOL_VERSION_KEY = "version";
+    private static final String MATE_SERVER_PROPERTIES_PATH = "mate-server.properties";
 
     private Router router;
+    private long timeout;
+    private long length;
+    private int port;
+    private boolean cleanup;
+    private Path resultsPath;
+    private CloseEndpoint closeEndpoint;
+
     public static String emuName = null;
 
     public static void main(String[] args) {
-        //read arguments and set default values otherwise
-        long timeout = 5;
-        long length = 1000;
-        int port = 12345;
-        String emuName = null;
-        if (args.length > 0) {
-            timeout = Long.valueOf(args[0]);
-        }
-        if (args.length > 1) {
-            length = Long.valueOf(args[1]);
-        }
-        if (args.length > 2) {
-            port = Integer.valueOf(args[2]);
-        }
-        if (args.length > 3) {
-            emuName = args[3];
-        }
+        Server server = new Server();
 
-        new Server().run(timeout, length, port, emuName);
+        server.loadConfig();
+        if (args.length > 0) {
+            // Read configuration from commandline arguments for backwards compatibility
+            server.timeout = Long.valueOf(args[0]);
+
+            if (args.length > 1) {
+                server.length = Long.valueOf(args[1]);
+            }
+            if (args.length > 2) {
+                server.port = Integer.valueOf(args[2]);
+            }
+            if (args.length > 3) {
+                emuName = args[3];
+            }
+        }
+        server.init();
+        server.run();
     }
 
-    public void run(long timeout, long length, int port, String emuName) {
+    public Server() {
         router = new Router();
+        timeout = 5;
+        length = 1000;
+        port = 12345;
+        cleanup = true;
+        resultsPath = Paths.get("results");
+    }
+
+    /**
+     * Load Server configuration from mate-server.properties
+     */
+    public void loadConfig() {
+        Properties properties = new Properties();
+        try {
+            properties.load(new FileReader(new File(MATE_SERVER_PROPERTIES_PATH)));
+        } catch (IOException e) {
+            System.out.println("WARNING: Failed to load mate.properties file: " + e.getLocalizedMessage());
+        }
+
+        timeout = Optional.ofNullable(properties.getProperty("timeout")).map(Long::valueOf).orElse(timeout);
+        length = Optional.ofNullable(properties.getProperty("length")).map(Long::valueOf).orElse(length);
+        port = Optional.ofNullable(properties.getProperty("port")).map(Integer::valueOf).orElse(port);
+        cleanup = Optional.ofNullable(properties.getProperty("cleanup")).map(Boolean::valueOf).orElse(cleanup);
+        resultsPath = Optional.ofNullable(properties.getProperty("results_path")).map(Paths::get).orElse(resultsPath);
+    }
+
+    /**
+     * Setup the endpoints, cleanup old results and setup the needed directories
+     */
+    public void init() {
         router.add("/legacy", new LegacyEndpoint(timeout, length));
-        CloseEndpoint closeEndpoint = new CloseEndpoint();
+        closeEndpoint = new CloseEndpoint();
         router.add("/close", closeEndpoint);
         router.add("/crash", new CrashEndpoint());
         router.add("/properties", new PropertiesEndpoint());
         router.add("/accessibility",new AccessibilityEndpoint());
 
-        Server.emuName = emuName;
-
+        cleanup();
         createFolders();
+    }
 
-        //Check OS (windows or linux)
-        boolean isWin = false;
-        String os = System.getProperty("os.name");
-        if (os != null && os.startsWith("Windows"))
-            isWin = true;
-        ProcessRunner.isWin = isWin;
+    private void cleanup() {
+        if (!cleanup) {
+            return;
+        }
+        File resultsDir = resultsPath.toFile();
+        if (!resultsDir.delete() && resultsDir.exists()) {
+            //log not able to delete results dir
+        }
+    }
 
-
+    public void run() {
         //ProcessRunner.runProcess(isWin, "rm *.png");
         try {
             ServerSocket server = new ServerSocket(port);
@@ -153,21 +194,20 @@ public class Server {
     }
 
     private void createFolders() {
-        String workingDir = System.getProperty("user.dir");
-        // System.out.println(workingDir);
-        try {
-            new File(workingDir+"/csvs").mkdir();
-        } catch(Exception e){
-
+        File resultsDir = resultsPath.toFile();
+        if (!resultsDir.mkdirs() && !resultsDir.isDirectory()) {
+            //log not created
+        }
+        File csvsDir = resultsPath.resolve("csvs").toFile();
+        if (!csvsDir.mkdirs() && !csvsDir.isDirectory()) {
+            //log not created
+        }
+        File picturesDir = resultsPath.resolve("pictures").toFile();
+        if (!picturesDir.mkdirs() && !picturesDir.isDirectory()) {
+            //log not created
         }
 
-        try {
-            new File(workingDir+"/pictures").mkdir();
-        } catch(Exception e){
-        }
-
-        ImageHandler.screenShotDir = workingDir+"/pictures/";
-        Report.reportDir = workingDir+"/csvs/";
+        Report.reportDir = csvsDir.getPath() + "/";
+        ImageHandler.screenShotDir = picturesDir.getPath() + "/";
     }
-
 }

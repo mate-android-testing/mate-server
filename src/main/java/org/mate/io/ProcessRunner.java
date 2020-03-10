@@ -8,8 +8,7 @@ import java.util.List;
 public class ProcessRunner {
     private ProcessRunner() {}
 
-    public static boolean isWin = System.getProperty("os.name")
-            .startsWith("Windows");
+    public static boolean isWin = System.getProperty("os.name").startsWith("Windows");
 
     public static List<String> runProcess(String... cmd){
         try {
