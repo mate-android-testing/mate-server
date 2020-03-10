@@ -128,7 +128,6 @@ public class Server {
             if (port == 0) {
                 System.out.println(server.getLocalPort());
             }
-            System.out.println(server.getLocalPort());
             logger.doLog();
             Socket client;
 
