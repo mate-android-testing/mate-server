@@ -5,6 +5,12 @@ import subprocess
 import pathlib
 import tempfile
 
+def execCmd(cmd):
+    if platform.system() == "Windows":
+        subprocess.run(["powershell", "-command", cmd], stdout=subprocess.PIPE)
+    else:
+        subprocess.run(["bash", "-c", cmd], stdout=subprocess.PIPE)
+
 device = sys.argv[1]
 package = sys.argv[2]
 chromosome = sys.argv[3]
@@ -16,7 +22,7 @@ coverage_dir = package + ".coverage/" + chromosome
 pathlib.Path(coverage_dir).mkdir(parents=True, exist_ok=True)
 
 store_in_app_command = "adb -s " + device + " shell input keyevent 3; adb -s " + device + " shell monkey -p " + package + " 1"
-subprocess.run(["bash", "-c", store_in_app_command])
+execCmd(store_in_app_command)
 
 if entity != False:
     coverage_file = coverage_dir + "/" + entity
@@ -26,4 +32,4 @@ else:
 print("Created new coverage file: "  + coverage_file)
 
 pull_file_command = "adb -s " + device + " exec-out run-as " + package + " cat files/coverage.exec > " + coverage_file
-subprocess.run(["bash", "-c", pull_file_command])
+execCmd(pull_file_command)

@@ -15,8 +15,9 @@ public class AccessibilityUtils {
     public static String lastImagePath="";
 
     public static double  getContrastRatio(String imagePath,int x1, int y1, int x2, int y2){
+        System.out.println("get contrast ratio");
         String path = imagePath;
-        if (!imagePath.equals(lastImagePath)){
+        if (true || !imagePath.equals(lastImagePath)){
             if (image!=null)
                 image.flush();
             image=null;
@@ -34,6 +35,7 @@ public class AccessibilityUtils {
 
         double contrastRatio = 21;
         if (image!=null) {
+            System.out.println("here");
             contrastRatio = ColorUtils.calculateContrastRatioForAreaOtsu(image, x1, y1, x2, y2);
 
         }
@@ -50,6 +52,30 @@ public class AccessibilityUtils {
         }
 
         return contrastRatio;
+    }
+
+
+    public static double  matchesSurroundingColor(String imagePath,int x1, int y1, int x2, int y2){
+        String path = imagePath;
+        if (!imagePath.equals(lastImagePath)){
+            if (image!=null)
+                image.flush();
+            image=null;
+
+            File file= new File(path);
+            try {
+                System.out.println("load img: " + path);
+                image = ImageIO.read(file);
+            } catch (IOException e) {
+                System.out.println("image not found: "+path);
+                image = null;
+            }
+        }
+        lastImagePath = imagePath;
+
+        double matches = ColorUtils.matchesSurroundingColor(image, x1, y1, x2, y2);
+
+        return matches;
     }
 
     public static String getLuminance(String imagePath,int x1, int y1, int x2, int y2){
