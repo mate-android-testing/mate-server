@@ -53,6 +53,7 @@ public class Server {
         router.add("/close", closeEndpoint);
         router.add("/crash", new CrashEndpoint());
         router.add("/properties", new PropertiesEndpoint());
+        router.add("/emulator/interaction", new EmulatorInteractionEndpoint());
         router.add("/accessibility",new AccessibilityEndpoint());
 
         Server.emuName = emuName;
