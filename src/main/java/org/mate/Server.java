@@ -154,6 +154,9 @@ public class Server {
                         } else {
                             response = endpoint.handle(request);
                         }
+                        if (response == null) {
+                            response = Messages.unhandledMessage(request.getSubject());
+                        }
                         Messages.addMetadata(response);
                         out.write(Serializer.serialize(response));
                         out.flush();

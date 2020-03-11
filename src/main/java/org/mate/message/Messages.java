@@ -53,6 +53,12 @@ public class Messages {
                         + "\" not registered in MATE-Server. Maybe you are "
                         + "using an outdated version of the server?")
                 .build();
+    }
 
+    public static Message unhandledMessage(String subject) {
+        return new Message.MessageBuilder("/error")
+                .withParameter("info", "Endpoint for message with subject \"" + subject +
+                        "\" was unable produce a response.")
+                .build();
     }
 }
