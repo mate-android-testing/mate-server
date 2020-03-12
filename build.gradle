@@ -22,7 +22,10 @@ apply plugin: 'pmd'
 group 'org.mate'
 version '1.0-SNAPSHOT'
 
-sourceCompatibility = 1.8
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
 
 //create a single Jar with all dependencies
 task fatJar(type: Jar) {
@@ -41,6 +44,7 @@ repositories {
 
 dependencies {
     compile fileTree(dir: 'lib', include: '*.jar')
+    compile group: 'org.jacoco', name: 'org.jacoco.report', version: '0.8.5'
     testImplementation 'junit:junit:4.12'
 }
 
