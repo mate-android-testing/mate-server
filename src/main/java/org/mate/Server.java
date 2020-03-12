@@ -76,7 +76,7 @@ public class Server {
         try {
             properties.load(new FileReader(new File(MATE_SERVER_PROPERTIES_PATH)));
         } catch (IOException e) {
-            Log.println("WARNING: failed to load " + MATE_SERVER_PROPERTIES_PATH + " file: " + e.getLocalizedMessage());
+            Log.printWarning("failed to load " + MATE_SERVER_PROPERTIES_PATH + " file: " + e.getLocalizedMessage());
         }
 
         timeout = Optional.ofNullable(properties.getProperty("timeout")).map(Long::valueOf).orElse(timeout);

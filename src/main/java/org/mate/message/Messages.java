@@ -37,8 +37,8 @@ public class Messages {
         String protocolVersion = message.getParameter(
                 METADATA_PREFIX + MESSAGE_PROTOCOL_VERSION_KEY);
         if (!protocolVersion.equals(MESSAGE_PROTOCOL_VERSION)) {
-            Log.println(
-                    "WARNING: Message protocol version used by MATE-Server ("
+            Log.printWarning(
+                    "Message protocol version used by MATE-Server ("
                             + MESSAGE_PROTOCOL_VERSION
                             + ") does not match with the version used by MATE ("
                             + protocolVersion

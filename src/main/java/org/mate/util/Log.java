@@ -1,7 +1,6 @@
 package org.mate.util;
 
 import java.io.BufferedWriter;
-import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -52,13 +51,22 @@ public class Log {
         log = false;
     }
 
+    public static void printWarning(String message) {
+        printWithTag("WARNING", message);
+    }
+
     public static void printError(String message) {
+        printWithTag("ERROR", message);
+    }
+
+    private static void printWithTag(String tag, String message) {
         if (logger == null) {
             throw new IllegalStateException("No logger registered");
         }
         StringBuilder output = new StringBuilder();
         for (String line : message.split("\n")) {
-            output.append("ERROR: ")
+            output.append(tag)
+                    .append(": ")
                     .append(line)
                     .append("\n");
         }
