@@ -1,26 +1,21 @@
-import com.github.spotbugs.SpotBugsTask
-
 buildscript {
     repositories {
         maven {
             url "https://plugins.gradle.org/m2/"
         }
     }
-    dependencies {
-        classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:1.7.1"
-    }
 }
 
 plugins {
     id 'java'
+    id "com.github.spotbugs" version "4.0.2"
 }
 
-apply plugin: "com.github.spotbugs"
 apply plugin: 'checkstyle'
 apply plugin: 'pmd'
 
 group 'org.mate'
-version '1.0-SNAPSHOT'
+version '0.4'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_11
@@ -30,10 +25,9 @@ java {
 //create a single Jar with all dependencies
 task fatJar(type: Jar) {
     manifest {
-        attributes 'Implementation-Version': version,
-                   'Main-Class': 'org.mate.Server'
+        attributes 'Main-Class': 'org.mate.Server'
     }
-    baseName = project.name + '-all'
+    archiveBaseName = rootProject.name + '-all'
     from {configurations.compile.collect{it.isDirectory() ? it : zipTree(it)}}
     with jar
 }
@@ -55,7 +49,7 @@ test {
 }
 
 spotbugs {
-    toolVersion = '3.1.12'
+    toolVersion = '4.0.0'
     ignoreFailures = true
     effort = "max"
     reportLevel = "high"
@@ -69,16 +63,14 @@ pmd {
     ignoreFailures true
 }
 
-tasks.withType(SpotBugsTask) {
-    group = "verification"
-    //classes = files("${project.buildDir}/intermediates/javac")
-    ignoreFailures = true
-
-    // configure automatically generated tasks
+spotbugsMain {
     reports {
         xml.enabled = false
-        html.enabled = true
-        html.destination file("$project.buildDir/reports/spotbugs/spotbugs.html")
+        html {
+            enabled = true
+            destination = file("$buildDir/reports/spotbugs/main/spotbugs.html")
+            stylesheet = 'fancy-hist.xsl'
+        }
     }
 }
 
@@ -91,9 +83,7 @@ task checkstyle(type: Checkstyle) {
     reports {
         html.enabled = true
         xml.enabled = false
-        html {
-            destination file("$project.buildDir/reports/checkstyle/checkstyle.html")
-        }
+        html.destination file("$project.buildDir/reports/checkstyle/checkstyle.html")
     }
 
     classpath = files()
