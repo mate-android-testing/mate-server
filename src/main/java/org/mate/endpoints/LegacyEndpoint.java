@@ -10,7 +10,7 @@ import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.mate.accessibility.ImageHandler;
 import org.mate.graphs.CFG;
-import org.mate.io.ADB;
+import org.mate.io.ProcessRunner;
 import org.mate.io.Device;
 import org.mate.message.Message;
 import org.mate.network.Endpoint;
@@ -149,34 +149,7 @@ public class LegacyEndpoint implements Endpoint {
 
             return "ok";
         }
-
-
-
-        List<String> result = ADB.runCommand(cmdStr);
-        String response = "";
-
-        if (cmdStr.contains("density")) {
-            response = "0";
-            if (result != null && result.size() > 0)
-                response = result.get(0).replace("Physical density: ", "");
-            System.out.println("NH: Density: " + response);
-        }
-
-        if (cmdStr.contains("clear")) {
-            response = "clear";
-            System.out.println("NH:  clear: app data deleted");
-        }
-
-        if (cmdStr.contains("rm -rf")) {
-            response = "delete";
-            System.out.println("NH:  pngs deleted");
-        }
-
-        if (cmdStr.contains("screencap")) {
-            response = "NH: screenshot";
-        }
-
-        return response;
+        return null;
     }
 
     /**
@@ -632,10 +605,7 @@ public class LegacyEndpoint implements Endpoint {
      *          otherwise {@code false}.
      */
     private boolean completedWritingTraces(String deviceID) {
-
-        String checkFileCmd = "adb -s " + deviceID + " shell " + "\"run-as " + graph.getPackageName() + " ls\"";
-
-        List<String> files = ADB.runCommand(checkFileCmd);
+        List<String> files = ProcessRunner.runProcess("adb", "-s", deviceID, "shell", "run-as", graph.getPackageName(), "ls");
         System.out.println("Files: " + files);
 
         return files.stream().anyMatch(str -> str.trim().equals("info.txt"));

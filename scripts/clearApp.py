@@ -5,7 +5,7 @@ import sys
 device = sys.argv[1]
 package = sys.argv[2]
 
-cmd = "adb -s "+ device + " shell pm clear " + package;
+cmd = "adb -s "+ device + " shell pm clear " + package
 
 subprocess.run(["bash", "-c", cmd])
 

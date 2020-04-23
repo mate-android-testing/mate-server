@@ -1,5 +1,13 @@
 import subprocess
 import tempfile
+import platform
+
+def execCmd(cmd):
+    if platform.system() == "Windows":
+        subprocess.run(["powershell", "-command", cmd], stdout=subprocess.PIPE)
+    else:
+        subprocess.run(["bash", "-c", cmd], stdout=subprocess.PIPE)
+
 
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""
@@ -13,7 +21,7 @@ def crunsh(listOfFiles):
         crunsh_cmd = "java -jar bin/jacococli.jar merge " + " ".join(files) + " --destfile " + crunsh_file
         lof.append(crunsh_file)
 
-        subprocess.run(["bash", "-c", crunsh_cmd], stdout=subprocess.PIPE)
+        execCmd(crunsh_cmd)
     return lof
 
 def genCoverageReport(listOfFiles, src_dir):
@@ -25,4 +33,4 @@ def genCoverageReport(listOfFiles, src_dir):
 
     generate_coverage_command = "java -jar bin/jacococli.jar report " + coverage_files + " --classfiles " + src_dir + "/classes --sourcefiles " + src_dir + "/java --xml " + report_path
 
-    subprocess.run(["bash", "-c", generate_coverage_command], stdout=subprocess.PIPE)
+    execCmd(generate_coverage_command)
