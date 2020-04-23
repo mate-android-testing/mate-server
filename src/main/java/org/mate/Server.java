@@ -26,6 +26,7 @@ public class Server {
 
     public static void main(String[] args) {
         //read arguments and set default values otherwise
+
         long timeout = 5;
         long length = 1000;
         int port = 12345;

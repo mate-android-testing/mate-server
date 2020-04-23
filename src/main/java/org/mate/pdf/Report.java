@@ -6,8 +6,16 @@ import org.mate.accessibility.ImageHandler;
 import org.mate.io.Device;
 
 import java.io.*;
+import java.util.HashMap;
 
 public class Report {
+
+    {
+        uniqueStateIds = new HashMap<String,String>();
+    }
+
+    public static HashMap<String, String> uniqueStateIds = null;
+
     public static String reportDir;
 
     public static void generateReport(String cmdStr) throws Exception{
@@ -47,6 +55,8 @@ public class Report {
     public static String addFlaw(String cmdStr){
 
         //System.out.println ("add flaw::");
+        String date = new java.util.Date().toGMTString();
+
 
         System.out.println(cmdStr);
 
@@ -70,7 +80,9 @@ public class Report {
 
         Device device = Device.getDevice(deviceID);
 
+
         String flawDetails = "";
+        flawDetails += date+ ",";
         flawDetails += packageName+",";
         flawDetails += activityName+",";
         flawDetails += screenId+",";
@@ -130,7 +142,7 @@ public class Report {
             fw = new FileWriter(reportFile, true);
             BufferedWriter bw = new BufferedWriter(fw);
             PrintWriter out = new PrintWriter(bw);
-            out.println("App,activity,screen,flaw,widget_type,widget_id,widget_text,extra-info,x1,y1,x2,y2,imgpath,marked_imgpath");
+            out.println("Date,App,activity,screen,flaw,widget_type,widget_id,widget_text,extra-info,x1,y1,x2,y2,imgpath,marked_imgpath");
             out.close();
         } catch (IOException e) {
             e.printStackTrace();
