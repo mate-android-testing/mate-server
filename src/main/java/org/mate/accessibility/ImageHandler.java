@@ -1,20 +1,27 @@
 package org.mate.accessibility;
 
 import org.mate.io.ProcessRunner;
+import org.mate.util.AndroidEnvironment;
 import org.mate.io.Device;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.util.List;
 
 public class ImageHandler {
 
     public static String screenShotDir;
 
     public static int contImg = 0;
+    private final AndroidEnvironment androidEnvironment;
 
-    public static String takeScreenshot(String cmdStr) {
+    public ImageHandler(AndroidEnvironment androidEnvironment) {
+        this.androidEnvironment = androidEnvironment;
+    }
+
+    public String takeScreenshot(String cmdStr) {
 
         String targetFolder = screenShotDir + cmdStr.split("_")[1];
         System.out.println("target folder: " + targetFolder);
@@ -24,8 +31,8 @@ public class ImageHandler {
         String imgPath = parts[2];
         int index = imgPath.lastIndexOf("_");
 
-        ProcessRunner.runProcess("adb", "-s", emulator, "shell", "screencap", "-p", "/sdcard/" + imgPath);
-        ProcessRunner.runProcess("adb", "-s", emulator, "pull", "/sdcard/"+parts[2], targetFolder);
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", emulator, "shell", "screencap", "-p", "/sdcard/" + imgPath);
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", emulator, "pull", "/sdcard/"+parts[2], targetFolder);
 
         Device device = Device.getDevice(emulator);
         device.setCurrentScreenShotLocation(targetFolder+"/"+imgPath);
@@ -33,7 +40,7 @@ public class ImageHandler {
         return imgPath;
     }
 
-    public static String takeFlickerScreenshot(String cmdStr) {
+    public String takeFlickerScreenshot(String cmdStr) {
 
         String targetFolder = screenShotDir + cmdStr.split("_")[1];
         System.out.println("target folder: " + targetFolder);
@@ -47,11 +54,11 @@ public class ImageHandler {
 
         for (int i=0; i<20; i++) {
             imgPath = originalImgPath.replace(".png","_flicker_"+i+".png");
-            ProcessRunner.runProcess("adb", "-s", emulator, "shell", "screencap", "-p", "/sdcard/" + imgPath);
+            ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", emulator, "shell", "screencap", "-p", "/sdcard/" + imgPath);
         }
         for (int i=0; i<20; i++) {
             imgPath = originalImgPath.replace(".png","_flicker_"+i+".png");
-            ProcessRunner.runProcess("adb", "-s", emulator, "pull", "/sdcard/" + imgPath, targetFolder);
+            ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", emulator, "pull", "/sdcard/" + imgPath, targetFolder);
         }
 
         boolean flickering = AccessibilityUtils.checkFlickering(targetFolder,originalImgPath);
@@ -59,7 +66,7 @@ public class ImageHandler {
         return imgPath;
     }
 
-    public static String markImage(String originalImgPath,int x1, int y1, int x2, int y2,String flawType) {
+    public String markImage(String originalImgPath,int x1, int y1, int x2, int y2,String flawType) {
 
         System.out.println("MARK IMAGE");
         contImg++;
@@ -85,7 +92,7 @@ public class ImageHandler {
         return newImagePath;
     }
 
-    public static String markImage(String cmdStr) {
+    public String markImage(String cmdStr) {
 
         try {
             System.out.println(cmdStr);
@@ -125,7 +132,7 @@ public class ImageHandler {
         return "";
     }
 
-    public static String calculateLuminance(String cmdStr){
+    public String calculateLuminance(String cmdStr){
         String response = "0";
         try {
 
@@ -157,7 +164,7 @@ public class ImageHandler {
         return response;
     }
 
-    public static String matchesSurroundingColor(String cmdStr){
+    public String matchesSurroundingColor(String cmdStr){
 
         System.out.println(cmdStr);
         String response = "false";
@@ -193,7 +200,7 @@ public class ImageHandler {
         return response;
     }
 
-    public static String calculateConstratRatio(String cmdStr) {
+    public String calculateConstratRatio(String cmdStr) {
 
         String response = "21";
         try {
@@ -228,7 +235,7 @@ public class ImageHandler {
         return response;
     }
 
-    public static void createPicturesFolder(String deviceID, String packageName) {
+    public void createPicturesFolder(String deviceID, String packageName) {
         try {
             new File(screenShotDir+packageName).mkdir();
         } catch(Exception e){

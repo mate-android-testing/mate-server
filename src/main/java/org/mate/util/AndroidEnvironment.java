@@ -1,27 +1,20 @@
-package org.mate.io;
+package org.mate.util;
 
-import org.mate.util.Log;
-
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class AndroidRunner {
-    private static final long PROCESS_TIMEOUT = 10; //Timeout of android commands in seconds
+public class AndroidEnvironment {
     private final Path androidSdkPath;
     private final Path adbCmdPath;
     private final Path aaptCmdPath;
 
-    public AndroidRunner() {
+    public AndroidEnvironment() {
         var sdkPath = Optional.ofNullable(System.getenv("ANDROID_HOME"));
         sdkPath = sdkPath.or(() -> Optional.ofNullable(System.getenv("ANDROID_SDK_ROOT")));
 
@@ -34,7 +27,7 @@ public class AndroidRunner {
                 home = Optional.ofNullable(System.getenv("HOME"));
             }
             return home.flatMap(path -> {
-                Path androidSdkPath = Paths.get(path).resolve("Android/sdk");
+                Path androidSdkPath = Paths.get(path).resolve("Android/Sdk");
                 if (Files.exists(androidSdkPath) && Files.isDirectory(androidSdkPath)) {
                     return Optional.of(androidSdkPath);
                 }
@@ -90,66 +83,19 @@ public class AndroidRunner {
         }
     }
 
-    private List<String> runProcess(List<String> cmd){
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.redirectErrorStream(true);
-        try {
-            Process p = pb.start();
-            var output = new BufferedReader(new InputStreamReader(p.getInputStream()))
-                    .lines()
-                    .collect(Collectors.toList());
-            if (!p.waitFor(PROCESS_TIMEOUT, TimeUnit.SECONDS)) {
-                Log.printError("execution timeout for cmd " + cmd + " reached (" + PROCESS_TIMEOUT + " seconds)");
-            }
-            return output;
-        } catch (Exception e) {
-            Log.printError("unable to execute cmd " + cmd + ": " + e.getMessage() + "\n" + e.fillInStackTrace());
-        }
-        return null;
-    }
 
-    public List<String> runAdbCmd(List<String> cmd) {
+    public String getAdbExecutable() {
         if (adbCmdPath == null) {
-            throw new IllegalStateException("cannot execute adb command as adb was not found in PATH or android installation");
+            throw new IllegalStateException("cannot get adb executable as adb was not found in PATH or android installation");
         }
-        var adbCmd = Arrays.asList(adbCmdPath.toString());
-        adbCmd.addAll(cmd);
-        return runProcess(adbCmd);
+        return adbCmdPath.toString();
     }
 
-    public List<String> runAaptCmd(List<String> cmd) {
+    public String getAaptExecutable() {
         if (aaptCmdPath == null) {
-            throw new IllegalStateException("cannot execute aapt command as aapt was not found in PATH or android installation");
+            throw new IllegalStateException("cannot get aapt executable as aapt was not found in PATH or android installation");
         }
-        var aaptCmd = Arrays.asList(aaptCmdPath.toString());
-        aaptCmd.addAll(cmd);
-        return runProcess(aaptCmd);
-    }
-
-    public boolean outputAdbCmdToFile(List<String> cmd, Path outputFilePath) {
-        var encounteredError = false;
-        var adbCmd = Arrays.asList(adbCmdPath.toString());
-        adbCmd.addAll(cmd);
-        try {
-        ProcessBuilder pb = new ProcessBuilder(adbCmd);
-        pb.redirectOutput(outputFilePath.toFile());
-            var p = pb.start();
-            var errOutput = new BufferedReader(new InputStreamReader(p.getErrorStream()))
-                    .lines()
-                    .collect(Collectors.joining("\n"));
-            if (!p.waitFor(PROCESS_TIMEOUT, TimeUnit.SECONDS)) {
-                encounteredError = true;
-                Log.printError("execution timeout for cmd " + adbCmd + " reached (" + PROCESS_TIMEOUT + " seconds)");
-            }
-            if (!errOutput.isBlank()) {
-                encounteredError = true;
-                Log.printError("stderr of cmd "+ adbCmd + ":" + "\n" + errOutput);
-            }
-        } catch (Exception e) {
-            encounteredError = true;
-            Log.printError("unable to execute cmd " + adbCmd + " or redirect output to file \"" + outputFilePath + "\": " + e.getMessage() + "\n" + e.fillInStackTrace());
-        }
-        return encounteredError;
+        return aaptCmdPath.toString();
     }
 
     private static boolean existsInPath(String cmd) {

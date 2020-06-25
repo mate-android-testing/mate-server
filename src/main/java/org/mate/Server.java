@@ -2,6 +2,7 @@ package org.mate;
 
 import org.mate.accessibility.ImageHandler;
 import org.mate.endpoints.*;
+import org.mate.util.AndroidEnvironment;
 import org.mate.io.Device;
 import org.mate.message.Message;
 import org.mate.message.Messages;
@@ -33,6 +34,8 @@ public class Server {
     private CloseEndpoint closeEndpoint;
 
     public static String emuName = null;
+    private AndroidEnvironment androidEnvironment;
+    private ImageHandler imageHandler;
 
     public static void main(String[] args) {
         Server server = new Server();
@@ -40,13 +43,13 @@ public class Server {
         server.loadConfig();
         if (args.length > 0) {
             // Read configuration from commandline arguments for backwards compatibility
-            server.timeout = Long.valueOf(args[0]);
+            server.timeout = Long.parseLong(args[0]);
 
             if (args.length > 1) {
-                server.length = Long.valueOf(args[1]);
+                server.length = Long.parseLong(args[1]);
             }
             if (args.length > 2) {
-                server.port = Integer.valueOf(args[2]);
+                server.port = Integer.parseInt(args[2]);
             }
             if (args.length > 3) {
                 emuName = args[3];
@@ -56,6 +59,9 @@ public class Server {
         server.run();
     }
 
+    /**
+     * Initialize server with default values and register a logger
+     */
     public Server() {
         router = new Router();
         timeout = 5;
@@ -90,17 +96,24 @@ public class Server {
      * Setup the endpoints, cleanup old results and setup the needed directories
      */
     public void init() {
-        router.add("/legacy", new LegacyEndpoint(timeout, length));
+        androidEnvironment = new AndroidEnvironment();
+        imageHandler = new ImageHandler(androidEnvironment);
+        CoverageEndpoint coverageEndpoint = new CoverageEndpoint(androidEnvironment);
+        router.add("/legacy", new LegacyEndpoint(timeout, length, coverageEndpoint, androidEnvironment, imageHandler));
         closeEndpoint = new CloseEndpoint();
         router.add("/close", closeEndpoint);
-        router.add("/crash", new CrashEndpoint());
+        router.add("/crash", new CrashEndpoint(androidEnvironment));
         router.add("/properties", new PropertiesEndpoint());
-        router.add("/accessibility",new AccessibilityEndpoint());
+        router.add("/accessibility",new AccessibilityEndpoint(imageHandler));
+        router.add("/coverage", coverageEndpoint);
 
         cleanup();
         createFolders();
     }
 
+    /**
+     * Delete old results folder if cleanup is {@code true}
+     */
     private void cleanup() {
         if (!cleanup || !Files.exists(resultsPath)) {
             return;
@@ -119,6 +132,9 @@ public class Server {
         }
     }
 
+    /**
+     * Start listening on configured {@code port} and pass incoming messages to router
+     */
     public void run() {
         //ProcessRunner.runProcess(isWin, "rm *.png");
         try {
@@ -129,7 +145,7 @@ public class Server {
             logger.doLog();
             Socket client;
 
-            Device.loadActiveDevices();
+            Device.loadActiveDevices(androidEnvironment);
 
             while (true) {
                 closeEndpoint.reset();
@@ -173,6 +189,9 @@ public class Server {
         }
     }
 
+    /**
+     * Create directories for saving (intermediate) results
+     */
     private void createFolders() {
         File resultsDir = resultsPath.toFile();
         if (!resultsDir.mkdirs() && !resultsDir.isDirectory()) {

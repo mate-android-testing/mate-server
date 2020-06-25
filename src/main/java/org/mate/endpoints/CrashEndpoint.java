@@ -1,6 +1,7 @@
 package org.mate.endpoints;
 
 import org.mate.io.ProcessRunner;
+import org.mate.util.AndroidEnvironment;
 import org.mate.io.Device;
 import org.mate.message.Message;
 import org.mate.network.Endpoint;
@@ -8,6 +9,12 @@ import org.mate.network.Endpoint;
 import java.util.List;
 
 public class CrashEndpoint implements Endpoint {
+    private final AndroidEnvironment androidEnvironment;
+
+    public CrashEndpoint(AndroidEnvironment androidEnvironment) {
+        this.androidEnvironment = androidEnvironment;
+    }
+
     @Override
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/crash/stacktrace")) {
@@ -20,7 +27,7 @@ public class CrashEndpoint implements Endpoint {
 
     private String getLatestCrashStackTrace(String deviceID) {
         List<String> response = ProcessRunner.runProcess(
-                "adb",
+                androidEnvironment.getAdbExecutable(),
                 "-s",
                 deviceID,
                 "exec-out",

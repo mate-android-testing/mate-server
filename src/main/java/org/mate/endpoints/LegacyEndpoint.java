@@ -10,6 +10,7 @@ import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.mate.accessibility.ImageHandler;
 import org.mate.graphs.CFG;
+import org.mate.util.AndroidEnvironment;
 import org.mate.io.ProcessRunner;
 import org.mate.io.Device;
 import org.mate.message.Message;
@@ -28,15 +29,21 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class LegacyEndpoint implements Endpoint {
+    private final AndroidEnvironment androidEnvironment;
+    private final ImageHandler imageHandler;
     // graph instance needed for branch distance computation
     private CFG graph = null;
     private final long timeout;
     private final long length;
-    private boolean generatePDFReport = false;
+    private final boolean generatePDFReport = false;
+    private final CoverageEndpoint coverageEndpoint;
 
-    public LegacyEndpoint(long timeout, long length) {
+    public LegacyEndpoint(long timeout, long length, CoverageEndpoint coverageEndpoint, AndroidEnvironment androidEnvironment, ImageHandler imageHandler) {
         this.timeout = timeout;
         this.length = length;
+        this.coverageEndpoint = coverageEndpoint;
+        this.androidEnvironment = androidEnvironment;
+        this.imageHandler = imageHandler;
     }
 
     @Override
@@ -51,7 +58,7 @@ public class LegacyEndpoint implements Endpoint {
         System.out.println(cmdStr);
 
         if (cmdStr.startsWith("reportFlaw")){
-            return Report.addFlaw(cmdStr);
+            return Report.addFlaw(cmdStr, imageHandler);
         }
 
         if (cmdStr.startsWith("clearApp"))
@@ -76,7 +83,7 @@ public class LegacyEndpoint implements Endpoint {
             return getActivities(cmdStr);
 
         if (cmdStr.startsWith("getEmulator"))
-            return Device.allocateDevice(cmdStr);
+            return Device.allocateDevice(cmdStr, imageHandler, androidEnvironment);
 
         if (cmdStr.startsWith("releaseEmulator"))
             return Device.releaseDevice(cmdStr);
@@ -113,19 +120,19 @@ public class LegacyEndpoint implements Endpoint {
 
         //format commands
         if (cmdStr.startsWith("screenshot"))
-            return ImageHandler.takeScreenshot(cmdStr);
+            return imageHandler.takeScreenshot(cmdStr);
 
         if (cmdStr.startsWith("flickerScreenshot"))
-            return ImageHandler.takeFlickerScreenshot(cmdStr);
+            return imageHandler.takeFlickerScreenshot(cmdStr);
 
         if (cmdStr.startsWith("mark-image") && generatePDFReport)
-            return ImageHandler.markImage(cmdStr);
+            return imageHandler.markImage(cmdStr);
 
         if (cmdStr.startsWith("contrastratio"))
-            return ImageHandler.calculateConstratRatio(cmdStr);
+            return imageHandler.calculateConstratRatio(cmdStr);
 
         if (cmdStr.startsWith("luminance"))
-            return ImageHandler.calculateLuminance(cmdStr);
+            return imageHandler.calculateLuminance(cmdStr);
 
         if (cmdStr.startsWith("rm emulator"))
             return "";
@@ -605,7 +612,7 @@ public class LegacyEndpoint implements Endpoint {
      *          otherwise {@code false}.
      */
     private boolean completedWritingTraces(String deviceID) {
-        List<String> files = ProcessRunner.runProcess("adb", "-s", deviceID, "shell", "run-as", graph.getPackageName(), "ls");
+        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "run-as", graph.getPackageName(), "ls");
         System.out.println("Files: " + files);
 
         return files.stream().anyMatch(str -> str.trim().equals("info.txt"));
