@@ -239,27 +239,6 @@ public class Device {
         return String.join("\n", response);
     }
 
-    public String storeCoverageData(String chromosome, String entity) {
-        System.out.println("Storing coverage data");
-        String cmd = "";
-        if (ProcessRunner.isWin) {
-            System.out.println("Running windows storing coverage command!");
-            cmd = "python3 storeCoverageData.py " + deviceID + " " + packageName + " " + chromosome;
-        } else {
-            cmd = "./storeCoverageData.py " + deviceID + " " + packageName + " " + chromosome;
-        }
-        if (entity != null) {
-            cmd += " " + entity;
-        }
-        List<String> response;
-        if (ProcessRunner.isWin) {
-            response = ProcessRunner.runProcess("powershell", "-command", cmd);
-        } else {
-            response = ProcessRunner.runProcess("bash", "-c", cmd);
-        }
-        return String.join("\n", response);
-    }
-
     public String copyCoverageData(String chromosome_source, String chromosome_target, String entities) {
         System.out.println("Copying coverage data");
         String cmd = "";
@@ -277,84 +256,6 @@ public class Device {
             response = ProcessRunner.runProcess("bash", "-c", cmd);
         }
         return String.join("\n", response);
-    }
-
-
-    public String getCoverage(String chromosome) {
-        String response="unknown";
-        String cmd = "";
-        if (ProcessRunner.isWin) {
-            System.out.println("Running windows get coverage command!");
-            cmd = "python3 getCoverage.py " + packageName + " " + chromosome;
-        } else {
-            cmd = "./getCoverage.py " + packageName + " " + chromosome;
-        }
-        List<String> result;
-        if (ProcessRunner.isWin) {
-            result = ProcessRunner.runProcess("powershell", "-command", cmd);
-        } else {
-            result = ProcessRunner.runProcess("bash", "-c", cmd);
-        }
-        if (result != null && result.size() > 0)
-            response = result.get(result.size() - 1);
-        System.out.println("coverage: " + response);
-
-        return response;
-    }
-
-    public List<String> getLineCoveredPercentage(String chromosome, String line) {
-        String cmd = "";
-        if (ProcessRunner.isWin) {
-            System.out.println("Running windows get line coverage command!");
-            cmd = "python3 getLineCoveredPercentage.py " + packageName + " " + chromosome;
-        } else {
-            cmd = "./getLineCoveredPercentage.py " + packageName + " " + chromosome;
-        }
-        try {
-            // TODO: refactor and use ProcessRunner.runProces() (no Windows support yet)
-            ProcessBuilder pb = new ProcessBuilder(Arrays.asList("bash", "-c", cmd));
-            pb.redirectErrorStream(true);
-            Process p = pb.start();
-            BufferedWriter br = new BufferedWriter(new OutputStreamWriter(p.getOutputStream()));
-            br.write(line);
-            br.flush();
-            br.close();
-            BufferedReader in = new BufferedReader(new InputStreamReader(p.getInputStream()));
-            String _temp;
-            List<String> result = new ArrayList<>();
-            while ((_temp = in.readLine()) != null) {
-                result.add(_temp);
-            }
-
-            System.out.println("result after command: " + result);
-            return result;
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    public String getCombinedCoverage(String chromosomes) {
-        String response="unknown";
-        String cmd = "";
-        if (ProcessRunner.isWin) {
-            System.out.println("Running windows get combined coverage command!");
-            cmd = "python3 getCombinedCoverage.py " + packageName + " " + chromosomes;
-        } else {
-            cmd = "./getCombinedCoverage.py " + packageName + " " + chromosomes;
-        }
-        List<String> result;
-        if (ProcessRunner.isWin) {
-            result = ProcessRunner.runProcess("powershell", "-command", cmd);
-        } else {
-            result = ProcessRunner.runProcess("bash", "-c", cmd);
-        }
-        if (result != null && result.size() > 0)
-            response = result.get(result.size() - 1);
-        System.out.println("combined coverage: " + response);
-
-        return response;
     }
 
     public static void loadActiveDevices(AndroidEnvironment androidEnvironment) {
@@ -460,6 +361,4 @@ public class Device {
     public static Device getDevice(String deviceId){
         return devices.get(deviceId);
     }
-
-
 }

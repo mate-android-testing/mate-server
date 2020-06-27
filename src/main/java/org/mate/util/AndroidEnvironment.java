@@ -27,7 +27,7 @@ public class AndroidEnvironment {
                 home = Optional.ofNullable(System.getenv("HOME"));
             }
             return home.flatMap(path -> {
-                Path androidSdkPath = Paths.get(path).resolve("Android/Sdk");
+                Path androidSdkPath = Path.of(path, "Android", "Sdk");
                 if (Files.exists(androidSdkPath) && Files.isDirectory(androidSdkPath)) {
                     return Optional.of(androidSdkPath);
                 }
@@ -40,7 +40,7 @@ public class AndroidEnvironment {
         }
 
         if (existsInPath("adb")) {
-            adbCmdPath = Paths.get("adb");
+            adbCmdPath = Path.of("adb");
         } else {
             adbCmdPath = Optional.ofNullable(androidSdkPath).flatMap(path -> {
                 var adbCmdPath = path.resolve("platform-tools/adb");
@@ -56,7 +56,7 @@ public class AndroidEnvironment {
         }
 
         if (existsInPath("aapt")) {
-            aaptCmdPath = Paths.get("aapt");
+            aaptCmdPath = Path.of("aapt");
         } else {
             aaptCmdPath = Optional.ofNullable(androidSdkPath).flatMap(path -> {
                 var buildToolsPath = path.resolve("build-tools");

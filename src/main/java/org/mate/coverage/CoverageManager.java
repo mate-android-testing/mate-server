@@ -22,6 +22,20 @@ public class CoverageManager {
             this.lineNr = lineNr;
         }
 
+        public static Line valueOf(String line) {
+            String[] components = line.split("\\+");
+            if (components.length != 3) {
+                throw new IllegalArgumentException("illegal line format: " + line);
+            }
+            int lineNr;
+            try {
+                lineNr = Integer.parseInt(components[2]);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("line number is not an integer: " + components[2]);
+            }
+            return new Line(components[0], components[1], lineNr);
+        }
+
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
@@ -38,7 +52,7 @@ public class CoverageManager {
         }
     }
 
-    public List<Double> getLineCoveredPercentage(List<Path> execFilePaths, Path classesDirPath, List<Line> lines) {
+    public static List<Double> getLineCoveredPercentages(List<Path> execFilePaths, Path classesDirPath, List<Line> lines) {
         Map<String, Map<String, Set<Integer>>> requestedLines = new HashMap<>();
         for (Line line : lines) {
             requestedLines
@@ -47,7 +61,7 @@ public class CoverageManager {
                     .add(line.lineNr);
         }
 
-        IBundleCoverage bundle = generateCoverage(execFilePaths, classesDirPath);
+        IBundleCoverage bundle = generateBundleCoverage(execFilePaths, classesDirPath);
         Map<Line, Double> coveredPercentage = new HashMap<>();
         for (IPackageCoverage packageCoverage : bundle.getPackages()) {
             String packageName = packageCoverage.getName();
@@ -92,13 +106,13 @@ public class CoverageManager {
         return lines.stream().map(line -> coveredPercentage.getOrDefault(line, 0.0)).collect(Collectors.toList());
     }
 
-    public Double getCombinedCoverage(List<Path> execFilePaths, Path classesDirPath) {
-        IBundleCoverage bundle = generateCoverage(execFilePaths, classesDirPath);
+    public static Double getCombinedCoverage(List<Path> execFilePaths, Path classesDirPath) {
+        IBundleCoverage bundle = generateBundleCoverage(execFilePaths, classesDirPath);
         ICounter counter = bundle.getLineCounter();
         return counter.getCoveredRatio();
     }
 
-    public IBundleCoverage generateCoverage(List<Path> execFilePaths, Path classesDirPath) {
+    public static IBundleCoverage generateBundleCoverage(List<Path> execFilePaths, Path classesDirPath) {
         CoverageBuilder coverageBuilder = new CoverageBuilder();
         ExecutionDataStore executionDataStore = new ExecutionDataStore();
         for (Path execFilePath : execFilePaths) {

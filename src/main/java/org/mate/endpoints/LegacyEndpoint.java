@@ -10,6 +10,7 @@ import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.mate.accessibility.ImageHandler;
 import org.mate.graphs.CFG;
+import org.mate.message.Messages;
 import org.mate.util.AndroidEnvironment;
 import org.mate.io.ProcessRunner;
 import org.mate.io.Device;
@@ -48,8 +49,12 @@ public class LegacyEndpoint implements Endpoint {
 
     @Override
     public Message handle(Message request) {
+        final var response = handleRequest(request.getParameter("cmd"));
+        if (response == null) {
+            return Messages.errorMessage("legacy message was not understood");
+        }
         return new Message.MessageBuilder("/legacy")
-                .withParameter("response", handleRequest(request.getParameter("cmd")))
+                .withParameter("response", response)
                 .build();
     }
 
@@ -73,9 +78,6 @@ public class LegacyEndpoint implements Endpoint {
         if (cmdStr.startsWith("storeCurrentTraceFile"))
             return storeCurrentTraceFile(cmdStr);
 
-        if (cmdStr.startsWith("storeCoverageData"))
-            return storeCoverageData(cmdStr);
-
         if (cmdStr.startsWith("copyCoverageData"))
             return copyCoverageData(cmdStr);
 
@@ -87,15 +89,6 @@ public class LegacyEndpoint implements Endpoint {
 
         if (cmdStr.startsWith("releaseEmulator"))
             return Device.releaseDevice(cmdStr);
-
-        if (cmdStr.startsWith("getCoverage"))
-            return getCoverage(cmdStr);
-
-        if (cmdStr.startsWith("getLineCoveredPercentage"))
-            return getLineCoveredPercentage(cmdStr);
-
-        if (cmdStr.startsWith("getCombinedCoverage"))
-            return getCombinedCoverage(cmdStr);
 
         if (cmdStr.startsWith("grantPermissions"))
             return grantPermissions(cmdStr);
@@ -780,18 +773,6 @@ public class LegacyEndpoint implements Endpoint {
         return device.storeCurrentTraceFile();
     }
 
-    private String storeCoverageData(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        String chromosome = parts[2];
-        String entity = null;
-        if (parts.length > 3) {
-            entity = parts[3];
-        }
-        Device device = Device.devices.get(deviceID);
-        return device.storeCoverageData(chromosome, entity);
-    }
-
     private String copyCoverageData(String cmdStr) {
         String parts[] = cmdStr.split(":");
         String deviceID = parts[1];
@@ -801,7 +782,6 @@ public class LegacyEndpoint implements Endpoint {
         Device device = Device.devices.get(deviceID);
         return device.copyCoverageData(chromosome_source, chromosome_target, entities);
     }
-
 
     private String getActivities(String cmdStr) {
         String parts[] = cmdStr.split(":");
@@ -815,34 +795,6 @@ public class LegacyEndpoint implements Endpoint {
         String deviceID = parts[1];
         Device device = Device.devices.get(deviceID);
         return String.join("\n", device.getSourceLines());
-    }
-
-    private String getCoverage(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        String chromosome = parts[2];
-        Device device = Device.devices.get(deviceID);
-        return device.getCoverage(chromosome);
-    }
-
-    private String getLineCoveredPercentage(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        String chromosome = parts[2];
-        String line = parts[3];
-        Device device = Device.devices.get(deviceID);
-        return String.join("\n", device.getLineCoveredPercentage(chromosome, line));
-    }
-
-    private String getCombinedCoverage(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        Device device = Device.devices.get(deviceID);
-        String chromosomes = "all";
-        if (parts.length > 2) {
-            chromosomes = parts[2];
-        }
-        return device.getCombinedCoverage(chromosomes);
     }
 
     private String clearApp(String cmdStr) {

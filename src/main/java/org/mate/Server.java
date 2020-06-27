@@ -24,13 +24,13 @@ import java.util.*;
 public class Server {
     private static final String MATE_SERVER_PROPERTIES_PATH = "mate-server.properties";
 
-    private Router router;
+    private final Router router;
     private long timeout;
     private long length;
     private int port;
     private boolean cleanup;
     private Path resultsPath;
-    private Log logger;
+    private final Log logger;
     private CloseEndpoint closeEndpoint;
 
     public static String emuName = null;
@@ -68,7 +68,7 @@ public class Server {
         length = 1000;
         port = 12345;
         cleanup = true;
-        resultsPath = Paths.get("results");
+        resultsPath = Path.of("results");
         logger = new Log();
         logger.doNotLog();
         Log.registerLogger(logger);
@@ -98,7 +98,7 @@ public class Server {
     public void init() {
         androidEnvironment = new AndroidEnvironment();
         imageHandler = new ImageHandler(androidEnvironment);
-        CoverageEndpoint coverageEndpoint = new CoverageEndpoint(androidEnvironment);
+        CoverageEndpoint coverageEndpoint = new CoverageEndpoint(androidEnvironment, resultsPath);
         router.add("/legacy", new LegacyEndpoint(timeout, length, coverageEndpoint, androidEnvironment, imageHandler));
         closeEndpoint = new CloseEndpoint();
         router.add("/close", closeEndpoint);

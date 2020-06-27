@@ -8,11 +8,15 @@ import java.util.Map;
 
 public class Messages {
     private static final String METADATA_PREFIX = "__meta__";
-    private static final String MESSAGE_PROTOCOL_VERSION = "1.2";
+    private static final String MESSAGE_PROTOCOL_VERSION = "1.3";
     private static final String MESSAGE_PROTOCOL_VERSION_KEY = "version";
 
     //util class
     private Messages() {
+    }
+
+    public static Message errorMessage(String info) {
+        return new Message.MessageBuilder("/error").withParameter("info", info).build();
     }
 
     public static void addMetadata(Message message) {
@@ -47,18 +51,15 @@ public class Messages {
     }
 
     public static Message unknownEndpoint(String subject) {
-        return new Message.MessageBuilder("/error")
-                .withParameter("info", "Endpoint for message with subject \""
-                        + subject
-                        + "\" not registered in MATE-Server. Maybe you are "
-                        + "using an outdated version of the server?")
-                .build();
+        return errorMessage("Endpoint for message with subject \""
+                + subject
+                + "\" not registered in MATE-Server. Maybe you are "
+                + "using an outdated version of the server?");
     }
 
     public static Message unhandledMessage(String subject) {
-        return new Message.MessageBuilder("/error")
-                .withParameter("info", "Endpoint for message with subject \"" + subject +
-                        "\" was unable produce a response.")
-                .build();
+        return errorMessage("Endpoint for message with subject \""
+                + subject
+                + "\" was unable produce a response.");
     }
 }
