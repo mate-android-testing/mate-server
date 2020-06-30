@@ -1,4 +1,4 @@
-package org.mate.message;
+package org.mate.network.message;
 
 import org.mate.util.Log;
 

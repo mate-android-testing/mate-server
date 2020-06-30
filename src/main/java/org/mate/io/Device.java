@@ -67,7 +67,7 @@ public class Device {
     }
 
     private int getAPIVersionFromADB(){
-        List<String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "getprop", "ro.build.version.sdk");
+        List<String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "getprop", "ro.build.version.sdk").getOk();
         if (result != null && result.size() > 0) {
             System.out.println("API consulta: " + result.get(0));
             return Integer.valueOf(result.get(0));
@@ -84,8 +84,8 @@ public class Device {
      */
     public boolean grantPermissions(String packageName) {
 
-        List<String> responseRead = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "pm", "grant", packageName, "android.permission.READ_EXTERNAL_STORAGE");
-        List<String> responseWrite = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "pm", "grant", packageName, "android.permission.WRITE_EXTERNAL_STORAGE");
+        List<String> responseRead = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "pm", "grant", packageName, "android.permission.READ_EXTERNAL_STORAGE").getOk();
+        List<String> responseWrite = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "pm", "grant", packageName, "android.permission.WRITE_EXTERNAL_STORAGE").getOk();
 
         // empty repsonse should signal no failure
         return responseRead.isEmpty() && responseWrite.isEmpty();
@@ -104,7 +104,7 @@ public class Device {
         String tracesDir = "storage/emulated/0"; // + packageName;
         // String checkFileCmd = "adb -s " + deviceID + " shell " + "\"run-as " + packageName + " ls\"";
 
-        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", tracesDir);
+        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", tracesDir).getOk();
 
         // check whether there is some traces file
         if (!files.stream().anyMatch(str -> str.trim().equals("traces.txt"))) {
@@ -164,9 +164,9 @@ public class Device {
 
         List<String> result;
         if (ProcessRunner.isWin) {
-            result = ProcessRunner.runProcess("powershell", "-command", cmd);
+            result = ProcessRunner.runProcess("powershell", "-command", cmd).getOk();
         } else {
-            result = ProcessRunner.runProcess("bash", "-c", cmd);
+            result = ProcessRunner.runProcess("bash", "-c", cmd).getOk();
         }
         if (result != null && result.size() > 0)
             response = result.get(0);
@@ -181,10 +181,10 @@ public class Device {
         if (ProcessRunner.isWin) {
             System.out.println("Running windows get source lines command!");
             cmd = androidEnvironment.getAaptExecutable() + " dump xmltree " + packageName + ".apk AndroidManifest.xml | python getActivityNames.py" + "";
-            response = ProcessRunner.runProcess("powershell", "-command", cmd);
+            response = ProcessRunner.runProcess("powershell", "-command", cmd).getOk();
         } else {
             cmd = androidEnvironment.getAaptExecutable() + " dump xmltree " + packageName + ".apk AndroidManifest.xml | ./getActivityNames.py";
-            response = ProcessRunner.runProcess("bash", "-c", cmd);
+            response = ProcessRunner.runProcess("bash", "-c", cmd).getOk();
         }
         System.out.println("activities:");
         for (String activity : response) {
@@ -198,28 +198,11 @@ public class Device {
         if (ProcessRunner.isWin) {
             System.out.println("Running windows get source lines command!");
             cmd = "python3 getSourceLines.py " + packageName;
-            return ProcessRunner.runProcess("powershell", "-command", cmd);
+            return ProcessRunner.runProcess("powershell", "-command", cmd).getOk();
         } else {
             cmd = "./getSourceLines.py " + packageName;
-            return ProcessRunner.runProcess("bash", "-c", cmd);
+            return ProcessRunner.runProcess("bash", "-c", cmd).getOk();
         }
-    }
-
-    public String clearApp() {
-        String cmd = "";
-        if (ProcessRunner.isWin) {
-            System.out.println("Running windows clear app command!");
-            cmd = "python3 clearApp.py " + deviceID + " " + packageName;
-        } else {
-            cmd = "./clearApp.py " + deviceID + " " + packageName;
-        }
-        List<String> response;
-        if (ProcessRunner.isWin) {
-            response = ProcessRunner.runProcess("powershell", "-command", cmd);
-        } else {
-            response = ProcessRunner.runProcess("bash", "-c", cmd);
-        }
-        return String.join("\n", response);
     }
 
     public String storeCurrentTraceFile() {
@@ -232,9 +215,9 @@ public class Device {
         }
         List<String> response;
         if (ProcessRunner.isWin) {
-            response = ProcessRunner.runProcess("powershell", "-command", cmd);
+            response = ProcessRunner.runProcess("powershell", "-command", cmd).getOk();
         } else {
-            response = ProcessRunner.runProcess("bash", "-c", cmd);
+            response = ProcessRunner.runProcess("bash", "-c", cmd).getOk();
         }
         return String.join("\n", response);
     }
@@ -251,9 +234,9 @@ public class Device {
         }
         List<String> response;
         if (ProcessRunner.isWin) {
-            response = ProcessRunner.runProcess("powershell", "-command", cmd);
+            response = ProcessRunner.runProcess("powershell", "-command", cmd).getOk();
         } else {
-            response = ProcessRunner.runProcess("bash", "-c", cmd);
+            response = ProcessRunner.runProcess("bash", "-c", cmd).getOk();
         }
         return String.join("\n", response);
     }
@@ -261,7 +244,7 @@ public class Device {
     public static void loadActiveDevices(AndroidEnvironment androidEnvironment) {
         if (devices==null)
             devices = new Hashtable<String,Device>();
-        List<String> resultDevices = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "devices");
+        List<String> resultDevices = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "devices").getOk();
         for (String deviceStr:resultDevices){
             String devID="";
             if (deviceStr.contains("device") && !deviceStr.contains("attached")) {
@@ -331,7 +314,7 @@ public class Device {
 
     public static String getDeviceRunningPackage(String packageName, AndroidEnvironment androidEnvironment) {
         for (String key: devices.keySet()){
-            List<String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", key, "shell", "ps", packageName);
+            List<String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", key, "shell", "ps", packageName).getOk();
             for (String res: result){
                 System.out.println(res);
                 if (res.contains(packageName))
@@ -344,15 +327,13 @@ public class Device {
     public static String releaseDevice(String cmdStr){
         String response = "";
         String[] parts = cmdStr.split(":");
-        if (parts!=null){
-            if (parts.length>0) {
-                String deviceID = parts[1];
-                Device device = devices.get(deviceID);
-                if (device!=null) {
-                    device.setPackageName("");
-                    device.setBusy(false);
-                    response = "released";
-                }
+        if (parts.length>0) {
+            String deviceID = parts[1];
+            Device device = devices.get(deviceID);
+            if (device!=null) {
+                device.setPackageName("");
+                device.setBusy(false);
+                response = "released";
             }
         }
         return response;

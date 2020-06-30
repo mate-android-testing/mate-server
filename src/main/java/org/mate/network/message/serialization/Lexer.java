@@ -1,4 +1,4 @@
-package org.mate.message.serialization;
+package org.mate.network.message.serialization;
 
 import java.io.IOException;
 import java.io.InputStream;

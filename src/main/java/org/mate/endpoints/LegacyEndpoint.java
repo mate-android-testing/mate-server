@@ -10,11 +10,11 @@ import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.mate.accessibility.ImageHandler;
 import org.mate.graphs.CFG;
-import org.mate.message.Messages;
+import org.mate.network.message.Messages;
 import org.mate.util.AndroidEnvironment;
 import org.mate.io.ProcessRunner;
 import org.mate.io.Device;
-import org.mate.message.Message;
+import org.mate.network.message.Message;
 import org.mate.network.Endpoint;
 import org.mate.pdf.Report;
 
@@ -37,12 +37,10 @@ public class LegacyEndpoint implements Endpoint {
     private final long timeout;
     private final long length;
     private final boolean generatePDFReport = false;
-    private final CoverageEndpoint coverageEndpoint;
 
-    public LegacyEndpoint(long timeout, long length, CoverageEndpoint coverageEndpoint, AndroidEnvironment androidEnvironment, ImageHandler imageHandler) {
+    public LegacyEndpoint(long timeout, long length, AndroidEnvironment androidEnvironment, ImageHandler imageHandler) {
         this.timeout = timeout;
         this.length = length;
-        this.coverageEndpoint = coverageEndpoint;
         this.androidEnvironment = androidEnvironment;
         this.imageHandler = imageHandler;
     }
@@ -65,9 +63,6 @@ public class LegacyEndpoint implements Endpoint {
         if (cmdStr.startsWith("reportFlaw")){
             return Report.addFlaw(cmdStr, imageHandler);
         }
-
-        if (cmdStr.startsWith("clearApp"))
-            return clearApp(cmdStr);
 
         if (cmdStr.startsWith("getActivity"))
             return getActivity(cmdStr);
@@ -605,7 +600,7 @@ public class LegacyEndpoint implements Endpoint {
      *          otherwise {@code false}.
      */
     private boolean completedWritingTraces(String deviceID) {
-        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "run-as", graph.getPackageName(), "ls");
+        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "run-as", graph.getPackageName(), "ls").getOk();
         System.out.println("Files: " + files);
 
         return files.stream().anyMatch(str -> str.trim().equals("info.txt"));
@@ -795,12 +790,5 @@ public class LegacyEndpoint implements Endpoint {
         String deviceID = parts[1];
         Device device = Device.devices.get(deviceID);
         return String.join("\n", device.getSourceLines());
-    }
-
-    private String clearApp(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        Device device = Device.devices.get(deviceID);
-        return device.clearApp();
     }
 }

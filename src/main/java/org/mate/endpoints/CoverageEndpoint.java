@@ -1,11 +1,11 @@
 package org.mate.endpoints;
 
 import org.mate.coverage.CoverageManager;
-import org.mate.message.Messages;
+import org.mate.network.message.Messages;
 import org.mate.util.AndroidEnvironment;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
-import org.mate.message.Message;
+import org.mate.network.message.Message;
 import org.mate.network.Endpoint;
 import org.mate.util.Log;
 import org.mate.util.Result;
@@ -165,7 +165,7 @@ public class CoverageEndpoint implements Endpoint {
                 "run-as",
                 packageName,
                 "cat",
-                "files/coverage.exec")) {
+                "files/coverage.exec").isOk()) {
             final var errorMsg = "Failed to extract coverage file from internal app storage";
             Log.printError(errorMsg);
             return errorMsg;

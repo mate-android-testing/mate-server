@@ -4,10 +4,10 @@ import org.mate.accessibility.ImageHandler;
 import org.mate.endpoints.*;
 import org.mate.util.AndroidEnvironment;
 import org.mate.io.Device;
-import org.mate.message.Message;
-import org.mate.message.Messages;
-import org.mate.message.serialization.Parser;
-import org.mate.message.serialization.Serializer;
+import org.mate.network.message.Message;
+import org.mate.network.message.Messages;
+import org.mate.network.message.serialization.Parser;
+import org.mate.network.message.serialization.Serializer;
 import org.mate.network.Endpoint;
 import org.mate.network.Router;
 import org.mate.pdf.Report;
@@ -98,14 +98,13 @@ public class Server {
     public void init() {
         androidEnvironment = new AndroidEnvironment();
         imageHandler = new ImageHandler(androidEnvironment);
-        CoverageEndpoint coverageEndpoint = new CoverageEndpoint(androidEnvironment, resultsPath);
-        router.add("/legacy", new LegacyEndpoint(timeout, length, coverageEndpoint, androidEnvironment, imageHandler));
+        router.add("/legacy", new LegacyEndpoint(timeout, length, androidEnvironment, imageHandler));
         closeEndpoint = new CloseEndpoint();
         router.add("/close", closeEndpoint);
         router.add("/crash", new CrashEndpoint(androidEnvironment));
         router.add("/properties", new PropertiesEndpoint());
         router.add("/accessibility",new AccessibilityEndpoint(imageHandler));
-        router.add("/coverage", coverageEndpoint);
+        router.add("/coverage", new CoverageEndpoint(androidEnvironment, resultsPath));
 
         cleanup();
         createFolders();

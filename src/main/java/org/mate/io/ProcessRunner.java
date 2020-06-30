@@ -1,8 +1,10 @@
 package org.mate.io;
 
 import org.mate.util.Log;
+import org.mate.util.Result;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -18,66 +20,77 @@ public class ProcessRunner {
     /**
      * Executes cmd and returns the output lines as a list of Strings
      * @param cmd cmd to be executed
-     * @return cmd output lines as list of Strings
+     * @return If successful an Ok result of output lines as a list of Strings. Err result with the error message as a
+     * single String in case of an error.
      */
-    public static List<String> runProcess(List<String> cmd){
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.redirectErrorStream(true);
-        try {
-            Process p = pb.start();
-            var output = new BufferedReader(new InputStreamReader(p.getInputStream()))
-                    .lines()
-                    .collect(Collectors.toList());
-            if (!p.waitFor(PROCESS_TIMEOUT, TimeUnit.SECONDS)) {
-                Log.printError("execution timeout for cmd " + cmd + " reached (" + PROCESS_TIMEOUT + " seconds)");
-            }
-            return output;
-        } catch (Exception e) {
-            Log.printError("unable to execute cmd " + cmd + ": " + e.getMessage() + "\n" + e.fillInStackTrace());
-        }
-        return null;
+    public static Result<List<String>, String> runProcess(List<String> cmd){
+        return runProcess(null, null, cmd);
     }
 
     /**
      * Executes cmd and returns the output lines as a list of Strings
      * @param cmd cmd to be executed
-     * @return cmd output lines as list of Strings
+     * @return If successful an Ok result of output lines as a list of Strings. Err result with the error message as a
+     * single String in case of an error.
      */
-    public static List<String> runProcess(String... cmd) {
-        return runProcess(List.of(cmd));
+    public static Result<List<String>, String> runProcess(String... cmd) {
+        return runProcess(null, null, List.of(cmd));
     }
 
     /**
-     * Executes cmd and writes output to the given output file
-     * @param outputFile Path of the output file
+     * Executes cmd, streams input to stdin of the cmd if given and writes output to the given output file or returns
+     * the output lines as a list of Strings
+     * @param outputFile Path of the output file. Output lines will be returned as a list of Strings if null is given.
+     * @param input will be streamed into stdin of the executed cmd if not null
      * @param cmd cmd to be executed
-     * @return true if successful otherwise false
+     * @return If successful an Ok result of output lines as a list of Strings or null, depending on whether an
+     * {@code outputFile} was given. Err result with the error message as a single String in case of an error.
      */
-    public static boolean runProcess(Path outputFile, List<String> cmd) {
+    public static Result<List<String>, String> runProcess(Path outputFile, String input, List<String> cmd) {
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
-        boolean successful = true;
         try {
             Process p = pb.start();
-            FileOutputStream fileOutputStream = new FileOutputStream(outputFile.toFile());
-            p.getInputStream().transferTo(fileOutputStream);
-            fileOutputStream.close();
+            if (input != null) {
+                BufferedWriter bufferedWriter = new BufferedWriter(
+                        new OutputStreamWriter(p.getOutputStream(),StandardCharsets.UTF_8));
+                bufferedWriter.write(input);
+                bufferedWriter.close();
+            }
+            List<String> output = null;
+            if (outputFile != null) {
+                FileOutputStream fileOutputStream = new FileOutputStream(outputFile.toFile());
+                p.getInputStream().transferTo(fileOutputStream);
+                fileOutputStream.close();
+            } else {
+                output = new BufferedReader(new InputStreamReader(p.getInputStream()))
+                        .lines()
+                        .collect(Collectors.toList());
+            }
+            if (!p.waitFor(PROCESS_TIMEOUT, TimeUnit.SECONDS)) {
+                var errMsg = "execution timeout for cmd " + cmd + " reached (" + PROCESS_TIMEOUT + " seconds)";
+                Log.printError(errMsg);
+                return Result.errOf(errMsg);
+            }
+            return Result.okOf(output);
         } catch (Exception e) {
-            Log.printError("unable to execute cmd " + cmd + " or redirect to file " + outputFile + ": "
-                    + e.getMessage() + "\n" + e.fillInStackTrace());
-            successful = false;
+            var errMsg = "unable to execute cmd " + cmd + " or redirect to file " + outputFile + ": " + e.getMessage()
+                    + "\n" + e.fillInStackTrace();
+            Log.printError(errMsg);
+            return Result.errOf(errMsg);
         }
-        return successful;
-
     }
 
     /**
-     * Executes cmd and writes output to the given output file
-     * @param outputFile Path of the output file
+     * Executes cmd, streams input to stdin of the cmd if given and writes output to the given output file or returns
+     * the output lines as a list of Strings
+     * @param outputFile Path of the output file. Output lines will be returned as a list of Strings if null is given.
+     * @param input will be streamed into stdin of the executed cmd if not null
      * @param cmd cmd to be executed
-     * @return true if successful otherwise false
+     * @return If successful an Ok result of output lines as a list of Strings or null, depending on whether an
+     * {@code outputFile} was given. Err result with the error message as a single String in case of an error.
      */
-    public static boolean runProcess(Path outputFile, String... cmd) {
-        return runProcess(outputFile, List.of(cmd));
+    public static Result<List<String>, String> runProcess(Path outputFile, String input, String... cmd) {
+        return runProcess(outputFile, input, List.of(cmd));
     }
 }

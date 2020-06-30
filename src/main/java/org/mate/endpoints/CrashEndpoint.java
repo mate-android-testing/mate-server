@@ -3,7 +3,7 @@ package org.mate.endpoints;
 import org.mate.io.ProcessRunner;
 import org.mate.util.AndroidEnvironment;
 import org.mate.io.Device;
-import org.mate.message.Message;
+import org.mate.network.message.Message;
 import org.mate.network.Endpoint;
 
 import java.util.List;
@@ -39,7 +39,7 @@ public class CrashEndpoint implements Endpoint {
                 "-t",
                 "2000",
                 "AndroidRuntime:E",
-                "*:S");
+                "*:S").getOk();
 
         for (int i = response.size() - 1; i >= 0; i--) {
             if (response.get(i).contains("E AndroidRuntime: FATAL EXCEPTION: ")) {
