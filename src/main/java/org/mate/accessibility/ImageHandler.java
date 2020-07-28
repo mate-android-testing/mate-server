@@ -2,33 +2,52 @@ package org.mate.accessibility;
 
 import org.mate.io.ProcessRunner;
 import org.mate.io.Device;
+import org.mate.pdf.Report;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.util.Hashtable;
 
 public class ImageHandler {
+
+    public static Hashtable<String,String> currentScreenShotLocation = new Hashtable<String,String>();
 
     public static String screenShotDir;
 
     public static int contImg = 0;
 
+    private static String currentPackageName = "";
+
     public static String takeScreenshot(String cmdStr) {
 
         String targetFolder = screenShotDir + cmdStr.split("_")[1];
-        System.out.println("target folder: " + targetFolder);
+        //System.out.println("target folder: " + targetFolder);
 
         String[] parts = cmdStr.split(":");
         String emulator = parts[1];
         String imgPath = parts[2];
+
+        String p[] = imgPath.split("_");
+        String packname = p[1];
+
+        if (!packname.equals(currentPackageName)){
+            System.out.println("Running app: " + packname);
+            currentPackageName = packname;
+        }
+
+        Report.createCSVFolder(emulator,packname);
+        ImageHandler.createPicturesFolder(emulator,packname);
+
         int index = imgPath.lastIndexOf("_");
 
         ProcessRunner.runProcess("adb", "-s", emulator, "shell", "screencap", "-p", "/sdcard/" + imgPath);
-        ProcessRunner.runProcess("adb", "-s", emulator, "pull", "/sdcard/"+parts[2], targetFolder);
+        ProcessRunner.runProcess("adb", "-s", emulator, "pull", "/sdcard/"+imgPath, targetFolder+"/");
 
-        Device device = Device.getDevice(emulator);
-        device.setCurrentScreenShotLocation(targetFolder+"/"+imgPath);
+        currentScreenShotLocation.put(emulator,targetFolder+"/"+imgPath);
+
+        //System.out.println(currentScreenShotLocation.get(emulator));
 
         return imgPath;
     }
@@ -197,9 +216,7 @@ public class ImageHandler {
 
         String response = "21";
         try {
-
-
-            System.out.println(cmdStr);
+            //System.out.println(cmdStr);
             String[] parts = cmdStr.split(":");
             String packageName = parts[1];
 
@@ -219,7 +236,7 @@ public class ImageHandler {
             String fileName = targetFolder+ "/"+packageName + "_" + stateId + ".png";
 
             double contrastRatio = AccessibilityUtils.getContrastRatio(fileName, x1, y1, x2, y2);
-            System.out.println("contrast ratio: " + contrastRatio);
+            //System.out.println("contrast ratio: " + contrastRatio);
             response = String.valueOf(contrastRatio);
         } catch (Exception e) {
             System.out.println("PROBLEMS CALCULATING CONTRAST RATIO");
@@ -231,6 +248,7 @@ public class ImageHandler {
     public static void createPicturesFolder(String deviceID, String packageName) {
         try {
             new File(screenShotDir+packageName).mkdir();
+            //System.out.println("created: " + screenShotDir+packageName+"/");
         } catch(Exception e){
         }
 

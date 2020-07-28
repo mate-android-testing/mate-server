@@ -15,7 +15,7 @@ public class AccessibilityUtils {
     public static String lastImagePath="";
 
     public static double  getContrastRatio(String imagePath,int x1, int y1, int x2, int y2){
-        System.out.println("get contrast ratio");
+        //System.out.println("get contrast ratio");
         String path = imagePath;
         if (true || !imagePath.equals(lastImagePath)){
             if (image!=null)
@@ -24,7 +24,7 @@ public class AccessibilityUtils {
 
             File file= new File(path);
             try {
-                System.out.println("load img: " + path);
+                //System.out.println("load img: " + path);
                 image = ImageIO.read(file);
             } catch (IOException e) {
                 System.out.println("image not found: "+path);
@@ -35,21 +35,13 @@ public class AccessibilityUtils {
 
         double contrastRatio = 21;
         if (image!=null) {
-            System.out.println("here");
+            //System.out.println("here");
             contrastRatio = ColorUtils.calculateContrastRatioForAreaOtsu(image, x1, y1, x2, y2);
 
         }
         else
             System.out.println("img: null");
 
-
-        if (contrastRatio<4.5){
-            for (int x = x1; x<(x2-x1); x++){
-                for (int y=y1; y<(y2-y1); y++){
-                    image.setRGB(x,y, Color.RED.getRGB());
-                }
-            }
-        }
 
         return contrastRatio;
     }
@@ -64,7 +56,7 @@ public class AccessibilityUtils {
 
             File file= new File(path);
             try {
-                System.out.println("load img: " + path);
+                //System.out.println("load img: " + path);
                 image = ImageIO.read(file);
             } catch (IOException e) {
                 System.out.println("image not found: "+path);
@@ -87,7 +79,7 @@ public class AccessibilityUtils {
 
             File file= new File(path);
             try {
-                System.out.println("load img: " + path);
+                //System.out.println("load img: " + path);
                 image = ImageIO.read(file);
             } catch (IOException e) {
                 System.out.println("image not found: "+path);
@@ -126,7 +118,7 @@ public class AccessibilityUtils {
                 sum+=histogram[h];
                 //System.out.print(histogram[h]+" ");
             }
-            System.out.println(sum);
+            //System.out.println(sum);
         }
 
         return false;

@@ -21,29 +21,21 @@ public class Server {
     private static final String MESSAGE_PROTOCOL_VERSION = "1.2";
     private static final String MESSAGE_PROTOCOL_VERSION_KEY = "version";
 
+    public static boolean failed;
+
     private Router router;
     public static String emuName = null;
 
     public static void main(String[] args) {
         //read arguments and set default values otherwise
 
-        long timeout = 5;
+        long timeout = 30;//in minutes
         long length = 1000;
         int port = 12345;
         String emuName = null;
         if (args.length > 0) {
-            timeout = Long.valueOf(args[0]);
+            port = Integer.valueOf(args[0]);
         }
-        if (args.length > 1) {
-            length = Long.valueOf(args[1]);
-        }
-        if (args.length > 2) {
-            port = Integer.valueOf(args[2]);
-        }
-        if (args.length > 3) {
-            emuName = args[3];
-        }
-
         new Server().run(timeout, length, port, emuName);
     }
 
@@ -70,13 +62,29 @@ public class Server {
 
         //ProcessRunner.runProcess(isWin, "rm *.png");
         try {
-            ServerSocket server = new ServerSocket(port);
-            if (port == 0) {
-                System.out.println(server.getLocalPort());
+
+
+            ServerSocket server = null;
+            boolean connected = false;
+
+            while (!connected) {
+                try {
+                    server = new ServerSocket(port);
+                    connected = true;
+                }
+                catch(Exception e){
+                    port++;
+                }
+
             }
+
+            System.out.println("Port: " + port);
+
+
             Socket client;
 
             Device.loadActiveDevices();
+
 
             while (true) {
                 closeEndpoint.reset();
@@ -90,25 +98,42 @@ public class Server {
 
                 try {
                     Message request;
-                    while (!closeEndpoint.isClosed()) {
-                        request = messageParser.nextMessage();
-                        verifyMetadata(request);
-                        stripMetadata(request);
-                        Endpoint endpoint = router.resolve(request.getSubject());
+                    int cont = 0;
+                    failed = false;
+                    while (!closeEndpoint.isClosed() && !failed) {
+                        //Device.listActiveDevices();
+                        //System.out.println("Waiting new message on port "+port);
                         Message response;
-                        if (endpoint == null) {
-                            response = new Message.MessageBuilder("/error")
-                                    .withParameter("info", "Endpoint for message with subject \""
-                                            + request.getSubject()
-                                            + "\" not registered in MATE-Server. Maybe you are "
-                                            + "using an outdated version of the server?")
-                                    .build();
-                        } else {
-                            response = endpoint.handle(request);
+                        try {
+                            request = messageParser.nextMessage();
+
+                            cont++;
+                            if (cont%175==0)
+                                System.out.println(".");
+                            else
+                                System.out.print(".");
+
+                            verifyMetadata(request);
+                            stripMetadata(request);
+                            Endpoint endpoint = router.resolve(request.getSubject());
+                            if (endpoint == null) {
+                                response = new Message.MessageBuilder("/error")
+                                        .withParameter("info", "Endpoint for message with subject \""
+                                                + request.getSubject()
+                                                + "\" not registered in MATE-Server. Maybe you are "
+                                                + "using an outdated version of the server?")
+                                        .build();
+                            } else {
+                                response = endpoint.handle(request);
+                            }
+                            addMetadata(response);
+                            out.write(Serializer.serialize(response));
+                            out.flush();
                         }
-                        addMetadata(response);
-                        out.write(Serializer.serialize(response));
-                        out.flush();
+                        catch(Exception e){
+                            e.printStackTrace();
+                            failed = true;
+                        }
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -120,6 +145,7 @@ public class Server {
         } catch (IOException ioe) {
             ioe.printStackTrace();
         }
+
     }
 
     private void addMetadata(Message message) {
@@ -156,6 +182,7 @@ public class Server {
     private void createFolders() {
         String workingDir = System.getProperty("user.dir");
         // System.out.println(workingDir);
+        workingDir = "/home/marceloeler/mate-uso/sast2020/results";
         try {
             new File(workingDir+"/csvs").mkdir();
         } catch(Exception e){
@@ -169,6 +196,7 @@ public class Server {
 
         ImageHandler.screenShotDir = workingDir+"/pictures/";
         Report.reportDir = workingDir+"/csvs/";
+        Report.generalReportDir = workingDir;
     }
 
 }

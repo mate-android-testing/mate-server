@@ -12,28 +12,32 @@ import java.util.List;
 
 public class Device {
 
+    public static Hashtable<String,Integer> apiVersions = new Hashtable<String,Integer>();
+
     public static Hashtable<String,Device> devices;
 
     private String deviceID;
     private String packageName;
     private boolean busy;
     private int APIVersion;
-    private String currentScreenShotLocation;
+
 
     public Device(String deviceID){
+        System.out.println("new device");
         this.deviceID = deviceID;
         this.packageName = "";
         this.busy = false;
-        APIVersion = this.getAPIVersionFromADB();
+        APIVersion = Device.getAPIVersionFromADB(deviceID);
+        apiVersions.put(deviceID,APIVersion);
     }
 
-    public String getCurrentScreenShotLocation(){
-        return currentScreenShotLocation;
-    }
+    //public String getCurrentScreenShotLocation(){
+    //    return currentScreenShotLocation;
+    //}
 
-    public void setCurrentScreenShotLocation(String currentScreenShotLocation){
-        this.currentScreenShotLocation = currentScreenShotLocation;
-    }
+    //public void setCurrentScreenShotLocation(String currentScreenShotLocation){
+    //    this.currentScreenShotLocation = currentScreenShotLocation;
+    //}
 
     public String getDeviceID() {
         return deviceID;
@@ -63,7 +67,7 @@ public class Device {
         return APIVersion;
     }
 
-    private int getAPIVersionFromADB(){
+    private static int getAPIVersionFromADB(String deviceID){
         List<String> result = ProcessRunner.runProcess("adb", "-s", deviceID, "shell", "getprop", "ro.build.version.sdk");
         if (result != null && result.size() > 0) {
             System.out.println("API consulta: " + result.get(0));
@@ -116,7 +120,68 @@ public class Device {
         return true;
     }
 
-    public String getCurrentActivity(){
+    public static String getCurrentActivity(String deviceID){
+        Integer apiVersion = apiVersions.get(deviceID);
+        if (apiVersion==null){
+            apiVersion = Device.getAPIVersionFromADB(deviceID);
+            apiVersions.put(deviceID,apiVersion);
+        }
+
+        String response="unknown";
+        String cmd = "adb -s " + deviceID +" shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
+        if (apiVersion==23 || apiVersion==25){
+            if (ProcessRunner.isWin) {
+                cmd = "$focused = adb -s " + deviceID + " shell dumpsys activity activities "
+                        + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[5]";
+                //System.out.println(cmd);
+            } else {
+                cmd = "adb -s " + deviceID + " shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
+            }
+        }
+
+        if (apiVersion==26 || apiVersion==27){
+            if (ProcessRunner.isWin) {
+                cmd = "$focused = adb -s " + deviceID + " shell dumpsys activity activities "
+                        + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[7]";
+                //System.out.println(cmd);
+            } else {
+                cmd = "adb -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
+            }
+        }
+
+        /*
+         * 27.04.2019
+         *
+         * The record 'mFocusedActivity' is not available anymore under Windows for API Level 28 (tested on Nexus5 and PixelC),
+         * although it is available still under Linux (tested on Nexus5), which is somewhat strange.
+         * Instead, we need to search for the 'realActivity' record, pick the second one (seems to be the current active Activity)
+         * and split on '='.
+         */
+        if (apiVersion == 28) {
+            if (ProcessRunner.isWin) {
+                cmd = "$activity = adb -s " + deviceID + " shell dumpsys activity activities "
+                        + "| select-string \"realActivity\" ; $focused = $activity[1] ; $final = $focused -split '=' ; echo $final[1]";
+                // Alternatively use: "$focused.Line.split(=)[1] \"";
+                //System.out.println(cmd);
+            } else {
+                cmd = "adb -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
+            }
+        }
+
+        List<String> result;
+        if (ProcessRunner.isWin) {
+            result = ProcessRunner.runProcess("powershell", "-command", cmd);
+        } else {
+            result = ProcessRunner.runProcess("bash", "-c", cmd);
+        }
+        if (result != null && result.size() > 0)
+            response = result.get(0);
+        //System.out.println("activity: " + response);
+
+        return response;
+    }
+
+    public String getCurrentActivityX(){
 
         String response="unknown";
         String cmd = "adb -s " + deviceID +" shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
@@ -124,7 +189,7 @@ public class Device {
             if (ProcessRunner.isWin) {
                 cmd = "$focused = adb -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[5]";
-                System.out.println(cmd);
+                //System.out.println(cmd);
             } else {
                 cmd = "adb -s " + deviceID + " shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
             }
@@ -134,7 +199,7 @@ public class Device {
             if (ProcessRunner.isWin) {
                 cmd = "$focused = adb -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[7]";
-                System.out.println(cmd);
+                //System.out.println(cmd);
             } else {
                 cmd = "adb -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
             }
@@ -153,7 +218,7 @@ public class Device {
                 cmd = "$activity = adb -s " + deviceID + " shell dumpsys activity activities "
                        + "| select-string \"realActivity\" ; $focused = $activity[1] ; $final = $focused -split '=' ; echo $final[1]";
                         // Alternatively use: "$focused.Line.split(=)[1] \"";
-                System.out.println(cmd);
+                //System.out.println(cmd);
             } else {
                 cmd = "adb -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
             }
@@ -167,7 +232,7 @@ public class Device {
         }
         if (result != null && result.size() > 0)
             response = result.get(0);
-        System.out.println("activity: " + response);
+        //System.out.println("activity: " + response);
 
         return response;
     }
@@ -176,16 +241,16 @@ public class Device {
         String cmd = "";
         List<String> response;
         if (ProcessRunner.isWin) {
-            System.out.println("Running windows get source lines command!");
+            //System.out.println("Running windows get source lines command!");
             cmd = "aapt dump xmltree " + packageName + ".apk AndroidManifest.xml | python getActivityNames.py" + "";
             response = ProcessRunner.runProcess("powershell", "-command", cmd);
         } else {
             cmd = "aapt dump xmltree " + packageName + ".apk AndroidManifest.xml | ./getActivityNames.py";
             response = ProcessRunner.runProcess("bash", "-c", cmd);
         }
-        System.out.println("activities:");
+        //System.out.println("activities:");
         for (String activity : response) {
-            System.out.println("\t" + activity);
+            //System.out.println("\t" + activity);
         }
         return response;
     }
@@ -193,7 +258,7 @@ public class Device {
     public List<String> getSourceLines() {
         String cmd = "";
         if (ProcessRunner.isWin) {
-            System.out.println("Running windows get source lines command!");
+            //System.out.println("Running windows get source lines command!");
             cmd = "python3 getSourceLines.py " + packageName;
             return ProcessRunner.runProcess("powershell", "-command", cmd);
         } else {
@@ -205,7 +270,7 @@ public class Device {
     public String clearApp() {
         String cmd = "";
         if (ProcessRunner.isWin) {
-            System.out.println("Running windows clear app command!");
+            //System.out.println("Running windows clear app command!");
             cmd = "python3 clearApp.py " + deviceID + " " + packageName;
         } else {
             cmd = "./clearApp.py " + deviceID + " " + packageName;
@@ -375,10 +440,10 @@ public class Device {
     }
 
     public static void listActiveDevices() {
-        for (String devID: devices.keySet()) {
+        /*for (String devID: .keySet()) {
             Device device = devices.get(devID);
             System.out.println(device.getDeviceID()+ " - " + device.isBusy()+ ": " + device.getPackageName());
-        }
+        }*/
     }
 
     public static String allocateDevice(String cmdStr){
@@ -419,8 +484,9 @@ public class Device {
         }*/
         //response = "4f60d1bb";
 
-        Report.createHeader(deviceID,packageName);
+        Report.createCSVFolder(deviceID,packageName);
         ImageHandler.createPicturesFolder(deviceID,packageName);
+
 
         return deviceID;
     }
@@ -429,7 +495,7 @@ public class Device {
         for (String key: devices.keySet()){
             List<String> result = ProcessRunner.runProcess("adb", "-s", key, "shell", "ps", packageName);
             for (String res: result){
-                System.out.println(res);
+                //System.out.println(res);
                 if (res.contains(packageName))
                     return key;
             }

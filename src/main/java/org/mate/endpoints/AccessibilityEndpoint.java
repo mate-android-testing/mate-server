@@ -15,7 +15,7 @@ public class AccessibilityEndpoint implements Endpoint {
 
     private String handleRequest(String cmdStr){
         if (cmdStr.startsWith("surroundingColor")) {
-            System.out.println("matches color");
+            //System.out.println("matches color");
             return ImageHandler.matchesSurroundingColor(cmdStr);
         }
         return "";

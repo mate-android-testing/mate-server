@@ -17,6 +17,7 @@ public class Parser {
 
         Lexer.Token currentToken = tokenIterator.next();
 
+        //System.out.println(currentToken.getType().toString()+ " - " + currentToken.getContents());
         if (currentToken.getType() != Lexer.Type.SUBJECT) {
             throw new IllegalStateException("Unexpected first token of type: " + currentToken.getType());
         }
@@ -24,17 +25,21 @@ public class Parser {
         Message.MessageBuilder messageBuilder = new Message.MessageBuilder(currentToken.getContents());
 
         currentToken = tokenIterator.next();
+        //if (currentToken.getType()==Lexer.Type.VALUE)
+            //System.out.println(currentToken.getType().toString()+ " - " + currentToken.getContents());
         if (currentToken.getType() != Lexer.Type.END_PARAM && currentToken.getType() != Lexer.Type.END_MESSAGE) {
             throw new IllegalStateException("Unexpected token after subject of type: " + currentToken.getType());
         }
 
+
+       // if (currentToken.getType()==Lexer.Type.VALUE)
+            //System.out.println(currentToken.getType().toString()+ " - " + currentToken.getContents());
         while (currentToken.getType() != Lexer.Type.END_MESSAGE) {
             if (currentToken.getType() != Lexer.Type.END_PARAM) {
                 throw new IllegalStateException("Unexpected token after param value of type: " + currentToken.getType());
             }
 
             currentToken = tokenIterator.next();
-
             if (currentToken.getType() != Lexer.Type.PARAM_KEY) {
                 throw new IllegalStateException("Unexpected token instead of param key of type: " + currentToken.getType());
             }
@@ -42,13 +47,11 @@ public class Parser {
             String paramKey = currentToken.getContents();
 
             currentToken = tokenIterator.next();
-
             if (currentToken.getType() != Lexer.Type.RELATION_SEPARATOR) {
                 throw new IllegalStateException("Unexpected token instead of relation separator of type: " + currentToken.getType());
             }
 
             currentToken = tokenIterator.next();
-
             if (currentToken.getType() != Lexer.Type.VALUE) {
                 throw new IllegalStateException("Unexpected token instead of param value of type: " + currentToken.getType());
             }

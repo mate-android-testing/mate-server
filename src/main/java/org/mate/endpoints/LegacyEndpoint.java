@@ -46,13 +46,13 @@ public class LegacyEndpoint implements Endpoint {
                 .build();
     }
 
-    private String handleRequest(String cmdStr) {
-        System.out.println();
-        System.out.println(cmdStr);
+    int cont = 0;
+    public String handleRequest(String cmdStr) {
 
-        if (cmdStr.startsWith("reportFlaw")){
+        cont++;
+        //System.out.println(cmdStr);
+        if (cmdStr.startsWith("reportFlaw"))
             return Report.addFlaw(cmdStr);
-        }
 
         if (cmdStr.startsWith("clearApp"))
             return clearApp(cmdStr);
@@ -762,8 +762,7 @@ public class LegacyEndpoint implements Endpoint {
     private String getActivity(String cmdStr) {
         String parts[] = cmdStr.split(":");
         String deviceID = parts[1];
-        Device device = Device.devices.get(deviceID);
-        return device.getCurrentActivity();
+        return Device.getCurrentActivity(deviceID);
     }
 
     private String storeCurrentTraceFile(String cmdStr) {

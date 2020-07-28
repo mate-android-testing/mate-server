@@ -58,7 +58,7 @@ public class ColorUtils {
         }
 
         byte[] grayScaleValues = new byte[fb.getHeight()*fb.getWidth()];
-        System.out.println("size: " + fb.getWidth()+" vs " + fb.getHeight());
+        //System.out.println("size: " + fb.getWidth()+" vs " + fb.getHeight());
         int index = 0;
         for (int y=0; y<y2-y1; y++) {
             for (int x = 0; x < x2 - x1; x++) {
@@ -66,7 +66,7 @@ public class ColorUtils {
                 index++;
             }
         }
-        System.out.println("lenght grayscalevalues: " + grayScaleValues.length);
+        //System.out.println("lenght grayscalevalues: " + grayScaleValues.length);
         OtsuThresholder otsu = new OtsuThresholder();
         int o = otsu.doThreshold(grayScaleValues,null);
 
@@ -117,8 +117,8 @@ public class ColorUtils {
 
             ex.printStackTrace();
         }
-        System.out.println("Freqhigh: " + freqHigh.size());
-        System.out.println("FreqLow: " + freqLow.size());
+        //System.out.println("Freqhigh: " + freqHigh.size());
+        //System.out.println("FreqLow: " + freqLow.size());
         if (freqHigh.size()==0 || freqLow.size()==0)
             return 0;
 
