@@ -18,7 +18,7 @@ public class ImageHandler {
 
     public static int contImg = 0;
 
-    private static String currentPackageName = "";
+    public static String currentPackageName = "";
 
     public static String takeScreenshot(String cmdStr) {
 
@@ -55,7 +55,7 @@ public class ImageHandler {
     public static String takeFlickerScreenshot(String cmdStr) {
 
         String targetFolder = screenShotDir + cmdStr.split("_")[1];
-        System.out.println("target folder: " + targetFolder);
+        //System.out.println("target folder: " + targetFolder);
 
         String[] parts = cmdStr.split(":");
         String emulator = parts[1];
@@ -107,7 +107,7 @@ public class ImageHandler {
     public static String markImage(String cmdStr) {
 
         try {
-            System.out.println(cmdStr);
+            //System.out.println(cmdStr);
             String[] parts = cmdStr.split(":");
             String imageName = parts[1];
             int x = Integer.parseInt(parts[2].split("-")[1]);
@@ -148,7 +148,7 @@ public class ImageHandler {
         String response = "0";
         try {
 
-            System.out.println(cmdStr);
+            //System.out.println(cmdStr);
             String[] parts = cmdStr.split(":");
             String packageName = parts[1];
 
@@ -164,10 +164,10 @@ public class ImageHandler {
             int y2 = Integer.valueOf(positions[3]);
 
             String fileName = targetFolder+ "/"+packageName + "_" + stateId + ".png";
-            System.out.println(fileName);
-            System.out.println(coord);
+            //System.out.println(fileName);
+            //System.out.println(coord);
             String luminances = AccessibilityUtils.getLuminance(fileName, x1, y1, x2, y2);
-            System.out.println("luminance: " + luminances);
+            //System.out.println("luminance: " + luminances);
             response = luminances;
         } catch (Exception e) {
             System.out.println("PROBLEMS CALCULATING LUMINANCE");

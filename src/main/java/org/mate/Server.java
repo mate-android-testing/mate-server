@@ -11,10 +11,12 @@ import org.mate.network.Endpoint;
 import org.mate.network.Router;
 import org.mate.pdf.Report;
 
+import java.awt.*;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
+import java.util.List;
 
 public class Server {
     private static final String METADATA_PREFIX = "__meta__";
@@ -92,26 +94,29 @@ public class Server {
                 System.out.println("Waiting for connection (" + new Date().toGMTString() + ")");
                 client = server.accept();
                 System.out.println("Accepted connection (" + new Date().toGMTString() + ")");
-
+                ImageHandler.currentPackageName = "";
                 OutputStream out = client.getOutputStream();
                 Parser messageParser = new Parser(client.getInputStream());
 
                 try {
                     Message request;
-                    int cont = 0;
+                    long timeStart = new java.util.Date().getTime();
                     failed = false;
+                    int lastMinute = 0;
                     while (!closeEndpoint.isClosed() && !failed) {
+                        long currentTime = new java.util.Date().getTime();
+                        long runningTime = (currentTime-timeStart);
+                        int seconds = (int) runningTime/1000;
+                        int minutes = (int) seconds/60;
+                        if (minutes!=lastMinute && minutes%5 == 0) {
+                            System.out.println("Running time: " + minutes + "(" + ImageHandler.currentPackageName + ")");
+                            lastMinute = minutes;
+                        }
                         //Device.listActiveDevices();
                         //System.out.println("Waiting new message on port "+port);
                         Message response;
                         try {
                             request = messageParser.nextMessage();
-
-                            cont++;
-                            if (cont%175==0)
-                                System.out.println(".");
-                            else
-                                System.out.print(".");
 
                             verifyMetadata(request);
                             stripMetadata(request);

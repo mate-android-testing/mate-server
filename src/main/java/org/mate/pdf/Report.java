@@ -83,14 +83,14 @@ public class Report {
     }
 
     public static void actionMeasuresReport(String cmdStr){
-        System.out.println("MEASURES: " +  cmdStr);
+        //System.out.println("MEASURES: " +  cmdStr);
         String parts[] = cmdStr.split("%");
         String deviceId = parts[1];
         String header = parts[2];
         String values = parts[3];
 
         String reportFile = generalReportDir+"/actionMeasures.csv";
-        System.out.println(reportFile);
+        //System.out.println(reportFile);
         File tempFile = new File( reportFile);
         boolean exists = tempFile.exists();
 
