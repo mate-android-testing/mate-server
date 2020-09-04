@@ -100,7 +100,7 @@ public class Device {
         System.out.println(cmd);
 
         // TODO: react to faulty response
-        ADB.runCommand(cmd);
+        // ADB.runCommand(cmd);
         return true;
     }
 
