@@ -1,15 +1,12 @@
 package org.mate.accessibility;
 
-import org.mate.io.ADB;
+import org.mate.io.ProcessRunner;
 import org.mate.io.Device;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.Writer;
+import java.io.*;
 
 public class ImageHandler {
 
@@ -26,11 +23,9 @@ public class ImageHandler {
         String emulator = parts[1];
         String imgPath = parts[2];
         int index = imgPath.lastIndexOf("_");
-        //String packageName = parts[1].substring(0,index-1);
-        cmdStr = "adb -s " + emulator+" shell screencap -p /sdcard/" + imgPath + " && adb -s "+ emulator + " pull /sdcard/" + parts[2] + " " + targetFolder;
 
-        System.out.println(cmdStr);
-        ADB.runCommand(cmdStr);
+        ProcessRunner.runProcess("adb", "-s", emulator, "shell", "screencap", "-p", "/sdcard/" + imgPath);
+        ProcessRunner.runProcess("adb", "-s", emulator, "pull", "/sdcard/"+parts[2], targetFolder);
 
         Device device = Device.getDevice(emulator);
         device.setCurrentScreenShotLocation(targetFolder+"/"+imgPath);
@@ -52,15 +47,11 @@ public class ImageHandler {
 
         for (int i=0; i<20; i++) {
             imgPath = originalImgPath.replace(".png","_flicker_"+i+".png");
-            cmdStr = "adb -s " + emulator + " shell screencap -p /sdcard/" + imgPath;
-            //System.out.println(cmdStr);
-            ADB.runCommand(cmdStr);
+            ProcessRunner.runProcess("adb", "-s", emulator, "shell", "screencap", "-p", "/sdcard/" + imgPath);
         }
         for (int i=0; i<20; i++) {
             imgPath = originalImgPath.replace(".png","_flicker_"+i+".png");
-            cmdStr = "adb -s " + emulator + " pull /sdcard/" + imgPath + " " + targetFolder;
-            //System.out.println(cmdStr);
-            ADB.runCommand(cmdStr);
+            ProcessRunner.runProcess("adb", "-s", emulator, "pull", "/sdcard/" + imgPath, targetFolder);
         }
 
         boolean flickering = AccessibilityUtils.checkFlickering(targetFolder,originalImgPath);
@@ -68,7 +59,7 @@ public class ImageHandler {
         return imgPath;
     }
 
-    public static String markImage(String originalImgPath,int x1, int y1, int x2, int y2) {
+    public static String markImage(String originalImgPath,int x1, int y1, int x2, int y2,String flawType) {
 
         System.out.println("MARK IMAGE");
         contImg++;
@@ -81,6 +72,10 @@ public class ImageHandler {
             g2d.setColor(Color.RED);
             g2d.setStroke(new BasicStroke(5));
             g2d.drawRect(x1, y1, x2-x1, y2-y1);
+            Font currentFont = g2d.getFont();
+            Font newFont = currentFont.deriveFont(Font.PLAIN,40);
+            g2d.setFont(newFont);
+            g2d.drawString(flawType,img.getWidth()/6,img.getHeight()-100);
             ImageIO.write(img, "PNG", new File(newImagePath));
             g2d.dispose();
         }catch (Exception e){
@@ -143,8 +138,6 @@ public class ImageHandler {
             String stateId = parts[2];
             String coord = parts[3];
 
-
-
             String[] positions = coord.split(",");
             int x1 = Integer.valueOf(positions[0]);
             int y1 = Integer.valueOf(positions[1]);
@@ -161,6 +154,42 @@ public class ImageHandler {
             System.out.println("PROBLEMS CALCULATING LUMINANCE");
             response = "0,0";
         }
+        return response;
+    }
+
+    public static String matchesSurroundingColor(String cmdStr){
+
+        System.out.println(cmdStr);
+        String response = "false";
+
+        try {
+
+            String[] parts = cmdStr.split(":");
+            String packageName = parts[1];
+
+            String targetFolder = screenShotDir + packageName.split("_")[1];
+
+            String stateId = parts[2];
+            String coord = parts[3];
+
+            String[] positions = coord.split(",");
+            int x1 = Integer.valueOf(positions[0]);
+            int y1 = Integer.valueOf(positions[1]);
+            int x2 = Integer.valueOf(positions[2]);
+            int y2 = Integer.valueOf(positions[3]);
+
+            String fileName = targetFolder + "/" + packageName + "_" + stateId + ".png";
+            //System.out.println(fileName);
+            //System.out.println(coord);
+            double matchesBackground = AccessibilityUtils.matchesSurroundingColor(fileName, x1, y1, x2, y2);
+
+            return String.valueOf(matchesBackground);
+        }
+        catch(Exception e){
+            System.out.println("Problems matching color background");
+            response = "false";
+        }
+
         return response;
     }
 
@@ -188,8 +217,7 @@ public class ImageHandler {
             int y2 = Integer.valueOf(positions[3]);
 
             String fileName = targetFolder+ "/"+packageName + "_" + stateId + ".png";
-            System.out.println(fileName);
-            System.out.println(coord);
+
             double contrastRatio = AccessibilityUtils.getContrastRatio(fileName, x1, y1, x2, y2);
             System.out.println("contrast ratio: " + contrastRatio);
             response = String.valueOf(contrastRatio);

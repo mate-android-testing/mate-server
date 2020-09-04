@@ -42,6 +42,7 @@ public class ColorUtils {
         if (x1<0||x2<0||y1<0||y1<0) {
             return 21;
         }
+
         BufferedImage buff = null;
         FastBitmap fb = null;
         //System.out.println(x1 + " " + y1 + " " + x2 + " "+y2);
@@ -57,15 +58,15 @@ public class ColorUtils {
         }
 
         byte[] grayScaleValues = new byte[fb.getHeight()*fb.getWidth()];
+        System.out.println("size: " + fb.getWidth()+" vs " + fb.getHeight());
         int index = 0;
         for (int y=0; y<y2-y1; y++) {
             for (int x = 0; x < x2 - x1; x++) {
-
                 grayScaleValues[index] = (byte)fb.getGray(y, x);
                 index++;
             }
         }
-
+        System.out.println("lenght grayscalevalues: " + grayScaleValues.length);
         OtsuThresholder otsu = new OtsuThresholder();
         int o = otsu.doThreshold(grayScaleValues,null);
 
@@ -79,6 +80,7 @@ public class ColorUtils {
             int xcolor = x1;
             int ycolor = y1;
             for (int y=0; y<y2-y1; y++){
+                //System.out.print (y);
                 ycolor = y1+y;
                 //if (y1==63)
                   //  System.out.println();
@@ -115,7 +117,8 @@ public class ColorUtils {
 
             ex.printStackTrace();
         }
-
+        System.out.println("Freqhigh: " + freqHigh.size());
+        System.out.println("FreqLow: " + freqLow.size());
         if (freqHigh.size()==0 || freqLow.size()==0)
             return 0;
 
@@ -274,7 +277,7 @@ public class ColorUtils {
         Color cHigh = new Color(colorHigh);
         Color cLow = new Color(colorLow);
 
-        System.out.println("chigh: " + cHigh.getRed()+"-"+cHigh.getGreen()+" " + cHigh.getBlue());
+        //System.out.println("chigh: " + cHigh.getRed()+"-"+cHigh.getGreen()+" " + cHigh.getBlue());
         buff.flush();
 
         String chighStr = cHigh.getRed()+":"+cHigh.getGreen()+":"+cHigh.getBlue()+":"+rgbToHex(cHigh.getRed(),cHigh.getGreen(),cHigh.getBlue())+":"+getHue(cHigh.getRed(),cHigh.getGreen(),cHigh.getBlue());
@@ -300,15 +303,15 @@ public class ColorUtils {
         float max = Math.max(Math.max(red, green), blue);
         System.out.println(min + " x " + max);
         if (min == max) {
-            System.out.println("zero");
+            //System.out.println("zero");
             return 0;
         }
 
         float hue = 0f;
         if (max == red) {
             hue = (green - blue) / (max - min);
-            System.out.println("g-b: " + (green-blue));
-            System.out.println("red: "+ hue);
+            //System.out.println("g-b: " + (green-blue));
+            //System.out.println("red: "+ hue);
 
         } else if (max == green) {
             hue = 2f + (blue - red) / (max - min);
@@ -320,7 +323,7 @@ public class ColorUtils {
         hue = hue * 60;
         if (hue < 0) hue = hue + 360;
 
-        System.out.println("hue: " + hue);
+        //System.out.println("hue: " + hue);
         return Math.round(hue);
     }
 
@@ -328,6 +331,163 @@ public class ColorUtils {
 
     public static double getContrastRatio(double l1, double l2){
         return (l1+0.05)/(l2+0.05);
+    }
+
+    public static double matchesSurroundingColor(BufferedImage image,int x1, int y1, int x2, int y2){
+
+        //System.out.println(x1+","+y1+","+x2+","+y2);
+
+        if (x2-x1<=0||y2-y1<=0) {
+            return 0;
+        }
+        if (x1<0||x2<0||y1<0||y1<0) {
+            return 0;
+        }
+        BufferedImage buff = null;
+        FastBitmap fb = null;
+        //System.out.println(x1 + " " + y1 + " " + x2 + " "+y2);
+
+        int modx2=x2+2;
+        int mody1=y1-2;
+        int mody2=y2+2;
+        int modx1=x1-2;
+
+        if (x1<=2)
+            modx1=0;
+        if (x2+2>=image.getWidth()){
+            modx2 = image.getWidth()-1;
+        }
+        if (y1<=2){
+            mody1=0;
+        }
+        if (y2+2>=image.getHeight()){
+            mody2=image.getHeight()-1;
+        }
+
+        try{
+            buff = image.getSubimage(modx1, mody1, modx2 - modx1, mody2 - mody1);
+            fb = new FastBitmap(buff);
+            fb.toGrayscale();
+        }
+        catch(Exception e){
+            e.printStackTrace();
+            return 0;
+        }
+
+        byte[] grayScaleValues = new byte[fb.getHeight()*fb.getWidth()];
+        int index = 0;
+        for (int y=0; y<mody2-mody1; y++) {
+            for (int x = 0; x < modx2 - modx1; x++) {
+                grayScaleValues[index] = (byte)fb.getGray(y, x);
+                index++;
+            }
+        }
+
+        //iterate through the X axis
+
+        int difx1 = x1-modx1;
+        int difx2 = modx2-x2;
+        int dify1 = y1-mody1;
+        int dify2 = mody2-y2;
+
+        int relX1 = difx1;
+        int relX2 = fb.getWidth()-difx2-1;
+        int relY1 = dify1;
+        int relY2 = fb.getHeight()-dify2-1;
+
+        byte surroundingColorA = 0;
+        byte surroundingColorB = 0;
+
+        int matchCount = 0;
+        try {
+            for (int y=relY1; y<relY2; y++) {
+
+                byte borderColor = (byte) fb.getGray(y, relX1);
+
+                if (difx1>=1) {
+                    surroundingColorA = (byte) fb.getGray(y, relX1 - 1);
+                    if (borderColor == surroundingColorA) {
+                        matchCount += 1;
+                    }
+
+                    if (difx1>=2) {
+                        surroundingColorB = (byte) fb.getGray(y, relX1 - 2);
+                        if (borderColor == surroundingColorB) {
+                            matchCount += 1;
+                        }
+                    }
+                }
+
+
+                if (difx2>=1) {
+                    borderColor = (byte) fb.getGray(y, relX2);
+                    surroundingColorA = (byte) fb.getGray(y, relX2 + 1);
+                    if (borderColor == surroundingColorA) {
+                        matchCount += 1;
+                    }
+
+                    if (difx2>=2) {
+                        surroundingColorB = (byte) fb.getGray(y, relX2 + 2);
+                        if (borderColor == surroundingColorB) {
+                            matchCount += 1;
+                        }
+                    }
+                }
+
+            }
+        }
+        catch(Exception e) {
+            e.printStackTrace();
+        }
+
+
+        int currentX=0;
+        //iterate through the Y axis
+        try {
+            for (int x=relX1; x<relX2; x++) {
+                currentX = x;
+                //System.out.print(x+", ");
+
+                byte borderColor = (byte) fb.getGray(relY1,x);
+
+                if (dify1>=1) {
+                    surroundingColorA = (byte) fb.getGray(relY1 - 1, x);
+                    if (borderColor == surroundingColorA) {
+                        matchCount += 1;
+                    }
+
+                    if (dify1>=2) {
+                        surroundingColorB = (byte) fb.getGray(relY1 - 2, x);
+                        if (borderColor == surroundingColorB) {
+                            matchCount += 1;
+                        }
+                    }
+                }
+
+                if (dify2>=1) {
+                    borderColor = (byte) fb.getGray(relY2, x);
+                    surroundingColorA = (byte) fb.getGray(relY2 + 1, x);
+                    if (borderColor == surroundingColorA) {
+                        matchCount += 1;
+                    }
+
+                    if (dify2>=2) {
+                        surroundingColorB = (byte) fb.getGray(relY2 + 2, x);
+                        if (borderColor == surroundingColorB) {
+                            matchCount += 1;
+                        }
+                    }
+                }
+            }
+        }
+        catch(Exception e) {
+            e.printStackTrace();
+            //System.out.println("x: "+ currentX + ", y2: " + relY2 + ", y1: " +relY1 + ", relX2: " + relX2);
+            //System.out.println("width: " + fb.getWidth() + "  height: " + fb.getHeight());
+        }
+
+        int sidesSum = 2*(fb.getWidth()-6)+2*(fb.getHeight()-6);
+        return (double) matchCount/(2*sidesSum);
     }
 /*
     relative luminance
@@ -369,3 +529,4 @@ where L1 is the relative luminance of the lighter of the colors, and L2 is the r
 */
 
 }
+

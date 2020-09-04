@@ -1,11 +1,8 @@
 package org.mate;
 
 import org.mate.accessibility.ImageHandler;
-import org.mate.endpoints.CloseEndpoint;
-import org.mate.endpoints.CrashEndpoint;
-import org.mate.endpoints.LegacyEndpoint;
-import org.mate.endpoints.PropertiesEndpoint;
-import org.mate.io.ADB;
+import org.mate.endpoints.*;
+import org.mate.io.ProcessRunner;
 import org.mate.io.Device;
 import org.mate.message.Message;
 import org.mate.message.serialization.Parser;
@@ -21,7 +18,7 @@ import java.util.*;
 
 public class Server {
     private static final String METADATA_PREFIX = "__meta__";
-    private static final String MESSAGE_PROTOCOL_VERSION = "1.1";
+    private static final String MESSAGE_PROTOCOL_VERSION = "1.2";
     private static final String MESSAGE_PROTOCOL_VERSION_KEY = "version";
 
     private Router router;
@@ -56,6 +53,7 @@ public class Server {
         router.add("/close", closeEndpoint);
         router.add("/crash", new CrashEndpoint());
         router.add("/properties", new PropertiesEndpoint());
+        router.add("/accessibility",new AccessibilityEndpoint());
 
         Server.emuName = emuName;
 
@@ -66,7 +64,7 @@ public class Server {
         String os = System.getProperty("os.name");
         if (os != null && os.startsWith("Windows"))
             isWin = true;
-        ADB.isWin = isWin;
+        ProcessRunner.isWin = isWin;
 
 
         //ProcessRunner.runProcess(isWin, "rm *.png");
