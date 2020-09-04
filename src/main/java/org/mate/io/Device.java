@@ -115,7 +115,7 @@ public class Device {
 
         System.out.println("Command: " + cmd);
 
-        System.out.println("Response: " + ADB.runCommand(cmd));
+        System.out.println("Response: " + ProcessRunner.runProcess(cmd));
         return true;
     }
 
@@ -131,7 +131,7 @@ public class Device {
         System.out.println(cmd);
 
         // TODO: react to faulty response
-        // ADB.runCommand(cmd);
+        ProcessRunner.runProcess("./push-mediafiles.sh", deviceID);
         return true;
     }
 

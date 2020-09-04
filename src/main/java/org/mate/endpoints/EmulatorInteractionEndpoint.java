@@ -1,6 +1,5 @@
 package org.mate.endpoints;
 
-import org.mate.io.ADB;
 import org.mate.io.ProcessRunner;
 import org.mate.message.Message;
 import org.mate.network.Endpoint;
@@ -14,18 +13,18 @@ public class EmulatorInteractionEndpoint implements Endpoint {
         if (request.getSubject().startsWith("/emulator/interaction")) {
             if ("rotation".equals(request.getParameter("type"))) {
                 if (!disabledAutoRotate) {
-                    ADB.runCommand("adb shell content insert --uri content://settings/system --bind name:s:accelerometer_rotation --bind value:i:0");
+                    ProcessRunner.runProcess("adb shell content insert --uri content://settings/system --bind name:s:accelerometer_rotation --bind value:i:0");
                 }
 
                 if ("toggle".equals(request.getParameter("rotation"))) {
                     String rotationMode;
                     if (isInPortraitMode) {
                         rotationMode = "landscape";
-                        ADB.runCommand("adb shell content insert --uri content://settings/system --bind name:s:user_rotation --bind value:i:1");
+                        ProcessRunner.runProcess("adb shell content insert --uri content://settings/system --bind name:s:user_rotation --bind value:i:1");
 
                     } else {
                         rotationMode = "portrait";
-                        ADB.runCommand("adb shell content insert --uri content://settings/system --bind name:s:user_rotation --bind value:i:0");
+                        ProcessRunner.runProcess("adb shell content insert --uri content://settings/system --bind name:s:user_rotation --bind value:i:0");
                     }
                     isInPortraitMode = !isInPortraitMode;
 
@@ -34,7 +33,7 @@ public class EmulatorInteractionEndpoint implements Endpoint {
                             .build();
                 } else if ("portrait".equals(request.getParameter("rotation"))) {
                     isInPortraitMode = true;
-                    ADB.runCommand("adb shell content insert --uri content://settings/system --bind name:s:user_rotation --bind value:i:0");
+                    ProcessRunner.runProcess("adb shell content insert --uri content://settings/system --bind name:s:user_rotation --bind value:i:0");
                     return new Message.MessageBuilder("/emulator/interaction")
                             .withParameter("rotation", "portrait")
                             .build();
