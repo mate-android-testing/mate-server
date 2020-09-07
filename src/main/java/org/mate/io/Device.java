@@ -85,7 +85,7 @@ public class Device {
         List<String> responseRead = ProcessRunner.runProcess("adb", "-s", deviceID, "shell", "pm", "grant", packageName, "android.permission.READ_EXTERNAL_STORAGE");
         List<String> responseWrite = ProcessRunner.runProcess("adb", "-s", deviceID, "shell", "pm", "grant", packageName, "android.permission.WRITE_EXTERNAL_STORAGE");
 
-        // empty repsonse should signal no failure
+        // empty response should signal no failure
         return responseRead.isEmpty() && responseWrite.isEmpty();
     }
 
@@ -103,19 +103,34 @@ public class Device {
 
         // the inner class seperator '$' needs to be escaped
         receiver = receiver.replaceAll("\\$", Matcher.quoteReplacement("\\$"));
-
-        String cmd =  "adb -s " + deviceID + " shell su root am broadcast -a " + action;
+        
+        String tag;
+        String component;
 
         if (dynamicReceiver) {
             // we can't specify the full component name (solely package) -> dynamic receivers can't be triggered by explicit intents
-            cmd += " -p " + packageName;
+            tag = "-p";
+            component = packageName;
         } else {
-            cmd += " -n " + packageName + "/" + receiver;
+            tag = "-n";
+            component = packageName + "/" + receiver;
         }
 
-        System.out.println("Command: " + cmd);
+        List<String> response = ProcessRunner.runProcess(
+                "adb",
+                "-s",
+                deviceID,
+                "shell",
+                "su",
+                "root",
+                "am",
+                "broadcast",
+                "-a",
+                action,
+                tag,
+                component);
 
-        System.out.println("Response: " + ProcessRunner.runProcess(cmd));
+        System.out.println("Response: " + response);
         return true;
     }
 
@@ -127,11 +142,21 @@ public class Device {
      */
     public boolean pushDummyFiles() {
 
-        String cmd = "./push-mediafiles.sh " + deviceID;
-        System.out.println(cmd);
-
-        // TODO: react to faulty response
-        ProcessRunner.runProcess("./push-mediafiles.sh", deviceID);
+        ProcessRunner.runProcess("adb", "-s", deviceID, "root");
+        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestBmp.bmp", "sdcard/mateTestBmp.bmp");
+        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestGif.gif", "sdcard/mateTestGif.gif");
+        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestJpg.jpg", "sdcard/mateTestJpg.jpg");
+        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestJson.json", "sdcard/mateTestJson.json");
+        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestMid.mid", "sdcard/mateTestMid.mid");
+        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestPdf.pdf", "sdcard/mateTestPdf.pdf");
+        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestPng.png", "sdcard/mateTestPng.png");
+        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestTiff.tiff", "sdcard/mateTestTiff.tiff");
+        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestTxt.txt", "sdcard/mateTestTxt.txt");
+        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestWav.wav", "sdcard/mateTestWav.wav");
+        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestCsv.csv", "sdcard/mateTestCsv.csv");
+        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestXml.xml", "sdcard/mateTestXml.xml");
+        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestOgg.ogg", "sdcard/mateTestOgg.ogg");
+        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestMp3.mp3", "sdcard/mateTestMp3.mp3");
         return true;
     }
 
@@ -223,8 +248,7 @@ public class Device {
         String cmd = "";
         List<String> response;
         if (ProcessRunner.isWin) {
-            System.out.println("Running windows get source lines command!");
-            cmd = "aapt dump xmltree " + packageName + ".apk AndroidManifest.xml | python getActivityNames.py" + "";
+            cmd = "aapt dump xmltree " + packageName + ".apk AndroidManifest.xml | python3 getActivityNames.py" + "";
             response = ProcessRunner.runProcess("powershell", "-command", cmd);
         } else {
             cmd = "aapt dump xmltree " + packageName + ".apk AndroidManifest.xml | ./getActivityNames.py";
