@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Hashtable;
 import java.util.List;
+import java.util.regex.Matcher;
 
 public class Device {
 
@@ -86,6 +87,52 @@ public class Device {
 
         // empty repsonse should signal no failure
         return responseRead.isEmpty() && responseWrite.isEmpty();
+    }
+
+    /**
+     * Broadcasts the notification of a system event to a given receiver.
+     *
+     * @param packageName The package name of the AUT.
+     * @param receiver The broadcast receiver listening for the system event notification.
+     * @param action The actual system event.
+     * @param dynamicReceiver Whether the receiver is a dynamic one.
+     * @return Returns {@code true} if the system event notification could be successfully
+     *      broad-casted, otherwise {@code false}.
+     */
+    public boolean executeSystemEvent(String packageName, String receiver, String action, boolean dynamicReceiver) {
+
+        // the inner class seperator '$' needs to be escaped
+        receiver = receiver.replaceAll("\\$", Matcher.quoteReplacement("\\$"));
+
+        String cmd =  "adb -s " + deviceID + " shell su root am broadcast -a " + action;
+
+        if (dynamicReceiver) {
+            // we can't specify the full component name (solely package) -> dynamic receivers can't be triggered by explicit intents
+            cmd += " -p " + packageName;
+        } else {
+            cmd += " -n " + packageName + "/" + receiver;
+        }
+
+        System.out.println("Command: " + cmd);
+
+        System.out.println("Response: " + ProcessRunner.runProcess(cmd));
+        return true;
+    }
+
+    /**
+     * Pushes dummy files for various data types onto the
+     * external storage.
+     *
+     * @return Returns whether pushing files succeeded.
+     */
+    public boolean pushDummyFiles() {
+
+        String cmd = "./push-mediafiles.sh " + deviceID;
+        System.out.println(cmd);
+
+        // TODO: react to faulty response
+        ProcessRunner.runProcess("./push-mediafiles.sh", deviceID);
+        return true;
     }
 
     /**
