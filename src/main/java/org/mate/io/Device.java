@@ -196,6 +196,10 @@ public class Device {
             if (ADB.isWin) {
                 cmd = "powershell -command " + "\"$focused = adb -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[5]\"";
+
+                cmd = "powershell -command " + "\"$focused = adb -s " + deviceID + " shell dumpsys window windows "
+                        + "| select-string mFocusedApp ; \"$focused\".Line.split(\" \")[6]\"";
+
                 System.out.println(cmd);
             } else {
                 cmd = "adb -s " + deviceID + " shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
@@ -232,8 +236,28 @@ public class Device {
         }
 
         List<String> result = ADB.runCommand(cmd);
-        if (result != null && result.size() > 0)
+
+        if (result != null && result.size() > 0) {
             response = result.get(0);
+        }
+
+        if (response.contains("einen Ausdruck aufzurufen, der den NULL hat.") && ADB.isWin) {
+
+            response = "unknown";
+
+            /*
+            cmd = "powershell -command " + "\"$activity = adb -s " + deviceID + " shell dumpsys activity activities "
+                    + "| select-string \"realActivity\" ; $focused = $activity[1] ; $final = $focused -split '=' ; echo $final[1]\"";
+
+            System.out.println(cmd);
+
+            result = ADB.runCommand(cmd);
+
+            if (result != null && result.size() > 0) {
+                response = result.get(0);
+            }
+            */
+        }
         System.out.println("activity: " + response);
 
         return response;
