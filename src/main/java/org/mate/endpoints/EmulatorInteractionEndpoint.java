@@ -12,10 +12,15 @@ public class EmulatorInteractionEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/emulator/interaction")) {
             if ("rotation".equals(request.getParameter("type"))) {
+
+                String deviceID = request.getParameter("deviceId");
+
                 if (!disabledAutoRotate) {
 
                     ProcessRunner.runProcess(
                             "adb",
+                            "-s",
+                            deviceID,
                             "shell",
                             "content",
                             "insert",
@@ -34,6 +39,8 @@ public class EmulatorInteractionEndpoint implements Endpoint {
                         rotationMode = "landscape";
                         ProcessRunner.runProcess(
                                 "adb",
+                                "-s",
+                                deviceID,
                                 "shell",
                                 "content",
                                 "insert",
@@ -48,6 +55,8 @@ public class EmulatorInteractionEndpoint implements Endpoint {
                         rotationMode = "portrait";
                         ProcessRunner.runProcess(
                                 "adb",
+                                "-s",
+                                deviceID,
                                 "shell",
                                 "content",
                                 "insert",
@@ -68,6 +77,8 @@ public class EmulatorInteractionEndpoint implements Endpoint {
 
                     ProcessRunner.runProcess(
                             "adb",
+                            "-s",
+                            deviceID,
                             "shell",
                             "content",
                             "insert",
