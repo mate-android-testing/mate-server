@@ -1,6 +1,6 @@
 package org.mate.accessibility;
 
-import org.mate.io.ADB;
+import org.mate.io.ProcessRunner;
 import org.mate.io.Device;
 
 import javax.imageio.ImageIO;
@@ -23,11 +23,9 @@ public class ImageHandler {
         String emulator = parts[1];
         String imgPath = parts[2];
         int index = imgPath.lastIndexOf("_");
-        //String packageName = parts[1].substring(0,index-1);
-        cmdStr = "adb -s " + emulator+" shell screencap -p /sdcard/" + imgPath + " && adb -s "+ emulator + " pull /sdcard/" + parts[2] + " " + targetFolder;
 
-        System.out.println(cmdStr);
-        ADB.runCommand(cmdStr);
+        ProcessRunner.runProcess("adb", "-s", emulator, "shell", "screencap", "-p", "/sdcard/" + imgPath);
+        ProcessRunner.runProcess("adb", "-s", emulator, "pull", "/sdcard/"+parts[2], targetFolder);
 
         Device device = Device.getDevice(emulator);
         device.setCurrentScreenShotLocation(targetFolder+"/"+imgPath);
@@ -49,15 +47,11 @@ public class ImageHandler {
 
         for (int i=0; i<20; i++) {
             imgPath = originalImgPath.replace(".png","_flicker_"+i+".png");
-            cmdStr = "adb -s " + emulator + " shell screencap -p /sdcard/" + imgPath;
-            //System.out.println(cmdStr);
-            ADB.runCommand(cmdStr);
+            ProcessRunner.runProcess("adb", "-s", emulator, "shell", "screencap", "-p", "/sdcard/" + imgPath);
         }
         for (int i=0; i<20; i++) {
             imgPath = originalImgPath.replace(".png","_flicker_"+i+".png");
-            cmdStr = "adb -s " + emulator + " pull /sdcard/" + imgPath + " " + targetFolder;
-            //System.out.println(cmdStr);
-            ADB.runCommand(cmdStr);
+            ProcessRunner.runProcess("adb", "-s", emulator, "pull", "/sdcard/" + imgPath, targetFolder);
         }
 
         boolean flickering = AccessibilityUtils.checkFlickering(targetFolder,originalImgPath);
