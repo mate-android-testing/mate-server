@@ -103,19 +103,34 @@ public class Device {
 
         // the inner class seperator '$' needs to be escaped
         receiver = receiver.replaceAll("\\$", Matcher.quoteReplacement("\\$"));
-
-        String cmd =  "adb -s " + deviceID + " shell su root am broadcast -a " + action;
+        
+        String tag;
+        String component;
 
         if (dynamicReceiver) {
             // we can't specify the full component name (solely package) -> dynamic receivers can't be triggered by explicit intents
-            cmd += " -p " + packageName;
+            tag = "-p";
+            component = packageName;
         } else {
-            cmd += " -n " + packageName + "/" + receiver;
+            tag = "-n";
+            component = packageName + "/" + receiver;
         }
 
-        System.out.println("Command: " + cmd);
+        List<String> response = ProcessRunner.runProcess(
+                "adb",
+                "-s",
+                deviceID,
+                "shell",
+                "su",
+                "root",
+                "am",
+                "broadcast",
+                "-a",
+                action,
+                tag,
+                component);
 
-        System.out.println("Response: " + ProcessRunner.runProcess(cmd));
+        System.out.println("Response: " + response);
         return true;
     }
 
@@ -233,8 +248,7 @@ public class Device {
         String cmd = "";
         List<String> response;
         if (ProcessRunner.isWin) {
-            System.out.println("Running windows get source lines command!");
-            cmd = "aapt dump xmltree " + packageName + ".apk AndroidManifest.xml | python getActivityNames.py" + "";
+            cmd = "aapt dump xmltree " + packageName + ".apk AndroidManifest.xml | python3 getActivityNames.py" + "";
             response = ProcessRunner.runProcess("powershell", "-command", cmd);
         } else {
             cmd = "aapt dump xmltree " + packageName + ".apk AndroidManifest.xml | ./getActivityNames.py";
