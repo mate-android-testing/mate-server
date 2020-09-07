@@ -103,6 +103,7 @@ public class Server {
         router.add("/close", closeEndpoint);
         router.add("/crash", new CrashEndpoint(androidEnvironment));
         router.add("/properties", new PropertiesEndpoint());
+        router.add("/emulator/interaction", new EmulatorInteractionEndpoint());
         router.add("/accessibility",new AccessibilityEndpoint(imageHandler));
         router.add("/coverage", new CoverageEndpoint(androidEnvironment, resultsPath));
 
