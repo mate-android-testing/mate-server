@@ -1,7 +1,7 @@
 package org.mate.endpoints;
 
 import org.mate.io.ProcessRunner;
-import org.mate.message.Message;
+import org.mate.network.message.Message;
 import org.mate.network.Endpoint;
 
 public class EmulatorInteractionEndpoint implements Endpoint {
