@@ -131,7 +131,7 @@ public class Device {
                 "-a",
                 action,
                 tag,
-                component);
+                component).getOk();
 
         System.out.println("Response: " + response);
         return true;
