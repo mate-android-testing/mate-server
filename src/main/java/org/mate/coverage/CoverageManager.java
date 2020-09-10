@@ -79,27 +79,76 @@ public class CoverageManager {
                 if (!requestedLines.get(packageName).containsKey(className)) {
                     continue;
                 }
+                //counter of how many lines the nearest covered line before the respective line of the key is await
+                var lastCoveredBeforeLine = new HashMap<Integer, Optional<Integer>>();
+                //counter of how many lines the nearest covered line after the respective line of the key is await
+                var nextCoveredAfterLine = new HashMap<Integer, Optional<Integer>>();
+                //counter of how many non empty lines are before the line of the respective key
+                var linesBeforeLine = new HashMap<Integer, Integer>();
+                //counter of how many non empty lines are after the line of the respective key
+                var linesAfterLine = new HashMap<Integer, Integer>();
+                for (Integer lineNr : requestedLines.get(packageName).get(className)) {
+                    lastCoveredBeforeLine.put(lineNr, Optional.empty());
+                    nextCoveredAfterLine.put(lineNr, Optional.empty());
+                    linesBeforeLine.put(lineNr, 0);
+                    linesAfterLine.put(lineNr, 0);
+                }
 
-                int coveredLinesInClass = 0;
-                int totalLinesInClass = 0;
                 for (int i = classCoverage.getFirstLine(); i <= classCoverage.getLastLine(); i++) {
                     int status = classCoverage.getLine(i).getStatus();
-                    if (status == ICounter.PARTLY_COVERED || status == ICounter.FULLY_COVERED) {
-                        totalLinesInClass++;
-                        coveredLinesInClass++;
-                    } else if (status != ICounter.EMPTY) {
-                        totalLinesInClass++;
+                    if (status == ICounter.EMPTY) {
+                        continue;
+                    }
+                    for (Integer lineNr : requestedLines.get(packageName).get(className)) {
+                        if (i < lineNr) {
+                            linesBeforeLine.compute(lineNr, (k, v) -> v + 1);
+                        } else if (i > lineNr) {
+                            linesAfterLine.compute(lineNr, (k, v) -> v + 1);
+                        }
+                        if (status == ICounter.PARTLY_COVERED || status == ICounter.FULLY_COVERED) {
+                            if (i < lineNr) {
+                                lastCoveredBeforeLine.put(lineNr, Optional.of(1));
+                            } else if (i > lineNr) {
+                                nextCoveredAfterLine.compute(lineNr, (k, v) -> v.or(() -> Optional.of(linesAfterLine.get(lineNr))));
+                            } else {
+                                lastCoveredBeforeLine.put(lineNr, Optional.of(0));
+                                nextCoveredAfterLine.put(lineNr, Optional.of(0));
+                            }
+                        } else {
+                            if (i < lineNr) {
+                                lastCoveredBeforeLine.compute(lineNr, (k, v) -> v.map(x -> x + 1));
+                            }
+                        }
                     }
                 }
-                double lineCoveredPercentageInClass = 0.5;
-                // sanity check, should always be true
-                if (totalLinesInClass != 0) {
-                    lineCoveredPercentageInClass += (coveredLinesInClass / (totalLinesInClass * 2.0));
-                }
-
 
                 for (Integer lineNr : requestedLines.get(packageName).get(className)) {
-                    coveredPercentage.put(new Line(packageName, className, lineNr), lineCoveredPercentageInClass);
+                    double lineCoveredPercentage = 0.5;
+                    if (lastCoveredBeforeLine.get(lineNr).map(x -> x == 0).orElse(false)
+                            && nextCoveredAfterLine.get(lineNr).map(x -> x == 0).orElse(false)) {
+                        lineCoveredPercentage = 1.0;
+                    } else {
+                        int factor = Math.max(linesBeforeLine.get(lineNr), linesAfterLine.get(lineNr));
+                        if (factor != 0) {
+                            Optional<Integer> closestCoveredLine = Optional.empty();
+                            if (lastCoveredBeforeLine.get(lineNr).isPresent()) {
+                                if (nextCoveredAfterLine.get(lineNr).isPresent()) {
+                                    closestCoveredLine = Optional.of(
+                                            Math.min(
+                                                    lastCoveredBeforeLine.get(lineNr).get(),
+                                                    nextCoveredAfterLine.get(lineNr).get()));
+                                } else {
+                                    closestCoveredLine = lastCoveredBeforeLine.get(lineNr);
+                                }
+                            } else {
+                                if (nextCoveredAfterLine.get(lineNr).isPresent()) {
+                                    closestCoveredLine = nextCoveredAfterLine.get(lineNr);
+                                }
+                            }
+                            lineCoveredPercentage += closestCoveredLine.map(x -> (factor - x) / (2.0 * factor)).orElse(0.0);
+                        }
+                    }
+                    coveredPercentage.put(new Line(packageName, className, lineNr), lineCoveredPercentage);
                 }
             }
         }
