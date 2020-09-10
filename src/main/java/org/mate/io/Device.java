@@ -7,10 +7,10 @@ import org.mate.util.AndroidEnvironment;
 
 import java.io.*;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Device {
 
@@ -145,21 +145,21 @@ public class Device {
      */
     public boolean pushDummyFiles() {
 
-        ProcessRunner.runProcess("adb", "-s", deviceID, "root");
-        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestBmp.bmp", "sdcard/mateTestBmp.bmp");
-        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestGif.gif", "sdcard/mateTestGif.gif");
-        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestJpg.jpg", "sdcard/mateTestJpg.jpg");
-        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestJson.json", "sdcard/mateTestJson.json");
-        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestMid.mid", "sdcard/mateTestMid.mid");
-        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestPdf.pdf", "sdcard/mateTestPdf.pdf");
-        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestPng.png", "sdcard/mateTestPng.png");
-        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestTiff.tiff", "sdcard/mateTestTiff.tiff");
-        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestTxt.txt", "sdcard/mateTestTxt.txt");
-        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestWav.wav", "sdcard/mateTestWav.wav");
-        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestCsv.csv", "sdcard/mateTestCsv.csv");
-        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestXml.xml", "sdcard/mateTestXml.xml");
-        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestOgg.ogg", "sdcard/mateTestOgg.ogg");
-        ProcessRunner.runProcess("adb", "-s", deviceID, "push", "mediafiles/mateTestMp3.mp3", "sdcard/mateTestMp3.mp3");
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "root");
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestBmp.bmp", "sdcard/mateTestBmp.bmp");
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestGif.gif", "sdcard/mateTestGif.gif");
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestJpg.jpg", "sdcard/mateTestJpg.jpg");
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestJson.json", "sdcard/mateTestJson.json");
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestMid.mid", "sdcard/mateTestMid.mid");
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestPdf.pdf", "sdcard/mateTestPdf.pdf");
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestPng.png", "sdcard/mateTestPng.png");
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestTiff.tiff", "sdcard/mateTestTiff.tiff");
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestTxt.txt", "sdcard/mateTestTxt.txt");
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestWav.wav", "sdcard/mateTestWav.wav");
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestCsv.csv", "sdcard/mateTestCsv.csv");
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestXml.xml", "sdcard/mateTestXml.xml");
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestOgg.ogg", "sdcard/mateTestOgg.ogg");
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestMp3.mp3", "sdcard/mateTestMp3.mp3");
         return true;
     }
 
@@ -249,67 +249,56 @@ public class Device {
 
     public List<String> getActivities() {
         String cmd = "";
-        List<String> response;
-        if (ProcessRunner.isWin) {
-            cmd = androidEnvironment.getAaptExecutable() + " dump xmltree " + packageName + ".apk AndroidManifest.xml | python3 getActivityNames.py" + "";
-            response = ProcessRunner.runProcess("powershell", "-command", cmd).getOk();
-        } else {
-            cmd = androidEnvironment.getAaptExecutable() + " dump xmltree " + packageName + ".apk AndroidManifest.xml | ./getActivityNames.py";
-            response = ProcessRunner.runProcess("bash", "-c", cmd).getOk();
+        List<String> activities = new ArrayList<>();
+        var lines = ProcessRunner.runProcess(androidEnvironment.getAaptExecutable(),
+                "dump",
+                "xmltree",
+                packageName + ".apk",
+                "AndroidManifest.xml").getOk();
+        var foundPackage = false;
+        var foundAct = false;
+        String whitePrefix = null;
+        String pkgName = null;
+
+        var rawPattern = Pattern.compile("\\(Raw: \"([^\"]*)\"");
+
+        for (String line : lines) {
+            if (foundPackage) {
+                if (foundAct) {
+                    if (line.startsWith(whitePrefix + "A:")
+                            && line.contains("android:name")
+                            && line.contains("(Raw: ")) {
+                        foundAct = false;
+                        Matcher matcher = rawPattern.matcher(line);
+                        matcher.find();
+                        String act = matcher.group(1);
+                        if (act.startsWith(pkgName)) {
+                            activities.add(act.substring(0, pkgName.length()) + "/" + act.substring(pkgName.length()));
+                        } else {
+                            activities.add(packageName + "/" + act);
+                        }
+                    }
+                } else {
+                    if (line.stripLeading().startsWith("E: activity ")) {
+                        foundAct = true;
+                        whitePrefix = " ".repeat(line.length() - line.stripLeading().length() + 2);
+                    }
+                }
+            } else {
+                if (line.stripLeading().startsWith("A: package=\"") && line.contains("(Raw: ")) {
+                    foundPackage = true;
+                    Matcher matcher = rawPattern.matcher(line);
+                    matcher.find();
+                    pkgName = matcher.group(1);
+                }
+            }
         }
+
         System.out.println("activities:");
-        for (String activity : response) {
+        for (String activity : activities) {
             System.out.println("\t" + activity);
         }
-        return response;
-    }
-
-    public List<String> getSourceLines() {
-        String cmd = "";
-        if (ProcessRunner.isWin) {
-            System.out.println("Running windows get source lines command!");
-            cmd = "python3 getSourceLines.py " + packageName;
-            return ProcessRunner.runProcess("powershell", "-command", cmd).getOk();
-        } else {
-            cmd = "./getSourceLines.py " + packageName;
-            return ProcessRunner.runProcess("bash", "-c", cmd).getOk();
-        }
-    }
-
-    public String storeCurrentTraceFile() {
-        System.out.println("Storing current Trace file!");
-        String cmd = "";
-        if (ProcessRunner.isWin) {
-            cmd = "python3 storeCurrentTraceFile.py" + " " + deviceID + " " + packageName;
-        } else {
-            cmd = "./storeCurrentTraceFile.py " + deviceID + " " + packageName;
-        }
-        List<String> response;
-        if (ProcessRunner.isWin) {
-            response = ProcessRunner.runProcess("powershell", "-command", cmd).getOk();
-        } else {
-            response = ProcessRunner.runProcess("bash", "-c", cmd).getOk();
-        }
-        return String.join("\n", response);
-    }
-
-    public String copyCoverageData(String chromosome_source, String chromosome_target, String entities) {
-        System.out.println("Copying coverage data");
-        String cmd = "";
-        if (ProcessRunner.isWin) {
-            System.out.println("Running windows copy coverage command!");
-            cmd = "python3 copyCoverageData.py " + packageName + " " + chromosome_source
-                    + " " + chromosome_target + " " + entities;
-        } else {
-            cmd = "./copyCoverageData.py " + packageName + " " + chromosome_source + " " + chromosome_target + " " + entities;
-        }
-        List<String> response;
-        if (ProcessRunner.isWin) {
-            response = ProcessRunner.runProcess("powershell", "-command", cmd).getOk();
-        } else {
-            response = ProcessRunner.runProcess("bash", "-c", cmd).getOk();
-        }
-        return String.join("\n", response);
+        return activities;
     }
 
     public static void loadActiveDevices(AndroidEnvironment androidEnvironment) {

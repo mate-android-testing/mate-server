@@ -9,8 +9,18 @@ import org.mate.network.message.Message;
 import org.mate.network.Endpoint;
 import org.mate.util.Log;
 import org.mate.util.Result;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
 
+import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import java.io.IOException;
+import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -40,6 +50,22 @@ public class CoverageEndpoint implements Endpoint {
             return getCombinedCoverage(request);
         } else if (request.getSubject().startsWith("/coverage/lineCoveredPercentages")) {
             return getLineCoveredPercentages(request);
+        } else if (request.getSubject().startsWith("/coverage/copy")) {
+            final var errorMsg = copyCoverageData(request);
+            if (errorMsg == null) {
+                return new Message("/coverage/copy");
+            } else {
+                return Messages.errorMessage(errorMsg);
+            }
+        } else if (request.getSubject().startsWith("/coverage/getSourceLines")) {
+            final var result = getSourceLines(request);
+            if (result.isOk()) {
+                return new Message.MessageBuilder("/coverage/getSourceLines")
+                        .withParameter("lines", result.getOk())
+                        .build();
+            } else {
+                return Messages.errorMessage(result.getErr());
+            }
         }
         return null;
     }
@@ -119,12 +145,20 @@ public class CoverageEndpoint implements Endpoint {
         return Result.okOf(execFiles);
     }
 
+    private Path getCoverageBaseDir(String packageName) {
+        return resultsPath.resolve(packageName + ".coverage");
+    }
+
+    private Path getCoverageChromosomeDir(String packageName, String chromosome) {
+        return getCoverageBaseDir(packageName).resolve(chromosome);
+    }
+
     private String storeCoverageData(Message request) {
         var deviceId = request.getParameter("deviceId");
         var packageName = Device.getDevice(deviceId).getPackageName();
         var chromosome = request.getParameter("chromosome");
         var entity = request.getParameter("entity");
-        var coverageDir = resultsPath.resolve(packageName + ".coverage").resolve(chromosome);
+        var coverageDir = getCoverageChromosomeDir(packageName, chromosome);
         coverageDir.toFile().mkdirs();
         Path coverageFile;
         if (entity == null) {
@@ -171,5 +205,88 @@ public class CoverageEndpoint implements Endpoint {
             return errorMsg;
         }
         return null;
+    }
+
+    private String copyCoverageData(Message request) {
+        var deviceId = request.getParameter("deviceId");
+        var packageName = Device.getDevice(deviceId).getPackageName();
+        var chromosomeSrc = request.getParameter("chromosome_src");
+        var chromosomeTarget = request.getParameter("chromosome_target");
+        var entities = request.getParameter("entities").split(",");
+        var srcDir = getCoverageChromosomeDir(packageName, chromosomeSrc);
+        var targetDir = getCoverageChromosomeDir(packageName, chromosomeTarget);
+
+        if (!targetDir.toFile().mkdirs() && !targetDir.toFile().isDirectory()) {
+            final var errorMsg = "Chromosome copy failed: target directory could not be created.";
+            Log.printError(errorMsg);
+            return errorMsg;
+        }
+        for (String entity : entities) {
+            try {
+                Files.copy(srcDir.resolve(entity), targetDir.resolve(entity));
+            } catch (IOException e) {
+                final var errorMsg = "Chromosome copy failed: entity " + entity + " could not be copied from "
+                        + srcDir + " to " + targetDir;
+                Log.printError(errorMsg);
+                return errorMsg;
+            }
+        }
+        return null;
+    }
+
+    private Result<String, String> getSourceLines(Message request) {
+        var deviceId = request.getParameter("deviceId");
+        var packageName = Device.getDevice(deviceId).getPackageName();
+        var reportFile = Path.of(packageName + ".report");
+        var separator = "+";
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        try {
+            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        } catch (ParserConfigurationException e) {
+            final var errorMsg = "Failed to get source lines: unable to set FEATURE_SECURE_PROCESSING for DocumentBuilderFactory";
+            Log.printError(errorMsg);
+            return Result.errOf(errorMsg);
+        }
+        DocumentBuilder builder;
+        try {
+            builder = factory.newDocumentBuilder();
+        } catch (ParserConfigurationException e) {
+            final var errorMsg = "Failed to get source lines: unable to create document builder";
+            Log.printError(errorMsg);
+            return Result.errOf(errorMsg);
+        }
+        //ignore dtd file
+        builder.setEntityResolver((publicId, systemId) -> new InputSource(new StringReader("")));
+        Document document;
+        try {
+            document = builder.parse(reportFile.toFile());
+        } catch (SAXException e) {
+            final var errorMsg = "Failed to get source lines: unable to parse report file (" + reportFile + ")";
+            Log.printError(errorMsg);
+            return Result.errOf(errorMsg);
+        } catch (IOException e) {
+            e.printStackTrace();
+            final var errorMsg = "Failed to get source lines: IOException while reading report file (" + reportFile + ")";
+            Log.printError(errorMsg);
+            return Result.errOf(errorMsg);
+        }
+        var sourceLines = new ArrayList<String>();
+        NodeList packages = document.getDocumentElement().getElementsByTagName("package");
+        for (int i = 0; i < packages.getLength(); i++) {
+            var currentPackage = (Element) packages.item(i);
+            var currentPackageName = currentPackage.getAttribute("name");
+            NodeList sourceFiles = currentPackage.getElementsByTagName("sourcefile");
+            for (int j = 0; j < sourceFiles.getLength(); j++) {
+                var sourceFile = (Element) sourceFiles.item(j);
+                String currentSrcName = sourceFile.getAttribute("name");
+                NodeList lines = sourceFile.getElementsByTagName("line");
+                for (int k = 0; k < lines.getLength(); k++) {
+                    Element line = (Element) lines.item(k);
+                    String lineNr = line.getAttribute("nr");
+                    sourceLines.add(currentPackageName + separator + currentSrcName + separator+ lineNr);
+                }
+            }
+        }
+        return Result.okOf(String.join("\n", sourceLines));
     }
 }

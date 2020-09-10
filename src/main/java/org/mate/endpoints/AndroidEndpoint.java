@@ -23,7 +23,7 @@ public class AndroidEndpoint implements Endpoint {
         if (request.getSubject().startsWith("/android/clearApp")) {
             var errMsg = clearApp(request);
             if (errMsg == null) {
-                return new Message("android/clearApp");
+                return new Message("/android/clearApp");
             } else {
                 return Messages.errorMessage(errMsg);
             }

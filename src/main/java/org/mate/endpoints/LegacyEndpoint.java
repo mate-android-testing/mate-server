@@ -67,15 +67,6 @@ public class LegacyEndpoint implements Endpoint {
         if (cmdStr.startsWith("getActivity"))
             return getActivity(cmdStr);
 
-        if (cmdStr.startsWith("getSourceLines"))
-            return getSourceLines(cmdStr);
-
-        if (cmdStr.startsWith("storeCurrentTraceFile"))
-            return storeCurrentTraceFile(cmdStr);
-
-        if (cmdStr.startsWith("copyCoverageData"))
-            return copyCoverageData(cmdStr);
-
         if (cmdStr.startsWith("getActivities"))
             return getActivities(cmdStr);
 
@@ -807,34 +798,10 @@ public class LegacyEndpoint implements Endpoint {
         return device.getCurrentActivity();
     }
 
-    private String storeCurrentTraceFile(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        Device device = Device.devices.get(deviceID);
-        return device.storeCurrentTraceFile();
-    }
-
-    private String copyCoverageData(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        String chromosome_source = parts[2];
-        String chromosome_target = parts[3];
-        String entities = parts[4];
-        Device device = Device.devices.get(deviceID);
-        return device.copyCoverageData(chromosome_source, chromosome_target, entities);
-    }
-
     private String getActivities(String cmdStr) {
         String parts[] = cmdStr.split(":");
         String deviceID = parts[1];
         Device device = Device.devices.get(deviceID);
         return String.join("\n", device.getActivities());
-    }
-
-    private String getSourceLines(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        Device device = Device.devices.get(deviceID);
-        return String.join("\n", device.getSourceLines());
     }
 }

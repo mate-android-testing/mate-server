@@ -3,10 +3,16 @@ package org.mate.endpoints;
 import org.mate.io.ProcessRunner;
 import org.mate.network.message.Message;
 import org.mate.network.Endpoint;
+import org.mate.util.AndroidEnvironment;
 
 public class EmulatorInteractionEndpoint implements Endpoint {
     private boolean disabledAutoRotate = false;
     private boolean isInPortraitMode = true;
+    private final AndroidEnvironment androidEnvironment;
+
+    public EmulatorInteractionEndpoint(AndroidEnvironment androidEnvironment) {
+        this.androidEnvironment = androidEnvironment;
+    }
 
     @Override
     public Message handle(Message request) {
@@ -18,7 +24,7 @@ public class EmulatorInteractionEndpoint implements Endpoint {
                 if (!disabledAutoRotate) {
 
                     ProcessRunner.runProcess(
-                            "adb",
+                            androidEnvironment.getAdbExecutable(),
                             "-s",
                             deviceID,
                             "shell",
@@ -38,7 +44,7 @@ public class EmulatorInteractionEndpoint implements Endpoint {
 
                         rotationMode = "landscape";
                         ProcessRunner.runProcess(
-                                "adb",
+                                androidEnvironment.getAdbExecutable(),
                                 "-s",
                                 deviceID,
                                 "shell",
@@ -54,7 +60,7 @@ public class EmulatorInteractionEndpoint implements Endpoint {
 
                         rotationMode = "portrait";
                         ProcessRunner.runProcess(
-                                "adb",
+                                androidEnvironment.getAdbExecutable(),
                                 "-s",
                                 deviceID,
                                 "shell",
@@ -76,7 +82,7 @@ public class EmulatorInteractionEndpoint implements Endpoint {
                     isInPortraitMode = true;
 
                     ProcessRunner.runProcess(
-                            "adb",
+                            androidEnvironment.getAdbExecutable(),
                             "-s",
                             deviceID,
                             "shell",
