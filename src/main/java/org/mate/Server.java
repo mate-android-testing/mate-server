@@ -18,7 +18,7 @@ import java.util.*;
 
 public class Server {
     private static final String METADATA_PREFIX = "__meta__";
-    private static final String MESSAGE_PROTOCOL_VERSION = "1.2";
+    private static final String MESSAGE_PROTOCOL_VERSION = "1.3";
     private static final String MESSAGE_PROTOCOL_VERSION_KEY = "version";
 
     private Router router;
@@ -55,6 +55,7 @@ public class Server {
         router.add("/properties", new PropertiesEndpoint());
         router.add("/emulator/interaction", new EmulatorInteractionEndpoint());
         router.add("/accessibility",new AccessibilityEndpoint());
+        router.add("/coverage", new CoverageEndPoint());
 
         Server.emuName = emuName;
 

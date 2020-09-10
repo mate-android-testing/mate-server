@@ -167,6 +167,7 @@ public class Device {
      * @return Returns {@code true} if the trace file could be pulled,
      *              otherwise {@code false}.
      */
+    // TODO: can be removed and replaced with pullTraceFile(String fileName)
     public boolean pullTraceFile() {
 
         // traces are stored on the sd card (external storage)
@@ -186,6 +187,41 @@ public class Device {
         ProcessRunner.runProcess("adb", "-s", deviceID, "pull", tracesDir+"/traces.txt", workingDir + File.separator + "traces.txt");
 
         return true;
+    }
+
+    /**
+     * Pulls the traces.txt file from the external storage (sd card) if present.
+     * The file is stored in the working directory, that is the mate-commander directory by default.
+     *
+     * @param fileName The name of the traces file.
+     * @return Returns the path to the traces file or {@code null} if some operation failed.
+     */
+    public File pullTraceFile(String fileName) {
+
+        // traces are stored on the sd card (external storage)
+        String tracesDir = "storage/emulated/0"; // + packageName;
+
+        List<String> files = ProcessRunner.runProcess("adb", "-s", deviceID, "shell", "ls", tracesDir);
+
+        // check whether there is some traces file
+        if (!files.stream().anyMatch(str -> str.trim().equals("traces.txt"))) {
+            return null;
+        }
+
+        // use the working directory (MATE-COMMANDER HOME) as output directory for trace file
+        String workingDir = System.getProperty("user.dir");
+        File appDir = new File(workingDir, packageName);
+        File localTracesDir = new File(appDir, "traces");
+
+        // create local traces directory if not yet present
+        if (!localTracesDir.exists()) {
+            System.out.println(localTracesDir.mkdirs());
+        }
+
+        System.out.println(ProcessRunner.runProcess("adb", "-s", deviceID, "pull",
+                tracesDir+"/traces.txt", localTracesDir + File.separator + fileName));
+
+        return new File(localTracesDir, fileName);
     }
 
     public String getCurrentActivity(){
