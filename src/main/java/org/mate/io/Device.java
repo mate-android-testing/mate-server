@@ -4,6 +4,8 @@ import org.mate.pdf.Report;
 import org.mate.Server;
 import org.mate.accessibility.ImageHandler;
 import org.mate.util.AndroidEnvironment;
+import org.mate.util.Log;
+import org.mate.util.Result;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -14,7 +16,7 @@ import java.util.regex.Pattern;
 
 public class Device {
 
-    public static Hashtable<String,Device> devices;
+    public static Hashtable<String, Device> devices;
     private final AndroidEnvironment androidEnvironment;
 
     private String deviceID;
@@ -23,7 +25,7 @@ public class Device {
     private int APIVersion;
     private String currentScreenShotLocation;
 
-    public Device(String deviceID, AndroidEnvironment androidEnvironment){
+    public Device(String deviceID, AndroidEnvironment androidEnvironment) {
         this.deviceID = deviceID;
         this.androidEnvironment = androidEnvironment;
         this.packageName = "";
@@ -31,11 +33,11 @@ public class Device {
         APIVersion = this.getAPIVersionFromADB();
     }
 
-    public String getCurrentScreenShotLocation(){
+    public String getCurrentScreenShotLocation() {
         return currentScreenShotLocation;
     }
 
-    public void setCurrentScreenShotLocation(String currentScreenShotLocation){
+    public void setCurrentScreenShotLocation(String currentScreenShotLocation) {
         this.currentScreenShotLocation = currentScreenShotLocation;
     }
 
@@ -55,11 +57,11 @@ public class Device {
         this.packageName = packageName;
     }
 
-    public void setBusy(boolean busy){
+    public void setBusy(boolean busy) {
         this.busy = busy;
     }
 
-    public boolean isBusy(){
+    public boolean isBusy() {
         return this.busy;
     }
 
@@ -67,7 +69,7 @@ public class Device {
         return APIVersion;
     }
 
-    private int getAPIVersionFromADB(){
+    private int getAPIVersionFromADB() {
         List<String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "getprop", "ro.build.version.sdk").getOk();
         if (result != null && result.size() > 0) {
             System.out.println("API consulta: " + result.get(0));
@@ -81,7 +83,7 @@ public class Device {
      *
      * @param packageName The package name of the app.
      * @return Returns {@code true} if the permissions could be granted,
-     *          otherwise {@code false}.
+     * otherwise {@code false}.
      */
     public boolean grantPermissions(String packageName) {
 
@@ -95,12 +97,12 @@ public class Device {
     /**
      * Broadcasts the notification of a system event to a given receiver.
      *
-     * @param packageName The package name of the AUT.
-     * @param receiver The broadcast receiver listening for the system event notification.
-     * @param action The actual system event.
+     * @param packageName     The package name of the AUT.
+     * @param receiver        The broadcast receiver listening for the system event notification.
+     * @param action          The actual system event.
      * @param dynamicReceiver Whether the receiver is a dynamic one.
      * @return Returns {@code true} if the system event notification could be successfully
-     *      broad-casted, otherwise {@code false}.
+     * broad-casted, otherwise {@code false}.
      */
     public boolean executeSystemEvent(String packageName, String receiver, String action, boolean dynamicReceiver) {
 
@@ -168,7 +170,7 @@ public class Device {
      * The file is stored in the working directory, that is the mate-commander directory by default.
      *
      * @return Returns {@code true} if the trace file could be pulled,
-     *              otherwise {@code false}.
+     * otherwise {@code false}.
      */
     // TODO: can be removed and replaced with pullTraceFile(String fileName)
     public boolean pullTraceFile() {
@@ -187,7 +189,7 @@ public class Device {
         // use the working directory (MATE-COMMANDER HOME) as output directory for trace file
         String workingDir = System.getProperty("user.dir");
 
-        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull", tracesDir+"/traces.txt", workingDir + File.separator + "traces.txt");
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull", tracesDir + "/traces.txt", workingDir + File.separator + "traces.txt");
 
         return true;
     }
@@ -197,18 +199,23 @@ public class Device {
      * The file is stored in the working directory, that is the mate-commander directory by default.
      *
      * @param fileName The name of the traces file.
-     * @return Returns the path to the traces file or {@code null} if some operation failed.
+     * @return Returns the path to the traces file.
      */
     public File pullTraceFile(String fileName) {
 
         // traces are stored on the sd card (external storage)
         String tracesDir = "storage/emulated/0"; // + packageName;
 
-        List<String> files = ProcessRunner.runProcess("adb", "-s", deviceID, "shell", "ls", tracesDir);
+        Result<List<String>, String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "shell", "ls", tracesDir);
+
+        if (files.isErr()) {
+            throw new IllegalStateException("Couldn't locate any file on external storage!");
+        }
 
         // check whether there is some traces file
-        if (!files.stream().anyMatch(str -> str.trim().equals("traces.txt"))) {
-            return null;
+        if (!files.getOk().stream().anyMatch(str -> str.trim().equals("traces.txt"))) {
+            throw new IllegalStateException("Couldn't locate the traces.txt file!");
         }
 
         // use the working directory (MATE-COMMANDER HOME) as output directory for trace file
@@ -218,20 +225,24 @@ public class Device {
 
         // create local traces directory if not yet present
         if (!localTracesDir.exists()) {
-            System.out.println(localTracesDir.mkdirs());
+            Log.println("Creating local traces directory: " + localTracesDir.mkdirs());
         }
 
-        System.out.println(ProcessRunner.runProcess("adb", "-s", deviceID, "pull",
-                tracesDir+"/traces.txt", localTracesDir + File.separator + fileName));
+        var pullOperation = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "pull", tracesDir + "/traces.txt", localTracesDir + File.separator + fileName);
+
+        if (pullOperation.isErr()) {
+            throw new IllegalStateException("Couldn't pull traces.txt file from emulator's external storage!");
+        }
 
         return new File(localTracesDir, fileName);
     }
 
-    public String getCurrentActivity(){
+    public String getCurrentActivity() {
 
-        String response="unknown";
-        String cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID +" shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
-        if (getAPIVersion()==23 || getAPIVersion()==25){
+        String response = "unknown";
+        String cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
+        if (getAPIVersion() == 23 || getAPIVersion() == 25) {
             if (ProcessRunner.isWin) {
                 cmd = "$focused = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[5]";
@@ -241,7 +252,7 @@ public class Device {
             }
         }
 
-        if (getAPIVersion()==26 || getAPIVersion()==27){
+        if (getAPIVersion() == 26 || getAPIVersion() == 27) {
             if (ProcessRunner.isWin) {
                 cmd = "$focused = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[7]";
@@ -252,18 +263,18 @@ public class Device {
         }
 
         /*
-        * 27.04.2019
-        *
-        * The record 'mFocusedActivity' is not available anymore under Windows for API Level 28 (tested on Nexus5 and PixelC),
-        * although it is available still under Linux (tested on Nexus5), which is somewhat strange.
-        * Instead, we need to search for the 'realActivity' record, pick the second one (seems to be the current active Activity)
-        * and split on '='.
+         * 27.04.2019
+         *
+         * The record 'mFocusedActivity' is not available anymore under Windows for API Level 28 (tested on Nexus5 and PixelC),
+         * although it is available still under Linux (tested on Nexus5), which is somewhat strange.
+         * Instead, we need to search for the 'realActivity' record, pick the second one (seems to be the current active Activity)
+         * and split on '='.
          */
         if (getAPIVersion() == 28) {
             if (ProcessRunner.isWin) {
                 cmd = "$activity = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
-                       + "| select-string \"realActivity\" ; $focused = $activity[1] ; $final = $focused -split '=' ; echo $final[1]";
-                        // Alternatively use: "$focused.Line.split(=)[1] \"";
+                        + "| select-string \"realActivity\" ; $focused = $activity[1] ; $final = $focused -split '=' ; echo $final[1]";
+                // Alternatively use: "$focused.Line.split(=)[1] \"";
                 System.out.println(cmd);
             } else {
                 cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
@@ -338,11 +349,11 @@ public class Device {
     }
 
     public static void loadActiveDevices(AndroidEnvironment androidEnvironment) {
-        if (devices==null)
-            devices = new Hashtable<String,Device>();
+        if (devices == null)
+            devices = new Hashtable<String, Device>();
         List<String> resultDevices = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "devices").getOk();
-        for (String deviceStr:resultDevices){
-            String devID="";
+        for (String deviceStr : resultDevices) {
+            String devID = "";
             if (deviceStr.contains("device") && !deviceStr.contains("attached")) {
                 devID = deviceStr.replace("device", "");
                 devID = devID.replace(" ", "");
@@ -358,13 +369,13 @@ public class Device {
     }
 
     public static void listActiveDevices() {
-        for (String devID: devices.keySet()) {
+        for (String devID : devices.keySet()) {
             Device device = devices.get(devID);
-            System.out.println(device.getDeviceID()+ " - " + device.isBusy()+ ": " + device.getPackageName());
+            System.out.println(device.getDeviceID() + " - " + device.isBusy() + ": " + device.getPackageName());
         }
     }
 
-    public static String allocateDevice(String cmdStr, ImageHandler imageHandler, AndroidEnvironment androidEnvironment){
+    public static String allocateDevice(String cmdStr, ImageHandler imageHandler, AndroidEnvironment androidEnvironment) {
         String parts[] = cmdStr.split(":");
         String packageName = parts[1];
 
@@ -377,7 +388,7 @@ public class Device {
 
         String deviceID = getDeviceRunningPackage(packageName, androidEnvironment);
         Device device = devices.get(deviceID);
-        if (device!=null) {
+        if (device != null) {
             device.setPackageName(packageName);
             device.setBusy(true);
         }
@@ -402,16 +413,16 @@ public class Device {
         }*/
         //response = "4f60d1bb";
 
-        Report.createHeader(deviceID,packageName);
-        imageHandler.createPicturesFolder(deviceID,packageName);
+        Report.createHeader(deviceID, packageName);
+        imageHandler.createPicturesFolder(deviceID, packageName);
 
         return deviceID;
     }
 
     public static String getDeviceRunningPackage(String packageName, AndroidEnvironment androidEnvironment) {
-        for (String key: devices.keySet()){
+        for (String key : devices.keySet()) {
             List<String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", key, "shell", "ps", packageName).getOk();
-            for (String res: result){
+            for (String res : result) {
                 System.out.println(res);
                 if (res.contains(packageName))
                     return key;
@@ -420,13 +431,13 @@ public class Device {
         return "";
     }
 
-    public static String releaseDevice(String cmdStr){
+    public static String releaseDevice(String cmdStr) {
         String response = "";
         String[] parts = cmdStr.split(":");
-        if (parts.length>0) {
+        if (parts.length > 0) {
             String deviceID = parts[1];
             Device device = devices.get(deviceID);
-            if (device!=null) {
+            if (device != null) {
                 device.setPackageName("");
                 device.setBusy(false);
                 response = "released";
@@ -435,7 +446,7 @@ public class Device {
         return response;
     }
 
-    public static Device getDevice(String deviceId){
+    public static Device getDevice(String deviceId) {
         return devices.get(deviceId);
     }
 }
