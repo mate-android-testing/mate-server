@@ -27,7 +27,9 @@ task fatJar(type: Jar) {
     manifest {
         attributes 'Main-Class': 'org.mate.Server'
     }
-    archiveBaseName = rootProject.name + '-all'
+    // archiveBaseName = rootProject.name + '-all'
+    // archiveFileName = rootProject.name + '.jar'
+    archiveName(rootProject.name + '.jar')
     from {configurations.compile.collect{it.isDirectory() ? it : zipTree(it)}}
     with jar
 }
