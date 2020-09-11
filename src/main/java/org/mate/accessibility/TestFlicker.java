@@ -1,12 +1,15 @@
 package org.mate.accessibility;
 
 import org.mate.io.ProcessRunner;
+import org.mate.util.AndroidEnvironment;
 
 public class TestFlicker {
 
     public static void main(String[] args){
         String screenShotDir = "/home/marceloeler/"; //TODO: remove hardcoded file path
         String targetFolder = screenShotDir;
+        AndroidEnvironment androidEnvironment = new AndroidEnvironment();
+
         System.out.println("target folder: " + targetFolder);
 
         String emulator = "emulator-5554";
@@ -18,11 +21,11 @@ public class TestFlicker {
         String cmdStr = "";
         for (int i=0; i<50; i++) {
             imgPath = originalImgPath.replace(".png","_flicker_"+i+".png");
-            ProcessRunner.runProcess("adb", "-s", emulator, "shell", "screencap", "-p", "/sdcard/" + imgPath);
+            ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", emulator, "shell", "screencap", "-p", "/sdcard/" + imgPath);
         }
         for (int i=0; i<50; i++) {
             imgPath = originalImgPath.replace(".png","_flicker_"+i+".png");
-            ProcessRunner.runProcess("adb", "-s", emulator, "pull", "/sdcard/" + imgPath, targetFolder);
+            ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", emulator, "pull", "/sdcard/" + imgPath, targetFolder);
         }
 
          boolean flickering = AccessibilityUtils.checkFlickering(targetFolder,originalImgPath);

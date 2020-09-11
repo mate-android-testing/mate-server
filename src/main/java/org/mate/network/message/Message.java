@@ -1,4 +1,4 @@
-package org.mate.message;
+package org.mate.network.message;
 
 import java.util.HashMap;
 import java.util.Map;

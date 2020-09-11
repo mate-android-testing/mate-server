@@ -1,9 +1,10 @@
-package org.mate.message.serialization;
+package org.mate.network.message.serialization;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -12,7 +13,7 @@ public class Lexer {
     public static final char END_PARAMETER_CHAR = ';';
     public static final char RELATION_SEPARATOR_CHAR = ':';
     public static final char END_MESSAGE_CHAR = '~';
-    public static final Charset CHARSET = Charset.forName("UTF-8");
+    public static final Charset CHARSET = StandardCharsets.UTF_8;
 
     private final InputStreamReader reader;
 
