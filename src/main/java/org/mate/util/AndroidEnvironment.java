@@ -39,43 +39,82 @@ public class AndroidEnvironment {
             Log.printWarning("unable to locate android installation");
         }
 
-        if (existsInPath("adb")) {
-            adbCmdPath = Path.of("adb");
+        if (System.getProperty("os.name").startsWith("Windows")) {
+            if (existsInPath("adb.exe")) {
+                adbCmdPath = Path.of("adb.exe");
+            } else {
+                adbCmdPath = Optional.ofNullable(androidSdkPath).flatMap(path -> {
+                    var adbCmdPath = path.resolve("platform-tools/adb.exe");
+                    if (Files.isExecutable(adbCmdPath)) {
+                        return Optional.of(adbCmdPath);
+                    }
+                    return Optional.empty();
+                }).orElse(null);
+            }
         } else {
-            adbCmdPath = Optional.ofNullable(androidSdkPath).flatMap(path -> {
-                var adbCmdPath = path.resolve("platform-tools/adb");
-                if (Files.isExecutable(adbCmdPath)) {
-                    return Optional.of(adbCmdPath);
-                }
-                return Optional.empty();
-            }).orElse(null);
+            if (existsInPath("adb")) {
+                adbCmdPath = Path.of("adb");
+            } else {
+                adbCmdPath = Optional.ofNullable(androidSdkPath).flatMap(path -> {
+                    var adbCmdPath = path.resolve("platform-tools/adb");
+                    if (Files.isExecutable(adbCmdPath)) {
+                        return Optional.of(adbCmdPath);
+                    }
+                    return Optional.empty();
+                }).orElse(null);
+            }
         }
 
         if (adbCmdPath == null) {
             Log.printWarning("unable to find adb executable in PATH or android installation");
         }
 
-        if (existsInPath("aapt")) {
-            aaptCmdPath = Path.of("aapt");
-        } else {
-            aaptCmdPath = Optional.ofNullable(androidSdkPath).flatMap(path -> {
-                var buildToolsPath = path.resolve("build-tools");
-                Optional<Path> latestBuildToolsPath = Optional.empty();
-                try {
-                     latestBuildToolsPath = Files.walk(buildToolsPath, 1)
-                             .filter(Files::isDirectory)
-                             .max(Comparator.comparing(Path::toString));
-                } catch (IOException e) {
-                    Log.printWarning(e.getMessage() + "\n" + e.fillInStackTrace());
-                }
-                return latestBuildToolsPath.flatMap((p) -> {
-                    var aaptCmdPath = p.resolve("aapt");
-                    if (Files.isExecutable(aaptCmdPath)) {
-                        return Optional.of(aaptCmdPath);
+        if (System.getProperty("os.name").startsWith("Windows")) {
+            if (existsInPath("aapt.exe")) {
+                aaptCmdPath = Path.of("aapt.exe");
+            } else {
+                aaptCmdPath = Optional.ofNullable(androidSdkPath).flatMap(path -> {
+                    var buildToolsPath = path.resolve("build-tools");
+                    Optional<Path> latestBuildToolsPath = Optional.empty();
+                    try {
+                        latestBuildToolsPath = Files.walk(buildToolsPath, 1)
+                                .filter(Files::isDirectory)
+                                .max(Comparator.comparing(Path::toString));
+                    } catch (IOException e) {
+                        Log.printWarning(e.getMessage() + "\n" + e.fillInStackTrace());
                     }
-                    return Optional.empty();
-                });
-            }).orElse(null);
+                    return latestBuildToolsPath.flatMap((p) -> {
+                        var aaptCmdPath = p.resolve("aapt.exe");
+                        if (Files.isExecutable(aaptCmdPath)) {
+                            return Optional.of(aaptCmdPath);
+                        }
+                        return Optional.empty();
+                    });
+                }).orElse(null);
+            }
+        } else {
+            if (existsInPath("aapt")) {
+                aaptCmdPath = Path.of("aapt");
+            } else {
+                aaptCmdPath = Optional.ofNullable(androidSdkPath).flatMap(path -> {
+                    var buildToolsPath = path.resolve("build-tools");
+                    Optional<Path> latestBuildToolsPath = Optional.empty();
+                    try {
+                        latestBuildToolsPath = Files.walk(buildToolsPath, 1)
+                                .filter(Files::isDirectory)
+                                .max(Comparator.comparing(Path::toString));
+                    } catch (IOException e) {
+                        Log.printWarning(e.getMessage() + "\n" + e.fillInStackTrace());
+                    }
+                    return latestBuildToolsPath.flatMap((p) -> {
+                        var aaptCmdPath = p.resolve("aapt");
+                        if (Files.isExecutable(aaptCmdPath)) {
+                            return Optional.of(aaptCmdPath);
+                        }
+                        return Optional.empty();
+                    });
+                }).orElse(null);
+            }
         }
 
         if (aaptCmdPath == null) {
