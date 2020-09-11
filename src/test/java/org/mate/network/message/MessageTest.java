@@ -1,11 +1,11 @@
-package org.mate.message;
+package org.mate.network.message;
 
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.mate.message.serialization.Lexer;
-import org.mate.message.serialization.Parser;
-import org.mate.message.serialization.Serializer;
+import org.mate.network.message.serialization.Lexer;
+import org.mate.network.message.serialization.Parser;
+import org.mate.network.message.serialization.Serializer;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;

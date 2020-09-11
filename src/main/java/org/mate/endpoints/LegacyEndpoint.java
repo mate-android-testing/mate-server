@@ -10,9 +10,11 @@ import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.mate.accessibility.ImageHandler;
 import org.mate.graphs.CFG;
+import org.mate.network.message.Messages;
+import org.mate.util.AndroidEnvironment;
 import org.mate.io.ProcessRunner;
 import org.mate.io.Device;
-import org.mate.message.Message;
+import org.mate.network.message.Message;
 import org.mate.network.Endpoint;
 import org.mate.pdf.Report;
 
@@ -28,21 +30,29 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class LegacyEndpoint implements Endpoint {
+    private final AndroidEnvironment androidEnvironment;
+    private final ImageHandler imageHandler;
     // graph instance needed for branch distance computation
     private CFG graph = null;
     private final long timeout;
     private final long length;
-    private boolean generatePDFReport = false;
+    private final boolean generatePDFReport = false;
 
-    public LegacyEndpoint(long timeout, long length) {
+    public LegacyEndpoint(long timeout, long length, AndroidEnvironment androidEnvironment, ImageHandler imageHandler) {
         this.timeout = timeout;
         this.length = length;
+        this.androidEnvironment = androidEnvironment;
+        this.imageHandler = imageHandler;
     }
 
     @Override
     public Message handle(Message request) {
+        final var response = handleRequest(request.getParameter("cmd"));
+        if (response == null) {
+            return Messages.errorMessage("legacy message was not understood");
+        }
         return new Message.MessageBuilder("/legacy")
-                .withParameter("response", handleRequest(request.getParameter("cmd")))
+                .withParameter("response", response)
                 .build();
     }
 
@@ -51,44 +61,20 @@ public class LegacyEndpoint implements Endpoint {
         System.out.println(cmdStr);
 
         if (cmdStr.startsWith("reportFlaw")){
-            return Report.addFlaw(cmdStr);
+            return Report.addFlaw(cmdStr, imageHandler);
         }
-
-        if (cmdStr.startsWith("clearApp"))
-            return clearApp(cmdStr);
 
         if (cmdStr.startsWith("getActivity"))
             return getActivity(cmdStr);
-
-        if (cmdStr.startsWith("getSourceLines"))
-            return getSourceLines(cmdStr);
-
-        if (cmdStr.startsWith("storeCurrentTraceFile"))
-            return storeCurrentTraceFile(cmdStr);
-
-        if (cmdStr.startsWith("storeCoverageData"))
-            return storeCoverageData(cmdStr);
-
-        if (cmdStr.startsWith("copyCoverageData"))
-            return copyCoverageData(cmdStr);
 
         if (cmdStr.startsWith("getActivities"))
             return getActivities(cmdStr);
 
         if (cmdStr.startsWith("getEmulator"))
-            return Device.allocateDevice(cmdStr);
+            return Device.allocateDevice(cmdStr, imageHandler, androidEnvironment);
 
         if (cmdStr.startsWith("releaseEmulator"))
             return Device.releaseDevice(cmdStr);
-
-        if (cmdStr.startsWith("getCoverage"))
-            return getCoverage(cmdStr);
-
-        if (cmdStr.startsWith("getLineCoveredPercentage"))
-            return getLineCoveredPercentage(cmdStr);
-
-        if (cmdStr.startsWith("getCombinedCoverage"))
-            return getCombinedCoverage(cmdStr);
 
         if (cmdStr.startsWith("grantPermissions"))
             return grantPermissions(cmdStr);
@@ -119,19 +105,19 @@ public class LegacyEndpoint implements Endpoint {
 
         //format commands
         if (cmdStr.startsWith("screenshot"))
-            return ImageHandler.takeScreenshot(cmdStr);
+            return imageHandler.takeScreenshot(cmdStr);
 
         if (cmdStr.startsWith("flickerScreenshot"))
-            return ImageHandler.takeFlickerScreenshot(cmdStr);
+            return imageHandler.takeFlickerScreenshot(cmdStr);
 
         if (cmdStr.startsWith("mark-image") && generatePDFReport)
-            return ImageHandler.markImage(cmdStr);
+            return imageHandler.markImage(cmdStr);
 
         if (cmdStr.startsWith("contrastratio"))
-            return ImageHandler.calculateConstratRatio(cmdStr);
+            return imageHandler.calculateConstratRatio(cmdStr);
 
         if (cmdStr.startsWith("luminance"))
-            return ImageHandler.calculateLuminance(cmdStr);
+            return imageHandler.calculateLuminance(cmdStr);
 
         if (cmdStr.startsWith("rm emulator"))
             return "";
@@ -651,7 +637,7 @@ public class LegacyEndpoint implements Endpoint {
      *          otherwise {@code false}.
      */
     private boolean completedWritingTraces(String deviceID) {
-        List<String> files = ProcessRunner.runProcess("adb", "-s", deviceID, "shell", "run-as", graph.getPackageName(), "ls");
+        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "run-as", graph.getPackageName(), "ls").getOk();
         System.out.println("Files: " + files);
 
         return files.stream().anyMatch(str -> str.trim().equals("info.txt"));
@@ -812,82 +798,10 @@ public class LegacyEndpoint implements Endpoint {
         return device.getCurrentActivity();
     }
 
-    private String storeCurrentTraceFile(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        Device device = Device.devices.get(deviceID);
-        return device.storeCurrentTraceFile();
-    }
-
-    private String storeCoverageData(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        String chromosome = parts[2];
-        String entity = null;
-        if (parts.length > 3) {
-            entity = parts[3];
-        }
-        Device device = Device.devices.get(deviceID);
-        return device.storeCoverageData(chromosome, entity);
-    }
-
-    private String copyCoverageData(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        String chromosome_source = parts[2];
-        String chromosome_target = parts[3];
-        String entities = parts[4];
-        Device device = Device.devices.get(deviceID);
-        return device.copyCoverageData(chromosome_source, chromosome_target, entities);
-    }
-
-
     private String getActivities(String cmdStr) {
         String parts[] = cmdStr.split(":");
         String deviceID = parts[1];
         Device device = Device.devices.get(deviceID);
         return String.join("\n", device.getActivities());
-    }
-
-    private String getSourceLines(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        Device device = Device.devices.get(deviceID);
-        return String.join("\n", device.getSourceLines());
-    }
-
-    private String getCoverage(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        String chromosome = parts[2];
-        Device device = Device.devices.get(deviceID);
-        return device.getCoverage(chromosome);
-    }
-
-    private String getLineCoveredPercentage(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        String chromosome = parts[2];
-        String line = parts[3];
-        Device device = Device.devices.get(deviceID);
-        return String.join("\n", device.getLineCoveredPercentage(chromosome, line));
-    }
-
-    private String getCombinedCoverage(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        Device device = Device.devices.get(deviceID);
-        String chromosomes = "all";
-        if (parts.length > 2) {
-            chromosomes = parts[2];
-        }
-        return device.getCombinedCoverage(chromosomes);
-    }
-
-    private String clearApp(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        Device device = Device.devices.get(deviceID);
-        return device.clearApp();
     }
 }

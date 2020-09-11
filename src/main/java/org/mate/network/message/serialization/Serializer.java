@@ -1,10 +1,10 @@
-package org.mate.message.serialization;
+package org.mate.network.message.serialization;
 
-import org.mate.message.Message;
+import org.mate.network.message.Message;
 
 import java.util.Map;
 
-import static org.mate.message.serialization.Lexer.*;
+import static org.mate.network.message.serialization.Lexer.*;
 
 public class Serializer {
     public static String escapeParameterValue(String unescaped) {

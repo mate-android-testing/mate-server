@@ -1,6 +1,6 @@
-package org.mate.message.serialization;
+package org.mate.network.message.serialization;
 
-import org.mate.message.Message;
+import org.mate.network.message.Message;
 
 import java.io.InputStream;
 import java.util.Iterator;

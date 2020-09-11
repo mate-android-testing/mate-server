@@ -1,10 +1,15 @@
 package org.mate.endpoints;
 
 import org.mate.accessibility.ImageHandler;
-import org.mate.message.Message;
+import org.mate.network.message.Message;
 import org.mate.network.Endpoint;
 
 public class AccessibilityEndpoint implements Endpoint {
+    private final ImageHandler imageHandler;
+
+    public AccessibilityEndpoint(ImageHandler imageHandler) {
+        this.imageHandler = imageHandler;
+    }
 
     @Override
     public Message handle(Message request) {
@@ -16,7 +21,7 @@ public class AccessibilityEndpoint implements Endpoint {
     private String handleRequest(String cmdStr){
         if (cmdStr.startsWith("surroundingColor")) {
             System.out.println("matches color");
-            return ImageHandler.matchesSurroundingColor(cmdStr);
+            return imageHandler.matchesSurroundingColor(cmdStr);
         }
         return "";
     }

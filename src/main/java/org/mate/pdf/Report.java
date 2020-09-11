@@ -44,7 +44,7 @@ public class Report {
         document.close();
     }
 
-    public static String addFlaw(String cmdStr){
+    public static String addFlaw(String cmdStr, ImageHandler imageHandler){
 
         //System.out.println ("add flaw::");
 
@@ -95,7 +95,7 @@ public class Report {
         int iy2 = Integer.valueOf(y2);
 
 
-        String newImagePath = ImageHandler.markImage(device.getCurrentScreenShotLocation(),ix1,iy1,ix2,iy2,flawType);
+        String newImagePath = imageHandler.markImage(device.getCurrentScreenShotLocation(),ix1,iy1,ix2,iy2,flawType);
 
         flawDetails +=newImagePath;
 

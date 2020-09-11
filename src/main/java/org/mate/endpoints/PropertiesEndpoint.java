@@ -1,6 +1,6 @@
 package org.mate.endpoints;
 
-import org.mate.message.Message;
+import org.mate.network.message.Message;
 import org.mate.network.Endpoint;
 
 import java.io.File;
