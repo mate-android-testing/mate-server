@@ -1,5 +1,7 @@
 package org.mate.endpoints;
 
+import org.mate.coverage.BranchCoverageManager;
+import org.mate.coverage.Coverage;
 import org.mate.coverage.CoverageManager;
 import org.mate.network.message.Messages;
 import org.mate.util.AndroidEnvironment;
@@ -23,9 +25,7 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class CoverageEndpoint implements Endpoint {
@@ -39,13 +39,11 @@ public class CoverageEndpoint implements Endpoint {
 
     @Override
     public Message handle(Message request) {
+
         if (request.getSubject().startsWith("/coverage/store")) {
-            final var errorMsg = storeCoverageData(request);
-            if (errorMsg == null) {
-                return new Message("/coverage/store");
-            } else {
-                return Messages.errorMessage(errorMsg);
-            }
+            return storeCoverageData(request);
+        } else if (request.getSubject().startsWith("/coverage/get")) {
+            return getCoverageData(request);
         } else if (request.getSubject().startsWith("/coverage/combined")) {
             return getCombinedCoverage(request);
         } else if (request.getSubject().startsWith("/coverage/lineCoveredPercentages")) {
@@ -67,7 +65,72 @@ public class CoverageEndpoint implements Endpoint {
                 return Messages.errorMessage(result.getErr());
             }
         }
-        return null;
+        throw new IllegalArgumentException("Message request with subject: "
+                + request.getSubject() + " can't be handled by CoverageEndPoint!");
+    }
+
+    private Message storeCoverageData(Message request) {
+
+        // get the coverage type, e.g. BRANCH_COVERAGE
+        Coverage coverage = Coverage.valueOf(request.getParameter("coverage_type"));
+
+        switch (coverage) {
+            case LINE_COVERAGE:
+                final var errorMsg = storeLineCoverageData(request);
+                if (errorMsg == null) {
+                    // TODO: add coverage parameter
+                    return new Message("/coverage/store");
+                } else {
+                    return Messages.errorMessage(errorMsg);
+                }
+            case BRANCH_COVERAGE:
+                return storeBranchCoverageData(request);
+            default:
+                throw new UnsupportedOperationException("Coverage type not yet supported!");
+        }
+    }
+
+    private Message getCoverageData(Message request) {
+
+        // get the coverage type, e.g. BRANCH_COVERAGE
+        Coverage coverage = Coverage.valueOf(request.getParameter("coverage_type"));
+
+        switch (coverage) {
+            case BRANCH_COVERAGE:
+                return getBranchCoverageData(request);
+            default:
+                throw new UnsupportedOperationException("Coverage type not yet supported!");
+        }
+    }
+
+    private Message getCombinedCoverage(Message request) {
+
+        // get the coverage type, e.g. BRANCH_COVERAGE
+        Coverage coverage = Coverage.valueOf(request.getParameter("coverage_type"));
+
+        switch (coverage) {
+            case LINE_COVERAGE:
+                return getCombinedLineCoverage(request);
+            case BRANCH_COVERAGE:
+                return getCombinedBranchCoverage(request);
+            default:
+                throw new UnsupportedOperationException("Coverage type not yet supported!");
+        }
+    }
+
+    private Message getCombinedBranchCoverage(Message request) {
+        return BranchCoverageManager.getCombinedCoverage();
+    }
+
+    private Message storeBranchCoverageData(Message request) {
+        String deviceID = request.getParameter("deviceId");
+        String testCaseId = request.getParameter("testcaseId");
+        return BranchCoverageManager.storeCoverage(androidEnvironment, deviceID, testCaseId);
+    }
+
+    private Message getBranchCoverageData(Message request) {
+        String testCaseId = request.getParameter("testcaseId");
+        return BranchCoverageManager.getCoverage(testCaseId);
     }
 
     private Message getLineCoveredPercentages(Message request) {
@@ -95,7 +158,7 @@ public class CoverageEndpoint implements Endpoint {
                 .build();
     }
 
-    private Message getCombinedCoverage(Message request) {
+    private Message getCombinedLineCoverage(Message request) {
         var deviceId = request.getParameter("deviceId");
         var packageName = Device.getDevice(deviceId).getPackageName();
         var chromosomes = request.getParameter("chromosomes");
@@ -153,7 +216,7 @@ public class CoverageEndpoint implements Endpoint {
         return getCoverageBaseDir(packageName).resolve(chromosome);
     }
 
-    private String storeCoverageData(Message request) {
+    private String storeLineCoverageData(Message request) {
         var deviceId = request.getParameter("deviceId");
         var packageName = Device.getDevice(deviceId).getPackageName();
         var chromosome = request.getParameter("chromosome");
@@ -283,7 +346,7 @@ public class CoverageEndpoint implements Endpoint {
                 for (int k = 0; k < lines.getLength(); k++) {
                     Element line = (Element) lines.item(k);
                     String lineNr = line.getAttribute("nr");
-                    sourceLines.add(currentPackageName + separator + currentSrcName + separator+ lineNr);
+                    sourceLines.add(currentPackageName + separator + currentSrcName + separator + lineNr);
                 }
             }
         }
