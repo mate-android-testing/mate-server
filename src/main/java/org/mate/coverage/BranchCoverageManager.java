@@ -1,6 +1,6 @@
 package org.mate.coverage;
 
-import org.mate.endpoints.CoverageEndpoint;
+import com.google.common.collect.Lists;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
 import org.mate.network.message.Message;
@@ -15,6 +15,18 @@ public final class BranchCoverageManager {
     // stores for each test case the coverage
     private static Map<String, Double> coverageMap = new HashMap<>();
 
+    /**
+     * Stores the branch coverage for a given test case. First, a broadcast is sent to the AUT
+     * in order to write out a traces.txt file on the external storage. Second, this traces.txt is
+     * pulled from the emulator and saved on a pre-defined location (app directory/traces).
+     * Finally, the branch coverage is evaluated by comparing the visited branches with the
+     * total number of branches.
+     *
+     * @param androidEnvironment Defines the location of the adb/aapt binary.
+     * @param deviceID The id of the emulator, e.g. emulator-5554.
+     * @param testCaseId The test case identifier.
+     * @return Returns the branch coverage for the given test case.
+     */
     public static Message storeCoverage(AndroidEnvironment androidEnvironment, String deviceID, String testCaseId) {
         // grant runtime permissions
         Device device = Device.devices.get(deviceID);
@@ -60,10 +72,11 @@ public final class BranchCoverageManager {
 
         // compute branch coverage
         try {
-            branchCoverage = evaluateBranchCoverage(branchesFile, tracesFile);
+            branchCoverage = evaluateBranchCoverage(branchesFile, List.of(tracesFile));
             // cache for later requests
             coverageMap.put(testCaseId, branchCoverage);
         } catch (IOException e) {
+            Log.printError(e.getMessage());
             throw new IllegalStateException("Branch coverage couldn't be evaluated!");
         }
 
@@ -72,30 +85,79 @@ public final class BranchCoverageManager {
                 .build();
     }
 
+    /**
+     * Gets the branch coverage for a given test case. Should be only called
+     * after storeCoverage has been called for the given test case.
+     *
+     * @param testCaseId The test case identifier.
+     * @return Returns the branch coverage for the given test case.
+     */
     public static Message getCoverage(String testCaseId) {
+        /*
+        * TODO: ensure that storeCoverage was previously called,
+        *  otherwise coverageMap doesn't contain a valid entry.
+         */
         return new Message.MessageBuilder("/coverage/get")
                 .withParameter("coverage", String.valueOf(coverageMap.get(testCaseId)))
                 .build();
     }
 
-    public static Message getCombinedCoverage() {
-        throw new UnsupportedOperationException("Get combined branch coverage not yet supported!");
-        // TODO: get branches file
-        // File branchesFile = new File(System.getProperty("user.dir"), "branches.txt");
-        // TODO: get list of traces file
-        // TODO: invoke evaluateBranchCoverage with list of traces file -> refactor if possible
+    /**
+     * Gets the combined branch coverage.
+     *
+     * @param packageName The package name of the AUT. Must coincide with the
+     *                    name of the app directory containing the traces subdirectory.
+     * @return Returns a message encapsulating the combined branch coverage.
+     */
+    public static Message getCombinedCoverage(String packageName) {
+
         // TODO: check whether it is necessary to pull again the last traces file
-        /*
+
+        // get branches file
+        File branchesFile = new File(System.getProperty("user.dir"), "branches.txt");
+
+        // get list of traces file
+        String workingDir = System.getProperty("user.dir");
+        File appDir = new File(workingDir, packageName);
+        File tracesDir = new File(appDir, "traces");
+
+        if (!tracesDir.exists()) {
+            throw new IllegalArgumentException("Traces directory " + tracesDir.getAbsolutePath() + " doesn't exist!");
+        }
+
+        List<File> tracesFiles = Lists.newArrayList(tracesDir.listFiles());
+
+        // evaluate branch coverage over all traces files
+        double branchCoverage = 0d;
+
+        try {
+            branchCoverage = evaluateBranchCoverage(branchesFile, tracesFiles);
+        } catch (IOException e) {
+            Log.printError(e.getMessage());
+            throw new IllegalStateException("Branch coverage couldn't be evaluated!");
+        }
+
         return new Message.MessageBuilder("/coverage/combined")
-                .withParameter("coverage", String.valueOf(coverageMap.get(testCaseId)))
+                .withParameter("coverage", String.valueOf(branchCoverage))
                 .build();
-         */
     }
 
-    private static double evaluateBranchCoverage(File branchesFile, File tracesFile) throws IOException {
+    /**
+     * Evaluates the branch coverage for a given set of traces files. Can be used
+     * to evaluate the branch coverage for a single test case as well as the combined coverage.
+     *
+     * @param branchesFile The branches.txt file listing for each class the number of branches.
+     * @param tracesFiles The set of traces file.
+     * @return Returns the branch coverage for a single test case or the combined coverage.
+     * @throws IOException Should never happen.
+     */
+    private static double evaluateBranchCoverage(File branchesFile, List<File> tracesFiles) throws IOException {
 
         Log.println("BranchesFile: " + branchesFile + "[" + branchesFile.exists() + "]");
-        Log.println("TracesFile: " + tracesFile + "[" + tracesFile.exists() + "]");
+
+        for (File tracesFile : tracesFiles) {
+            Log.println("TracesFile: " + tracesFile + "[" + tracesFile.exists() + "]");
+        }
 
         // tracks the number of total branches per class <class,#branches>
         Map<String, Integer> branches = new HashMap<>();
@@ -116,35 +178,35 @@ public final class BranchCoverageManager {
         }
 
         branchesReader.close();
-
-        // second argument refers to traces.txt
-        InputStream tracesInputStream = new FileInputStream(tracesFile);
-        BufferedReader tracesReader = new BufferedReader(new InputStreamReader(tracesInputStream));
         Set<String> coveredTraces = new HashSet<>();
 
-        // read the traces
-        String trace;
-        while ((trace = tracesReader.readLine()) != null) {
+        // second argument refers to traces.txt file(s)
+        for (File tracesFile : tracesFiles) {
+            InputStream tracesInputStream = new FileInputStream(tracesFile);
+            BufferedReader tracesReader = new BufferedReader(new InputStreamReader(tracesInputStream));
 
-            // each trace consists of className->methodName->branchID
-            String[] triple = trace.split("->");
+            // read the traces
+            String trace;
+            while ((trace = tracesReader.readLine()) != null) {
 
-            if (visitedBranches.containsKey(triple[0])) {
-                // only new not yet covered branches are interesting
-                if (!coveredTraces.contains(trace)) {
-                    // new covered branch for class, increase by one
-                    int visitedBranchesOfClass = visitedBranches.get(triple[0]);
-                    visitedBranches.put(triple[0], ++visitedBranchesOfClass);
+                // each trace consists of className->methodName->branchID
+                String[] triple = trace.split("->");
+
+                if (visitedBranches.containsKey(triple[0])) {
+                    // only new not yet covered branches are interesting
+                    if (!coveredTraces.contains(trace)) {
+                        // new covered branch for class, increase by one
+                        int visitedBranchesOfClass = visitedBranches.get(triple[0]);
+                        visitedBranches.put(triple[0], ++visitedBranchesOfClass);
+                    }
+                } else {
+                    // it's a new entry for the given class
+                    visitedBranches.put(triple[0], 1);
                 }
-            } else {
-                // it's a new entry for the given class
-                visitedBranches.put(triple[0], 1);
+                coveredTraces.add(trace);
             }
-
-            coveredTraces.add(trace);
+            tracesReader.close();
         }
-
-        tracesReader.close();
 
         double branchCoverage = 0d;
 
