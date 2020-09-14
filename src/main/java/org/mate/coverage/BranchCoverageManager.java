@@ -9,6 +9,7 @@ import org.mate.util.Log;
 
 import java.io.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public final class BranchCoverageManager {
 
@@ -107,9 +108,12 @@ public final class BranchCoverageManager {
      *
      * @param packageName The package name of the AUT. Must coincide with the
      *                    name of the app directory containing the traces subdirectory.
+     * @param testcaseIds Determines which test cases should be considered for the combined
+     *                    coverage computation. If {@code null}, all test cases are considered,
+     *                    otherwise only a subset described by the test case ids is considered.
      * @return Returns a message encapsulating the combined branch coverage.
      */
-    public static Message getCombinedCoverage(String packageName) {
+    public static Message getCombinedCoverage(String packageName, String testcaseIds) {
 
         // TODO: check whether it is necessary to pull again the last traces file
 
@@ -126,6 +130,16 @@ public final class BranchCoverageManager {
         }
 
         List<File> tracesFiles = Lists.newArrayList(tracesDir.listFiles());
+
+        if (testcaseIds != null) {
+            // test case ids are concatenated by '+'
+            List<String> testCases = Lists.newArrayList(testcaseIds.split("\\+"));
+
+            tracesFiles = tracesFiles.stream().filter(traceFile
+                    -> testCases.contains(traceFile.getName()
+                    // remove file prefix
+                    .replace("traces-testcase-", ""))).collect(Collectors.toList());
+        }
 
         // evaluate branch coverage over all traces files
         double branchCoverage = 0d;
