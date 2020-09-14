@@ -131,7 +131,8 @@ public class CoverageEndpoint implements Endpoint {
 
     private Message getCombinedBranchCoverage(Message request) {
         String packageName = request.getParameter("packageName");
-        return BranchCoverageManager.getCombinedCoverage(packageName);
+        String testcaseIds = request.getParameter("chromosomes");
+        return BranchCoverageManager.getCombinedCoverage(packageName, testcaseIds);
     }
 
     private Message storeBranchCoverageData(Message request) {
