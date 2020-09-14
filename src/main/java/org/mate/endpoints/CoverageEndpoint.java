@@ -2,7 +2,7 @@ package org.mate.endpoints;
 
 import org.mate.coverage.BranchCoverageManager;
 import org.mate.coverage.Coverage;
-import org.mate.coverage.CoverageManager;
+import org.mate.coverage.LineCoverageManager;
 import org.mate.network.message.Messages;
 import org.mate.util.AndroidEnvironment;
 import org.mate.io.Device;
@@ -78,8 +78,17 @@ public class CoverageEndpoint implements Endpoint {
             case LINE_COVERAGE:
                 final var errorMsg = storeLineCoverageData(request);
                 if (errorMsg == null) {
-                    // TODO: add coverage parameter
-                    return new Message("/coverage/store");
+
+                    // retrieve coverage of chromosome
+                    var response = getLineCoverageData(request);
+
+                    if (!response.getSubject().equals("/coverage/get")) {
+                        return Messages.errorMessage(response.getParameter("info"));
+                    } else {
+                        return new Message.MessageBuilder("/coverage/get")
+                                .withParameter("coverage", response.getParameter("coverage"))
+                                .build();
+                    }
                 } else {
                     return Messages.errorMessage(errorMsg);
                 }
@@ -96,6 +105,8 @@ public class CoverageEndpoint implements Endpoint {
         Coverage coverage = Coverage.valueOf(request.getParameter("coverage_type"));
 
         switch (coverage) {
+            case LINE_COVERAGE:
+                return getLineCoverageData(request);
             case BRANCH_COVERAGE:
                 return getBranchCoverageData(request);
             default:
@@ -125,13 +136,32 @@ public class CoverageEndpoint implements Endpoint {
 
     private Message storeBranchCoverageData(Message request) {
         String deviceID = request.getParameter("deviceId");
-        String testCaseId = request.getParameter("testcaseId");
+        String testCaseId = request.getParameter("chromosome");
         return BranchCoverageManager.storeCoverage(androidEnvironment, deviceID, testCaseId);
     }
 
     private Message getBranchCoverageData(Message request) {
-        String testCaseId = request.getParameter("testcaseId");
+        String testCaseId = request.getParameter("chromosome");
         return BranchCoverageManager.getCoverage(testCaseId);
+    }
+
+    private Message getLineCoverageData(Message request) {
+        var deviceId = request.getParameter("deviceId");
+        var packageName = Device.getDevice(deviceId).getPackageName();
+        var chromosome = request.getParameter("chromosome");
+        var baseCoverageDir = resultsPath.resolve(packageName + ".coverage");
+        final var execFiles = getExecFiles(chromosome, baseCoverageDir);
+        if (execFiles.isErr()) {
+            return Messages.errorMessage(execFiles.getErr());
+        }
+
+        Double combinedCoverage = LineCoverageManager.getCombinedCoverage(
+                execFiles.getOk(),
+                Path.of(packageName + ".src", "classes"));
+
+        return new Message.MessageBuilder("/coverage/get")
+                .withParameter("coverage", String.valueOf(combinedCoverage))
+                .build();
     }
 
     private Message getLineCoveredPercentages(Message request) {
@@ -139,7 +169,7 @@ public class CoverageEndpoint implements Endpoint {
         var packageName = Device.getDevice(deviceId).getPackageName();
         var chromosomes = request.getParameter("chromosomes");
         var lines = Arrays.stream(request.getParameter("lines").split("\\*"))
-                .map(CoverageManager.Line::valueOf)
+                .map(LineCoverageManager.Line::valueOf)
                 .collect(Collectors.toList());
         var baseCoverageDir = resultsPath.resolve(packageName + ".coverage");
         final var execFiles = getExecFiles(chromosomes, baseCoverageDir);
@@ -147,7 +177,7 @@ public class CoverageEndpoint implements Endpoint {
             return Messages.errorMessage(execFiles.getErr());
         }
 
-        var lineCoveredPercentages = CoverageManager.getLineCoveredPercentages(
+        var lineCoveredPercentages = LineCoverageManager.getLineCoveredPercentages(
                 execFiles.getOk(),
                 Path.of(packageName + ".src", "classes"),
                 lines);
@@ -169,7 +199,7 @@ public class CoverageEndpoint implements Endpoint {
             return Messages.errorMessage(execFiles.getErr());
         }
 
-        Double combinedCoverage = CoverageManager.getCombinedCoverage(
+        Double combinedCoverage = LineCoverageManager.getCombinedCoverage(
                 execFiles.getOk(),
                 Path.of(packageName + ".src", "classes"));
 
@@ -254,8 +284,10 @@ public class CoverageEndpoint implements Endpoint {
                 "-p",
                 packageName,
                 "1");
+
         //Extract coverage from internal app storage to local coverage file
         if (!ProcessRunner.runProcess(coverageFile,
+                null,
                 androidEnvironment.getAdbExecutable(),
                 "-s",
                 deviceId,
