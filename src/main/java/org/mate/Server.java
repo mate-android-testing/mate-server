@@ -164,6 +164,7 @@ public class Server {
                         request = messageParser.nextMessage();
                         Messages.verifyMetadata(request);
                         Messages.stripMetadata(request);
+                        Log.println("Request: " + request.getSubject());
                         Endpoint endpoint = router.resolve(request.getSubject());
                         Message response;
                         if (endpoint == null) {
