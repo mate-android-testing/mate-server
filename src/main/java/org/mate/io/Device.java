@@ -196,15 +196,18 @@ public class Device {
 
     /**
      * Pulls the traces.txt file from the external storage (sd card) if present.
-     * The file is stored in the working directory, that is the mate-commander directory by default.
+     * The file is stored in an app specific location.
      *
+     * @param entity An identifier to separate test suites (another base directory).
      * @param fileName The name of the traces file.
      * @return Returns the path to the traces file.
      */
-    public File pullTraceFile(String fileName) {
+    public File pullTraceFile(String entity, String fileName) {
+
+        Log.println("Entity: " + entity);
 
         // traces are stored on the sd card (external storage)
-        String tracesDir = "storage/emulated/0"; // + packageName;
+        String tracesDir = "storage/emulated/0";
 
         Result<List<String>, String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
                 "-s", deviceID, "shell", "ls", tracesDir);
@@ -223,6 +226,13 @@ public class Device {
         File appDir = new File(workingDir, packageName);
         File localTracesDir = new File(appDir, "traces");
 
+        if (entity != null) {
+            // creates a separate folder for each test suite
+            localTracesDir = new File(localTracesDir, entity);
+        }
+
+        Log.println("Local Traces Dir: " + localTracesDir);
+
         // create local traces directory if not yet present
         if (!localTracesDir.exists()) {
             Log.println("Creating local traces directory: " + localTracesDir.mkdirs());
@@ -233,6 +243,8 @@ public class Device {
 
         if (pullOperation.isErr()) {
             throw new IllegalStateException("Couldn't pull traces.txt file from emulator's external storage!");
+        } else {
+            Log.println("Pull Operation: " + pullOperation.getOk());
         }
 
         return new File(localTracesDir, fileName);

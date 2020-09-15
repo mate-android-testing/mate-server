@@ -1,6 +1,7 @@
 package org.mate.coverage;
 
 import com.google.common.collect.Lists;
+import org.apache.commons.io.FileUtils;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
 import org.mate.network.message.Message;
@@ -24,11 +25,13 @@ public final class BranchCoverageManager {
      * total number of branches.
      *
      * @param androidEnvironment Defines the location of the adb/aapt binary.
-     * @param deviceID The id of the emulator, e.g. emulator-5554.
-     * @param testCaseId The test case identifier.
+     * @param deviceID           The id of the emulator, e.g. emulator-5554.
+     * @param testCaseId         The test case identifier.
+     * @param entity             An identifier to separate test suites from each other.
      * @return Returns the branch coverage for the given test case.
      */
-    public static Message storeCoverage(AndroidEnvironment androidEnvironment, String deviceID, String testCaseId) {
+    public static Message storeCoverage(AndroidEnvironment androidEnvironment, String deviceID,
+                                        String testCaseId, String entity) {
         // grant runtime permissions
         Device device = Device.devices.get(deviceID);
         String packageName = device.getPackageName();
@@ -39,7 +42,7 @@ public final class BranchCoverageManager {
         }
 
         // run adb as root in order to fire up broadcast
-        var rootOperation =  ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "root");
+        var rootOperation = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "root");
 
         if (rootOperation.isErr()) {
             throw new IllegalStateException("Couldn't run ADB as root!");
@@ -66,7 +69,7 @@ public final class BranchCoverageManager {
         }
 
         // fetch traces + store it at certain location with test case id name
-        File tracesFile = device.pullTraceFile("traces-testcase-" + testCaseId);
+        File tracesFile = device.pullTraceFile(entity, "traces-testcase-" + testCaseId);
         File branchesFile = new File(System.getProperty("user.dir"), "branches.txt");
 
         double branchCoverage = 0d;
@@ -95,8 +98,8 @@ public final class BranchCoverageManager {
      */
     public static Message getCoverage(String testCaseId) {
         /*
-        * TODO: ensure that storeCoverage was previously called,
-        *  otherwise coverageMap doesn't contain a valid entry.
+         * TODO: ensure that storeCoverage was previously called,
+         *  otherwise coverageMap doesn't contain a valid entry.
          */
         return new Message.MessageBuilder("/coverage/get")
                 .withParameter("coverage", String.valueOf(coverageMap.get(testCaseId)))
@@ -104,16 +107,20 @@ public final class BranchCoverageManager {
     }
 
     /**
-     * Gets the combined branch coverage.
+     * Gets the combined branch coverage. This can either be the branch coverage for
+     * all the test cases if {@param entity} is {@code null} or a subset of test cases
+     * described by {@param testcaseIds}.
      *
      * @param packageName The package name of the AUT. Must coincide with the
      *                    name of the app directory containing the traces subdirectory.
      * @param testcaseIds Determines which test cases should be considered for the combined
      *                    coverage computation. If {@code null}, all test cases are considered,
      *                    otherwise only a subset described by the test case ids is considered.
+     * @param entity      An identifier to separate test suites. Specifies the base directory
+     *                    for a set of test cases, e.g. test_suite_0.
      * @return Returns a message encapsulating the combined branch coverage.
      */
-    public static Message getCombinedCoverage(String packageName, String testcaseIds) {
+    public static Message getCombinedCoverage(String packageName, String testcaseIds, String entity) {
 
         // TODO: check whether it is necessary to pull again the last traces file
 
@@ -125,11 +132,17 @@ public final class BranchCoverageManager {
         File appDir = new File(workingDir, packageName);
         File tracesDir = new File(appDir, "traces");
 
+        // get the trace files belonging to a particular test suite
+        if (entity != null) {
+            tracesDir = new File(tracesDir, entity);
+        }
+
         if (!tracesDir.exists()) {
             throw new IllegalArgumentException("Traces directory " + tracesDir.getAbsolutePath() + " doesn't exist!");
         }
 
-        List<File> tracesFiles = Lists.newArrayList(tracesDir.listFiles());
+        // recursively find all traces files
+        List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
 
         if (testcaseIds != null) {
             // test case ids are concatenated by '+'
@@ -161,7 +174,7 @@ public final class BranchCoverageManager {
      * to evaluate the branch coverage for a single test case as well as the combined coverage.
      *
      * @param branchesFile The branches.txt file listing for each class the number of branches.
-     * @param tracesFiles The set of traces file.
+     * @param tracesFiles  The set of traces file.
      * @return Returns the branch coverage for a single test case or the combined coverage.
      * @throws IOException Should never happen.
      */
