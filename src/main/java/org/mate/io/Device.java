@@ -1,5 +1,6 @@
 package org.mate.io;
 
+import org.apache.commons.io.FileUtils;
 import org.mate.pdf.Report;
 import org.mate.Server;
 import org.mate.accessibility.ImageHandler;
@@ -198,11 +199,12 @@ public class Device {
      * Pulls the traces.txt file from the external storage (sd card) if present.
      * The file is stored in an app specific location.
      *
-     * @param entity An identifier to separate test suites (another base directory).
-     * @param fileName The name of the traces file.
+     * @param chromosome Identifies either a test case or test suite.
+     * @param entity If chromosome identifies a test suite, entity identifies the test case,
+     *               otherwise {@code null}.
      * @return Returns the path to the traces file.
      */
-    public File pullTraceFile(String entity, String fileName) {
+    public File pullTraceFile(String chromosome, String entity) {
 
         Log.println("Entity: " + entity);
 
@@ -224,22 +226,30 @@ public class Device {
         // use the working directory (MATE-COMMANDER HOME) as output directory for trace file
         String workingDir = System.getProperty("user.dir");
         File appDir = new File(workingDir, packageName);
-        File localTracesDir = new File(appDir, "traces");
+        File baseTracesDir = new File(appDir, "traces");
+
+        // create base traces directory if not yet present
+        if (!baseTracesDir.exists()) {
+            Log.println("Creating base traces directory: " + baseTracesDir.mkdirs());
+        }
+
+        File tracesFile = new File(baseTracesDir, chromosome);
 
         if (entity != null) {
-            // creates a separate folder for each test suite
-            localTracesDir = new File(localTracesDir, entity);
+
+            // traces file refers to a directory
+            if (!tracesFile.exists()) {
+                Log.println("Creating traces directory: " + tracesFile.mkdirs());
+            }
+
+            // we deal with test suites, thus entity refers to the test case name
+            tracesFile = new File(tracesFile, entity);
         }
 
-        Log.println("Local Traces Dir: " + localTracesDir);
-
-        // create local traces directory if not yet present
-        if (!localTracesDir.exists()) {
-            Log.println("Creating local traces directory: " + localTracesDir.mkdirs());
-        }
+        Log.println("Traces File: " + tracesFile);
 
         var pullOperation = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
-                "-s", deviceID, "pull", tracesDir + "/traces.txt", localTracesDir + File.separator + fileName);
+                "-s", deviceID, "pull", tracesDir + "/traces.txt", String.valueOf(tracesFile));
 
         if (pullOperation.isErr()) {
             throw new IllegalStateException("Couldn't pull traces.txt file from emulator's external storage!");
@@ -247,7 +257,7 @@ public class Device {
             Log.println("Pull Operation: " + pullOperation.getOk());
         }
 
-        return new File(localTracesDir, fileName);
+        return tracesFile;
     }
 
     public String getCurrentActivity() {

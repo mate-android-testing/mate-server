@@ -9,6 +9,8 @@ import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
 
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -26,12 +28,12 @@ public final class BranchCoverageManager {
      *
      * @param androidEnvironment Defines the location of the adb/aapt binary.
      * @param deviceID           The id of the emulator, e.g. emulator-5554.
-     * @param testCaseId         The test case identifier.
-     * @param entity             An identifier to separate test suites from each other.
+     * @param chromosome
+     * @param entity
      * @return Returns the branch coverage for the given test case.
      */
     public static Message storeCoverage(AndroidEnvironment androidEnvironment, String deviceID,
-                                        String testCaseId, String entity) {
+                                        String chromosome, String entity) {
         // grant runtime permissions
         Device device = Device.devices.get(deviceID);
         String packageName = device.getPackageName();
@@ -69,7 +71,7 @@ public final class BranchCoverageManager {
         }
 
         // fetch traces + store it at certain location with test case id name
-        File tracesFile = device.pullTraceFile(entity, "traces-testcase-" + testCaseId);
+        File tracesFile = device.pullTraceFile(chromosome, entity);
         File branchesFile = new File(System.getProperty("user.dir"), "branches.txt");
 
         double branchCoverage = 0d;
@@ -78,7 +80,7 @@ public final class BranchCoverageManager {
         try {
             branchCoverage = evaluateBranchCoverage(branchesFile, List.of(tracesFile));
             // cache for later requests
-            coverageMap.put(testCaseId, branchCoverage);
+            coverageMap.put(tracesFile.getName(), branchCoverage);
         } catch (IOException e) {
             Log.printError(e.getMessage());
             throw new IllegalStateException("Branch coverage couldn't be evaluated!");
@@ -93,38 +95,23 @@ public final class BranchCoverageManager {
      * Gets the branch coverage for a given test case. Should be only called
      * after storeCoverage has been called for the given test case.
      *
-     * @param testCaseId The test case identifier.
+     * @param chromosome The test case identifier.
      * @return Returns the branch coverage for the given test case.
      */
-    public static Message getCoverage(String testCaseId) {
+    public static Message getCoverage(String chromosome) {
         /*
          * TODO: ensure that storeCoverage was previously called,
          *  otherwise coverageMap doesn't contain a valid entry.
          */
         return new Message.MessageBuilder("/coverage/get")
-                .withParameter("coverage", String.valueOf(coverageMap.get(testCaseId)))
+                .withParameter("coverage", String.valueOf(coverageMap.get(chromosome)))
                 .build();
     }
 
-    /**
-     * Gets the combined branch coverage. This can either be the branch coverage for
-     * all the test cases if {@param entity} is {@code null} or a subset of test cases
-     * described by {@param testcaseIds}.
-     *
-     * @param packageName The package name of the AUT. Must coincide with the
-     *                    name of the app directory containing the traces subdirectory.
-     * @param testcaseIds Determines which test cases should be considered for the combined
-     *                    coverage computation. If {@code null}, all test cases are considered,
-     *                    otherwise only a subset described by the test case ids is considered.
-     * @param entity      An identifier to separate test suites. Specifies the base directory
-     *                    for a set of test cases, e.g. test_suite_0.
-     * @return Returns a message encapsulating the combined branch coverage.
-     */
-    public static Message getCombinedCoverage(String packageName, String testcaseIds, String entity) {
+    public static Message getCombinedCoverage(String packageName, String chromosomes) {
 
         // TODO: check whether it is necessary to pull again the last traces file
 
-        // get branches file
         File branchesFile = new File(System.getProperty("user.dir"), "branches.txt");
 
         // get list of traces file
@@ -132,26 +119,25 @@ public final class BranchCoverageManager {
         File appDir = new File(workingDir, packageName);
         File tracesDir = new File(appDir, "traces");
 
-        // get the trace files belonging to a particular test suite
-        if (entity != null) {
-            tracesDir = new File(tracesDir, entity);
-        }
-
-        if (!tracesDir.exists()) {
-            throw new IllegalArgumentException("Traces directory " + tracesDir.getAbsolutePath() + " doesn't exist!");
-        }
-
-        // recursively find all traces files
         List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
 
-        if (testcaseIds != null) {
-            // test case ids are concatenated by '+'
-            List<String> testCases = Lists.newArrayList(testcaseIds.split("\\+"));
+        if (chromosomes != null) {
 
-            tracesFiles = tracesFiles.stream().filter(traceFile
-                    -> testCases.contains(traceFile.getName()
-                    // remove file prefix
-                    .replace("traces-testcase-", ""))).collect(Collectors.toList());
+            // only consider the traces files described by the chromosome ids
+            tracesFiles = new ArrayList<>();
+
+            for (String chromosome : chromosomes.split("\\+")) {
+                try {
+                    tracesFiles.addAll(
+                            Files.walk(tracesDir.toPath().resolve(chromosome))
+                                    .filter(Files::isRegularFile)
+                                    .map(Path::toFile)
+                                    .collect(Collectors.toList()));
+                } catch (IOException e) {
+                    Log.printError("Couldn't retrieve traces files!");
+                    throw new IllegalArgumentException(e);
+                }
+            }
         }
 
         // evaluate branch coverage over all traces files
