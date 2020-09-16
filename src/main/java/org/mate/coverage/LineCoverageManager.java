@@ -10,7 +10,7 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class CoverageManager {
+public class LineCoverageManager {
     public static class Line {
         private final String packageName;
         private final String className;

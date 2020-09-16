@@ -62,5 +62,30 @@ Build jar file with all dependencies using the gradle-wrapper
 Run MATE-Server
 
 ```
-java -jar build/libs/mate-server-all-1.0-SNAPSHOT.jar
+java -jar build/libs/mate.jar
+```
+
+## Branch Coverage Information
+
+In order to retrieve branch coverage information about an app, the APK must be instrumented.
+Get the instrumentation library from https://gitlab.infosun.fim.uni-passau.de/auermich/branchcoverage
+and build the <b>branchCoverage</b> module. Then, simply run 
+
+```
+java -jar branchCoverage.jar <PATH-TO-APK>
+```
+
+This will produce an instrumented APK in the same folder as the original APK.
+Rename it (<package-name>.apk) and sign it. Finally, run
+
+```
+apktool d <PATH-TO-INSTRUMENTED-APK> -f
+```
+
+This will produce an app directory, where you can find the traces later.
+Now, you can run MATE with branch coverage information. Therefor set the following key
+in the **mate.properties** file:
+
+```
+coverage=BRANCH_COVERAGE
 ```
