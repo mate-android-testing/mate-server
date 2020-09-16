@@ -16,24 +16,23 @@ import java.util.stream.Collectors;
 
 public final class BranchCoverageManager {
 
-    // stores for each test case the coverage
-    private static Map<String, Double> coverageMap = new HashMap<>();
-
     /**
-     * Stores the branch coverage for a given test case. First, a broadcast is sent to the AUT
-     * in order to write out a traces.txt file on the external storage. Second, this traces.txt is
-     * pulled from the emulator and saved on a pre-defined location (app directory/traces).
+     * Stores the branch coverage data for a chromosome, which can be either a test case or a test suite.
+     *
+     * First, a broadcast is sent to the AUT in order to write out a traces.txt file on the external storage.
+     * Second, this traces.txt is pulled from the emulator and saved on a pre-defined location (app directory/traces).
      * Finally, the branch coverage is evaluated by comparing the visited branches with the
      * total number of branches.
      *
      * @param androidEnvironment Defines the location of the adb/aapt binary.
      * @param deviceID           The id of the emulator, e.g. emulator-5554.
-     * @param chromosome
-     * @param entity
+     * @param chromosome         Identifies either a test case or a test suite.
+     * @param entity             Identifies a test case if chromosome refers to
+     *                           a test suite, otherwise {@code null}.
      * @return Returns the branch coverage for the given test case.
      */
-    public static Message storeCoverage(AndroidEnvironment androidEnvironment, String deviceID,
-                                        String chromosome, String entity) {
+    public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID,
+                                            String chromosome, String entity) {
         // grant runtime permissions
         Device device = Device.devices.get(deviceID);
         String packageName = device.getPackageName();
@@ -70,44 +69,17 @@ public final class BranchCoverageManager {
             throw new IllegalStateException("Couldn't send broadcast!");
         }
 
-        // fetch traces + store it at certain location with test case id name
-        File tracesFile = device.pullTraceFile(chromosome, entity);
-        File branchesFile = new File(System.getProperty("user.dir"), "branches.txt");
-
-        double branchCoverage = 0d;
-
-        // compute branch coverage
-        try {
-            branchCoverage = evaluateBranchCoverage(branchesFile, List.of(tracesFile));
-            // cache for later requests
-            coverageMap.put(tracesFile.getName(), branchCoverage);
-        } catch (IOException e) {
-            Log.printError(e.getMessage());
-            throw new IllegalStateException("Branch coverage couldn't be evaluated!");
-        }
-
-        return new Message.MessageBuilder("/coverage/store")
-                .withParameter("coverage", String.valueOf(branchCoverage))
-                .build();
+        device.pullTraceFile(chromosome, entity);
+        return new Message("/coverage/store");
     }
 
     /**
-     * Gets the branch coverage for a given test case. Should be only called
-     * after storeCoverage has been called for the given test case.
+     * Computes the (combined) coverage for a set of test cases/test suites.
      *
-     * @param chromosome The test case identifier.
-     * @return Returns the branch coverage for the given test case.
+     * @param packageName The package name of the AUT.
+     * @param chromosomes A list of chromosomes separated by '+'.
+     * @return Returns the (combined) coverage for a set of chromosomes.
      */
-    public static Message getCoverage(String chromosome) {
-        /*
-         * TODO: ensure that storeCoverage was previously called,
-         *  otherwise coverageMap doesn't contain a valid entry.
-         */
-        return new Message.MessageBuilder("/coverage/get")
-                .withParameter("coverage", String.valueOf(coverageMap.get(chromosome)))
-                .build();
-    }
-
     public static Message getCombinedCoverage(String packageName, String chromosomes) {
 
         // TODO: check whether it is necessary to pull again the last traces file
