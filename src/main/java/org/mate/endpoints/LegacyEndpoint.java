@@ -76,15 +76,6 @@ public class LegacyEndpoint implements Endpoint {
         if (cmdStr.startsWith("releaseEmulator"))
             return Device.releaseDevice(cmdStr);
 
-        if (cmdStr.startsWith("grantPermissions"))
-            return grantPermissions(cmdStr);
-
-        if (cmdStr.startsWith("executeSystemEvent"))
-            return executeSystemEvent(cmdStr);
-
-        if (cmdStr.startsWith("pushDummyFiles"))
-            return pushDummyFiles(cmdStr);
-
         if (cmdStr.startsWith("initCFG"))
             return initCFG(cmdStr);
 
@@ -136,64 +127,6 @@ public class LegacyEndpoint implements Endpoint {
             return "ok";
         }
         return null;
-    }
-
-    /**
-     * Simulates the occurrence of a system event.
-     *
-     * @param cmdStr The command string describing the system event.
-     * @return Returns the string "true" if the system
-     *      event could be simulated, otherwise the string "false".
-     */
-    private String executeSystemEvent(String cmdStr) {
-
-        // executeSystemEvent:package:receiver:action:dynamic:emulator-id
-        String parts[] = cmdStr.split(":");
-        String packageName = parts[1];
-        String receiver = parts[2];
-        String action = parts[3];
-        boolean dynamicReceiver = Boolean.valueOf(parts[4]);
-        String deviceID = parts[5];
-
-        Device device = Device.devices.get(deviceID);
-        boolean success = device.executeSystemEvent(packageName, receiver, action, dynamicReceiver);
-        return String.valueOf(success);
-
-    }
-
-    /**
-     * Grants runtime permission to a given app.
-     *
-     * @param cmdStr The command string.
-     * @return Returns the string "true" if the permissions
-     *      could be granted, otherwise the string "false".
-     */
-    private String grantPermissions(String cmdStr) {
-
-        String parts[] = cmdStr.split(":");
-        String packageName = parts[1];
-        String deviceID = parts[2];
-
-        Device device = Device.devices.get(deviceID);
-        boolean granted = device.grantPermissions(packageName);
-        return String.valueOf(granted);
-    }
-
-    /**
-     * Pushes dummy files for certain data types on the
-     * external storage. This files are used in combination
-     * with intent fuzzing, where the data tag of a component
-     * can refer to a URI, e.g. a file.
-     *
-     * @param cmdStr The command string.
-     */
-    private String pushDummyFiles(String cmdStr) {
-
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-
-        Device device = Device.devices.get(deviceID);
-        return String.valueOf(device.pushDummyFiles());
     }
 
     /**
