@@ -144,6 +144,12 @@ public class CoverageEndpoint implements Endpoint {
 
     private Message getBranchCoverageData(Message request) {
         String chromosome = request.getParameter("chromosome");
+        String entity = request.getParameter("entity");
+
+        if (entity != null) {
+            chromosome = entity;
+        }
+
         return BranchCoverageManager.getCoverage(chromosome);
     }
 
@@ -155,7 +161,8 @@ public class CoverageEndpoint implements Endpoint {
          return getCombinedLineCoverage(getRequest);
     }
 
-    private Message getLineCoverageData2(Message request) {
+    @SuppressWarnings("unused")
+    private Message getLineCoverageDataLegacy(Message request) {
         var deviceId = request.getParameter("deviceId");
         var packageName = Device.getDevice(deviceId).getPackageName();
         var chromosome = request.getParameter("chromosome");
