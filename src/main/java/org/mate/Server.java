@@ -107,6 +107,7 @@ public class Server {
         router.add("/android", new AndroidEndpoint(androidEnvironment));
         router.add("/accessibility",new AccessibilityEndpoint(imageHandler));
         router.add("/coverage", new CoverageEndpoint(androidEnvironment, resultsPath));
+        router.add("/fuzzer", new FuzzerEndpoint(androidEnvironment));
 
         cleanup();
         createFolders();
