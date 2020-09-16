@@ -82,10 +82,10 @@ public class CoverageEndpoint implements Endpoint {
                     // retrieve coverage of chromosome
                     var response = getLineCoverageData(request);
 
-                    if (!response.getSubject().equals("/coverage/get")) {
+                    if (!response.getSubject().equals("/coverage/combined")) {
                         return Messages.errorMessage(response.getParameter("info"));
                     } else {
-                        return new Message.MessageBuilder("/coverage/get")
+                        return new Message.MessageBuilder("/coverage/store")
                                 .withParameter("coverage", response.getParameter("coverage"))
                                 .build();
                     }
@@ -132,23 +132,37 @@ public class CoverageEndpoint implements Endpoint {
     private Message getCombinedBranchCoverage(Message request) {
         String packageName = request.getParameter("packageName");
         String testcaseIds = request.getParameter("chromosomes");
-        String entity = request.getParameter("entity");
-        return BranchCoverageManager.getCombinedCoverage(packageName, testcaseIds, entity);
+        return BranchCoverageManager.getCombinedCoverage(packageName, testcaseIds);
     }
 
     private Message storeBranchCoverageData(Message request) {
         String deviceID = request.getParameter("deviceId");
-        String testCaseId = request.getParameter("chromosome");
+        String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
-        return BranchCoverageManager.storeCoverage(androidEnvironment, deviceID, testCaseId, entity);
+        return BranchCoverageManager.storeCoverage(androidEnvironment, deviceID, chromosome, entity);
     }
 
     private Message getBranchCoverageData(Message request) {
-        String testCaseId = request.getParameter("chromosome");
-        return BranchCoverageManager.getCoverage(testCaseId);
+        String chromosome = request.getParameter("chromosome");
+        String entity = request.getParameter("entity");
+
+        if (entity != null) {
+            chromosome = entity;
+        }
+
+        return BranchCoverageManager.getCoverage(chromosome);
     }
 
     private Message getLineCoverageData(Message request) {
+         Message getRequest = new Message.MessageBuilder("/coverage/combined")
+                .withParameter("deviceId", request.getParameter("deviceId"))
+                 .withParameter("chromosomes", request.getParameter("chromosome"))
+                .build();
+         return getCombinedLineCoverage(getRequest);
+    }
+
+    @SuppressWarnings("unused")
+    private Message getLineCoverageDataLegacy(Message request) {
         var deviceId = request.getParameter("deviceId");
         var packageName = Device.getDevice(deviceId).getPackageName();
         var chromosome = request.getParameter("chromosome");
