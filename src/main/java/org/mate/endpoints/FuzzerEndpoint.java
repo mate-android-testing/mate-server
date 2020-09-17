@@ -6,6 +6,10 @@ import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
 
+/**
+ * This endpoint is responsible for handling intent fuzzing requests.
+ * This includes primarily the broadcasting of system events.
+ */
 public class FuzzerEndpoint implements Endpoint {
 
     private final AndroidEnvironment androidEnvironment;
