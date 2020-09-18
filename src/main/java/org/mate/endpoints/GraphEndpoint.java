@@ -76,6 +76,12 @@ public class GraphEndpoint implements Endpoint {
 
     private Message getBranches(Message request) {
 
+        GraphType graphType = GraphType.valueOf(request.getParameter("graph_type"));
+
+        if (graphType == GraphType.SGD) {
+            throw new UnsupportedOperationException("Graph type not yet supported!");
+        }
+
         if (graph == null) {
             throw new IllegalStateException("Graph hasn't been initialised!");
         }
