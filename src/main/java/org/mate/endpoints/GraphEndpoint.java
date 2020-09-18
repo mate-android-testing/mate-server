@@ -75,7 +75,15 @@ public class GraphEndpoint implements Endpoint {
     }
 
     private Message getBranches(Message request) {
-        return null;
+
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
+        String branches = String.join("\\+", graph.getBranches());
+        return new Message.MessageBuilder("/graph/get_branches")
+                .withParameter("branches", branches)
+                .build();
     }
 
     private Message getBranchDistance(Message request) {

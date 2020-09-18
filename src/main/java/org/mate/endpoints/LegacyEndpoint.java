@@ -1,6 +1,5 @@
 package org.mate.endpoints;
 
-import de.uni_passau.fim.auermich.Main;
 import de.uni_passau.fim.auermich.graphs.Edge;
 import de.uni_passau.fim.auermich.graphs.Vertex;
 import de.uni_passau.fim.auermich.statement.BasicStatement;
@@ -9,7 +8,7 @@ import de.uni_passau.fim.auermich.statement.ExitStatement;
 import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.mate.accessibility.ImageHandler;
-import org.mate.graphs.CFG;
+import org.mate.graphs.CFG2;
 import org.mate.network.message.Messages;
 import org.mate.util.AndroidEnvironment;
 import org.mate.io.ProcessRunner;
@@ -22,7 +21,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -33,7 +31,7 @@ public class LegacyEndpoint implements Endpoint {
     private final AndroidEnvironment androidEnvironment;
     private final ImageHandler imageHandler;
     // graph instance needed for branch distance computation
-    private CFG graph = null;
+    private CFG2 graph = null;
     private final long timeout;
     private final long length;
     private final boolean generatePDFReport = false;
@@ -75,9 +73,6 @@ public class LegacyEndpoint implements Endpoint {
 
         if (cmdStr.startsWith("releaseEmulator"))
             return Device.releaseDevice(cmdStr);
-
-        if (cmdStr.startsWith("initCFG"))
-            return initCFG(cmdStr);
 
         if (cmdStr.startsWith("getBranches"))
             return getBranches(cmdStr);
@@ -622,32 +617,6 @@ public class LegacyEndpoint implements Endpoint {
 
         System.out.println("Branch Distance Vector: " + branchDistanceVector);
         return String.join("\n", branchDistanceVector);
-    }
-
-    /**
-     * Initialises the CFG based on given APK file.
-     *
-     * @param cmdStr The command string containing the APK path.
-     * @return Returns the string {@code true} if the CFG
-     *      has been initialised successfully, otherwise {@code false}.
-     */
-    private String initCFG(String cmdStr) {
-
-        // limit is required to avoid splitting a Windows path
-        String[] parts = cmdStr.split(":", 3);
-        String packageName = parts[1];
-        String apkPath = parts[2];
-
-        System.out.println("Package Name: " + packageName);
-        System.out.println("APK path: " + apkPath);
-
-        try {
-            graph = new CFG(Main.computerInterCFGWithBB(apkPath,true), packageName);
-        } catch (IOException e) {
-            e.printStackTrace();
-            return "false";
-        }
-        return "true";
     }
 
     private String getActivity(String cmdStr) {

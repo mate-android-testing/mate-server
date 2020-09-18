@@ -1,5 +1,7 @@
 package org.mate.graphs;
 
+import java.util.List;
+
 public interface Graph {
 
     // number of vertices
@@ -7,4 +9,6 @@ public interface Graph {
 
     // package name of app
     String getAppName();
+
+    List<String> getBranches();
 }
