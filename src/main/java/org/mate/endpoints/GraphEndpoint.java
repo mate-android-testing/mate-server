@@ -27,12 +27,15 @@ public class GraphEndpoint implements Endpoint {
 
     @Override
     public Message handle(Message request) {
+        // TODO: do we need a command to set the target vertex or always select it randomly?
         if (request.getSubject().startsWith("/graph/init")) {
             return initGraph(request);
         } else if (request.getSubject().startsWith("/graph/get_branches")) {
             return getBranches(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
             return getBranchDistance(request);
+        } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector")) {
+            return getBranchDistanceVector(request);
         } else {
             throw new IllegalArgumentException("Message request with subject: "
                     + request.getSubject() + " can't be handled by GraphEndPoint!");
@@ -47,7 +50,7 @@ public class GraphEndpoint implements Endpoint {
         File apkPath = new File(request.getParameter("apk"));
 
         if (!apkPath.exists()) {
-            throw new IllegalArgumentException("Can't locate APK!");
+            throw new IllegalArgumentException("Can't locate APK: " + apkPath.getAbsolutePath() + "!");
         }
 
         boolean useBasicBlocks = Boolean.parseBoolean(request.getParameter("basic_blocks"));
@@ -93,6 +96,10 @@ public class GraphEndpoint implements Endpoint {
     }
 
     private Message getBranchDistance(Message request) {
+        return null;
+    }
+
+    private Message getBranchDistanceVector(Message request) {
         return null;
     }
 }

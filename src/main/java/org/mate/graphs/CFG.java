@@ -5,6 +5,7 @@ import de.uni_passau.fim.auermich.graphs.cfg.BaseCFG;
 import de.uni_passau.fim.auermich.statement.BasicStatement;
 import de.uni_passau.fim.auermich.statement.BlockStatement;
 
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -13,9 +14,17 @@ public abstract class CFG implements Graph {
     protected final BaseCFG baseCFG;
     private final String appName;
 
+    // the target is either a single branch or all branches (MIO/MOSA)
+    private List<Vertex> target = new ArrayList<>();
+
+    // cache the list of branches (the order must be consistent when requesting the branch distance vector)
+    protected final List<Vertex> branchVertices;
+
     public CFG(BaseCFG baseCFG, String appName) {
         this.baseCFG = baseCFG;
         this.appName = appName;
+        branchVertices = baseCFG.getBranches();
+        // TODO: init target depending on additional param (boolean singleObjective?)
     }
 
     @Override
@@ -31,7 +40,6 @@ public abstract class CFG implements Graph {
     @Override
     public List<String> getBranches() {
 
-        List<Vertex> branchVertices = baseCFG.getBranches();
         List<String> branches = new LinkedList<>();
 
         for (Vertex branchVertex : branchVertices) {
