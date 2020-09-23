@@ -1,6 +1,5 @@
 package org.mate.coverage;
 
-import com.google.common.collect.Lists;
 import org.apache.commons.io.FileUtils;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
@@ -84,12 +83,13 @@ public final class BranchCoverageManager {
 
         // TODO: check whether it is necessary to pull again the last traces file
 
-        File branchesFile = new File(System.getProperty("user.dir"), "branches.txt");
-
         // get list of traces file
         String workingDir = System.getProperty("user.dir");
         File appDir = new File(workingDir, packageName);
         File tracesDir = new File(appDir, "traces");
+
+        // the branches.txt should be located within the app directory
+        File branchesFile = new File(appDir, "branches.txt");
 
         List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
 
