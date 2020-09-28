@@ -193,19 +193,26 @@ public final class BranchCoverageManager {
             tracesReader.close();
         }
 
-        double branchCoverage = 0d;
-
         // compute branch coverage per class
         for (String key : branches.keySet()) {
 
             float totalBranches = branches.get(key);
-            float coveredBranches = visitedBranches.get(key);
-            branchCoverage += coveredBranches / totalBranches * 100;
+            float coveredBranches = visitedBranches.getOrDefault(key, 0);
 
-            Log.println("We have for the class " + key
-                    + " a branch coverage of: " + coveredBranches / totalBranches * 100 + "%");
+            // only log classes with coverage > 0
+            if (coveredBranches != 0) {
+                Log.println("We have for the class " + key
+                        + " a branch coverage of: " + coveredBranches / totalBranches * 100 + "%");
+            }
         }
 
+        // compute total branch coverage
+        double branchCoverage = 0d;
+        double totalVisitedBranches = visitedBranches.values().stream().reduce(0, Integer::sum);
+        double totalBranches = branches.values().stream().reduce(0, Integer::sum);
+        branchCoverage = totalVisitedBranches / totalBranches * 100;
+
+        Log.println("Total branch coverage: " + branchCoverage + "%");
         return branchCoverage;
     }
 
