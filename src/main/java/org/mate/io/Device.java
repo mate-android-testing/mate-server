@@ -205,10 +205,21 @@ public class Device {
             return false;
         }
 
-        // use the working directory (MATE-COMMANDER HOME) as output directory for trace file
+        // the working directory refers to the mate-commander folder
         String workingDir = System.getProperty("user.dir");
+        File appsDir = new File(workingDir, "apps");
+        File appDir = new File(appsDir, packageName);
+        File baseTracesDir = new File(appDir, "traces");
 
-        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull", tracesDir + "/traces.txt", workingDir + File.separator + "traces.txt");
+        // create base traces directory if not yet present
+        if (!baseTracesDir.exists()) {
+            Log.println("Creating base traces directory: " + baseTracesDir.mkdirs());
+        }
+
+        File tracesFile = new File(baseTracesDir, "traces.txt");
+
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull",
+                tracesDir + "/traces.txt", String.valueOf(tracesFile));
 
         return true;
     }
@@ -241,9 +252,10 @@ public class Device {
             throw new IllegalStateException("Couldn't locate the traces.txt file!");
         }
 
-        // use the working directory (MATE-COMMANDER HOME) as output directory for trace file
+        // the working directory refers to the mate-commander folder
         String workingDir = System.getProperty("user.dir");
-        File appDir = new File(workingDir, packageName);
+        File appsDir = new File(workingDir, "apps");
+        File appDir = new File(appsDir, packageName);
         File baseTracesDir = new File(appDir, "traces");
 
         // create base traces directory if not yet present
