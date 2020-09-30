@@ -85,7 +85,8 @@ public final class BranchCoverageManager {
 
         // get list of traces file
         String workingDir = System.getProperty("user.dir");
-        File appDir = new File(workingDir, packageName);
+        File appsDir = new File(workingDir, "apps");
+        File appDir = new File(appsDir, packageName);
         File tracesDir = new File(appDir, "traces");
 
         // the branches.txt should be located within the app directory
