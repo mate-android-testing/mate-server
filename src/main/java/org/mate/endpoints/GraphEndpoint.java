@@ -4,6 +4,8 @@ import org.mate.graphs.Graph;
 import org.mate.graphs.GraphType;
 import org.mate.graphs.InterCFG;
 import org.mate.graphs.IntraCFG;
+import org.mate.io.Device;
+import org.mate.io.ProcessRunner;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
@@ -96,6 +98,58 @@ public class GraphEndpoint implements Endpoint {
     }
 
     private Message getBranchDistance(Message request) {
+
+        String deviceID = request.getParameter("deviceId");
+        String packageName = request.getParameter("packageName");
+        String chromosome = request.getParameter("chromosome");
+        // TODO: check whether we need to separate traces like in the case of coverage
+        String entity = request.getParameter("entity");
+
+        // grant read/write permission on external storage
+        Device device = Device.getDevice(deviceID);
+        boolean granted = device.grantPermissions(packageName);
+
+        if (!granted) {
+            throw new IllegalStateException("Couldn't grant runtime permissions!");
+        }
+
+        // run adb as root in order to fire up broadcast
+        var rootOperation = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "root");
+
+        if (rootOperation.isErr()) {
+            throw new IllegalStateException("Couldn't run ADB as root!");
+        }
+
+        // send broadcast in order to write out traces
+        var broadcastOperation = ProcessRunner.runProcess(
+                androidEnvironment.getAdbExecutable(),
+                "-s",
+                deviceID,
+                "shell",
+                "am",
+                "broadcast",
+                "-a",
+                "STORE_TRACES",
+                "-n",
+                packageName + "/de.uni_passau.fim.auermich.branchdistance.tracer.Tracer",
+                "--es",
+                "packageName",
+                packageName);
+
+        if (broadcastOperation.isErr()) {
+            throw new IllegalStateException("Couldn't send broadcast!");
+        }
+
+        // fetch the traces
+        device.pullTraceFile(chromosome, entity);
+
+        // TODO: convert traces to nodes in the graph
+
+        // TODO: mark the nodes as visited and compute distance (approach level) using dijkstra
+
+        // TODO: get minimal distance (if distance == 0), then return branch distance
+
+        // TODO: return message wrapping branch distance value
         return null;
     }
 
