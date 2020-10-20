@@ -90,6 +90,7 @@ public class Server {
         port = Optional.ofNullable(properties.getProperty("port")).map(Integer::valueOf).orElse(port);
         cleanup = Optional.ofNullable(properties.getProperty("cleanup")).map(Boolean::valueOf).orElse(cleanup);
         resultsPath = Optional.ofNullable(properties.getProperty("results_path")).map(Paths::get).orElse(resultsPath);
+        Device.appsDir = Optional.ofNullable(properties.getProperty("apps_dir")).map(Paths::get).orElse(null);
     }
 
     /**

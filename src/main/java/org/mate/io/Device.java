@@ -9,6 +9,7 @@ import org.mate.util.Log;
 import org.mate.util.Result;
 
 import java.io.*;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
@@ -25,6 +26,9 @@ public class Device {
     private boolean busy;
     private int APIVersion;
     private String currentScreenShotLocation;
+
+    // defines where the apps, in particular the APKs are located
+    public static Path appsDir;
 
     public Device(String deviceID, AndroidEnvironment androidEnvironment) {
         this.deviceID = deviceID;
@@ -347,12 +351,20 @@ public class Device {
     }
 
     public List<String> getActivities() {
+
         String cmd = "";
         List<String> activities = new ArrayList<>();
+
+        String apkPath = packageName + ".apk";
+
+        if (appsDir != null) {
+            apkPath = appsDir + File.separator + apkPath;
+        }
+
         var lines = ProcessRunner.runProcess(androidEnvironment.getAaptExecutable(),
                 "dump",
                 "xmltree",
-                packageName + ".apk",
+                apkPath,
                 "AndroidManifest.xml").getOk();
         var foundPackage = false;
         var foundAct = false;
