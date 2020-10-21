@@ -202,7 +202,6 @@ public class Device {
      */
     public boolean pushDummyFiles() {
 
-        var root = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "root");
         var f1 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestBmp.bmp", "sdcard/mateTestBmp.bmp");
         var f2 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestGif.gif", "sdcard/mateTestGif.gif");
         var f3 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestJpg.jpg", "sdcard/mateTestJpg.jpg");
@@ -218,14 +217,13 @@ public class Device {
         var f13 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestOgg.ogg", "sdcard/mateTestOgg.ogg");
         var f14 =ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestMp3.mp3", "sdcard/mateTestMp3.mp3");
 
-        if (root.isErr() || f1.isErr() || f2.isErr() || f3.isErr() || f4.isErr() || f5.isErr() || f6.isErr()
+        if (f1.isErr() || f2.isErr() || f3.isErr() || f4.isErr() || f5.isErr() || f6.isErr()
                 || f7.isErr() || f8.isErr() || f9.isErr() || f10.isErr() || f11.isErr() || f12.isErr()
                 || f13.isErr() || f14.isErr()) {
             return false;
         } else {
-            final String success = "1 file pushed.";
-            return root.getOk().isEmpty()
-                    && f1.getOk().get(0).contains(success) && f2.getOk().get(0).contains(success)
+            final String success = "1 file pushed";
+            return f1.getOk().get(0).contains(success) && f2.getOk().get(0).contains(success)
                     && f3.getOk().get(0).contains(success) && f4.getOk().get(0).contains(success)
                     && f5.getOk().get(0).contains(success) && f6.getOk().get(0).contains(success)
                     && f7.getOk().get(0).contains(success) && f8.getOk().get(0).contains(success)
@@ -446,9 +444,9 @@ public class Device {
             }
         }
 
-        System.out.println("activities:");
+        Log.println("activities:");
         for (String activity : activities) {
-            System.out.println("\t" + activity);
+            Log.println("\t" + activity);
         }
         return activities;
     }
