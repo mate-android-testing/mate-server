@@ -41,19 +41,14 @@ public final class BranchCoverageManager {
             throw new IllegalStateException("Couldn't grant runtime permissions!");
         }
 
-        // run adb as root in order to fire up broadcast
-        var rootOperation = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "root");
-
-        if (rootOperation.isErr()) {
-            throw new IllegalStateException("Couldn't run ADB as root!");
-        }
-
         // send broadcast in order to write out traces
         var broadcastOperation = ProcessRunner.runProcess(
                 androidEnvironment.getAdbExecutable(),
                 "-s",
                 deviceID,
                 "shell",
+                "su",
+                "root",
                 "am",
                 "broadcast",
                 "-a",
