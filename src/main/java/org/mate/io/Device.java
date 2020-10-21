@@ -80,6 +80,57 @@ public class Device {
     }
 
     /**
+     * Fetches a serialized test case from the internal storage.
+     * Afterwards, the test case file is erased from the emulator.
+     *
+     * @param testCaseDir The test case directory on the emulator.
+     * @param testCase The name of the test case file.
+     * @return Returns {@code true} if the test case file could be fetched,
+     *          otherwise {@code false} is returned.
+     */
+    public boolean fetchTestCase(String testCaseDir, String testCase) {
+
+        // TODO: check whether on Windows the leading slash needs to be removed (it seems as it is not necessary)
+
+        // retrieve test cases inside test case directory
+        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", testCaseDir).getOk();
+
+        // check whether the test case file exists
+        if (!files.stream().anyMatch(str -> str.trim().equals(testCase))) {
+            return false;
+        }
+
+        // TODO: uses Devices.appsDir
+        // the working directory refers to the mate-commander folder
+        String workingDir = System.getProperty("user.dir");
+        File appsDir = new File(workingDir, "apps");
+        File appDir = new File(appsDir, packageName);
+        File testCasesDir = new File(appDir, "test-cases");
+        File testCaseFile = new File(testCasesDir, testCase);
+
+        // create local test-cases directory if not present
+        if (!testCasesDir.exists()) {
+            Log.println("Creating test-cases directory: " + testCasesDir.mkdirs());
+        }
+
+        // fetch the test case file
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull",
+                testCaseDir + "/" + testCase, String.valueOf(testCaseFile));
+
+        if (!testCaseFile.exists()) {
+            Log.println("Pulling test case file " + testCaseFile + " failed!");
+        }
+
+        // remove test case file from emulator
+        var removeOp = ProcessRunner.runProcess(
+                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                "rm", "-f", testCaseDir + "/" + testCase);
+
+        Log.println("Removal of test case file succeeded: " + removeOp.isOk());
+        return testCaseFile.exists();
+    }
+
+    /**
      * Grants read and write permission for external storage to the given app.
      *
      * @param packageName The package name of the app.
@@ -205,6 +256,7 @@ public class Device {
             return false;
         }
 
+        // TODO: uses Devices.appsDir
         // the working directory refers to the mate-commander folder
         String workingDir = System.getProperty("user.dir");
         File appsDir = new File(workingDir, "apps");
@@ -252,6 +304,7 @@ public class Device {
             throw new IllegalStateException("Couldn't locate the traces.txt file!");
         }
 
+        // TODO: uses Devices.appsDir
         // the working directory refers to the mate-commander folder
         String workingDir = System.getProperty("user.dir");
         File appsDir = new File(workingDir, "apps");
