@@ -1,14 +1,13 @@
 package org.mate.io;
 
-import org.apache.commons.io.FileUtils;
-import org.mate.pdf.Report;
 import org.mate.Server;
 import org.mate.accessibility.ImageHandler;
+import org.mate.pdf.Report;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
 import org.mate.util.Result;
 
-import java.io.*;
+import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Hashtable;
@@ -104,11 +103,7 @@ public class Device {
             return false;
         }
 
-        // TODO: uses Devices.appsDir
-        // the working directory refers to the mate-commander folder
-        String workingDir = System.getProperty("user.dir");
-        File appsDir = new File(workingDir, "apps");
-        File appDir = new File(appsDir, packageName);
+        File appDir = new File(appsDir.toFile(), packageName);
         File testCasesDir = new File(appDir, "test-cases");
         File testCaseFile = new File(testCasesDir, testCase);
 
@@ -345,7 +340,7 @@ public class Device {
             if (ProcessRunner.isWin) {
                 cmd = "$focused = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[5]";
-                System.out.println(cmd);
+                Log.println(cmd);
             } else {
                 cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
             }
@@ -355,7 +350,7 @@ public class Device {
             if (ProcessRunner.isWin) {
                 cmd = "$focused = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[7]";
-                System.out.println(cmd);
+                Log.println(cmd);
             } else {
                 cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
             }
@@ -374,7 +369,7 @@ public class Device {
                 cmd = "$activity = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string \"realActivity\" ; $focused = $activity[1] ; $final = $focused -split '=' ; echo $final[1]";
                 // Alternatively use: "$focused.Line.split(=)[1] \"";
-                System.out.println(cmd);
+                Log.println(cmd);
             } else {
                 cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
             }
@@ -388,7 +383,7 @@ public class Device {
         }
         if (result != null && result.size() > 0)
             response = result.get(0);
-        System.out.println("activity: " + response);
+        Log.println("activity: " + response);
 
         return response;
     }
