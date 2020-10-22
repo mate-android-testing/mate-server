@@ -209,10 +209,7 @@ public class Device {
             return false;
         }
 
-        // the working directory refers to the mate-commander folder
-        String workingDir = System.getProperty("user.dir");
-        File appsDir = new File(workingDir, "apps");
-        File appDir = new File(appsDir, packageName);
+        File appDir = new File(appsDir.toFile(), packageName);
         File baseTracesDir = new File(appDir, "traces");
 
         // create base traces directory if not yet present
@@ -256,10 +253,7 @@ public class Device {
             throw new IllegalStateException("Couldn't locate the traces.txt file!");
         }
 
-        // the working directory refers to the mate-commander folder
-        String workingDir = System.getProperty("user.dir");
-        File appsDir = new File(workingDir, "apps");
-        File appDir = new File(appsDir, packageName);
+        File appDir = new File(appsDir.toFile(), packageName);
         File baseTracesDir = new File(appDir, "traces");
 
         // create base traces directory if not yet present
@@ -355,11 +349,8 @@ public class Device {
         String cmd = "";
         List<String> activities = new ArrayList<>();
 
-        String apkPath = packageName + ".apk";
-
-        if (appsDir != null) {
-            apkPath = appsDir + File.separator + apkPath;
-        }
+        String apkPath = appsDir + File.separator + packageName + ".apk";
+        Log.println("APK PATH: " + apkPath);
 
         var lines = ProcessRunner.runProcess(androidEnvironment.getAaptExecutable(),
                 "dump",
@@ -435,7 +426,7 @@ public class Device {
     public static void listActiveDevices() {
         for (String devID : devices.keySet()) {
             Device device = devices.get(devID);
-            System.out.println(device.getDeviceID() + " - " + device.isBusy() + ": " + device.getPackageName());
+            Log.println(device.getDeviceID() + " - " + device.isBusy() + ": " + device.getPackageName());
         }
     }
 
