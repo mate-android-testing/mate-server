@@ -84,6 +84,57 @@ public class Device {
     }
 
     /**
+     * Fetches a serialized test case from the internal storage.
+     * Afterwards, the test case file is erased from the emulator.
+     *
+     * @param testCaseDir The test case directory on the emulator.
+     * @param testCase The name of the test case file.
+     * @return Returns {@code true} if the test case file could be fetched,
+     *          otherwise {@code false} is returned.
+     */
+    public boolean fetchTestCase(String testCaseDir, String testCase) {
+
+        // TODO: check whether on Windows the leading slash needs to be removed (it seems as it is not necessary)
+
+        // retrieve test cases inside test case directory
+        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", testCaseDir).getOk();
+
+        // check whether the test case file exists
+        if (!files.stream().anyMatch(str -> str.trim().equals(testCase))) {
+            return false;
+        }
+
+        // TODO: uses Devices.appsDir
+        // the working directory refers to the mate-commander folder
+        String workingDir = System.getProperty("user.dir");
+        File appsDir = new File(workingDir, "apps");
+        File appDir = new File(appsDir, packageName);
+        File testCasesDir = new File(appDir, "test-cases");
+        File testCaseFile = new File(testCasesDir, testCase);
+
+        // create local test-cases directory if not present
+        if (!testCasesDir.exists()) {
+            Log.println("Creating test-cases directory: " + testCasesDir.mkdirs());
+        }
+
+        // fetch the test case file
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull",
+                testCaseDir + "/" + testCase, String.valueOf(testCaseFile));
+
+        if (!testCaseFile.exists()) {
+            Log.println("Pulling test case file " + testCaseFile + " failed!");
+        }
+
+        // remove test case file from emulator
+        var removeOp = ProcessRunner.runProcess(
+                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                "rm", "-f", testCaseDir + "/" + testCase);
+
+        Log.println("Removal of test case file succeeded: " + removeOp.isOk());
+        return testCaseFile.exists();
+    }
+
+    /**
      * Grants read and write permission for external storage to the given app.
      *
      * @param packageName The package name of the app.
@@ -155,7 +206,6 @@ public class Device {
      */
     public boolean pushDummyFiles() {
 
-        var root = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "root");
         var f1 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestBmp.bmp", "sdcard/mateTestBmp.bmp");
         var f2 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestGif.gif", "sdcard/mateTestGif.gif");
         var f3 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestJpg.jpg", "sdcard/mateTestJpg.jpg");
@@ -171,14 +221,13 @@ public class Device {
         var f13 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestOgg.ogg", "sdcard/mateTestOgg.ogg");
         var f14 =ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestMp3.mp3", "sdcard/mateTestMp3.mp3");
 
-        if (root.isErr() || f1.isErr() || f2.isErr() || f3.isErr() || f4.isErr() || f5.isErr() || f6.isErr()
+        if (f1.isErr() || f2.isErr() || f3.isErr() || f4.isErr() || f5.isErr() || f6.isErr()
                 || f7.isErr() || f8.isErr() || f9.isErr() || f10.isErr() || f11.isErr() || f12.isErr()
                 || f13.isErr() || f14.isErr()) {
             return false;
         } else {
-            final String success = "1 file pushed.";
-            return root.getOk().isEmpty()
-                    && f1.getOk().get(0).contains(success) && f2.getOk().get(0).contains(success)
+            final String success = "1 file pushed";
+            return f1.getOk().get(0).contains(success) && f2.getOk().get(0).contains(success)
                     && f3.getOk().get(0).contains(success) && f4.getOk().get(0).contains(success)
                     && f5.getOk().get(0).contains(success) && f6.getOk().get(0).contains(success)
                     && f7.getOk().get(0).contains(success) && f8.getOk().get(0).contains(success)
@@ -396,9 +445,9 @@ public class Device {
             }
         }
 
-        System.out.println("activities:");
+        Log.println("activities:");
         for (String activity : activities) {
-            System.out.println("\t" + activity);
+            Log.println("\t" + activity);
         }
         return activities;
     }
