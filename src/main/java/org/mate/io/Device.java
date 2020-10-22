@@ -394,7 +394,6 @@ public class Device {
         List<String> activities = new ArrayList<>();
 
         String apkPath = appsDir + File.separator + packageName + ".apk";
-        Log.println("APK PATH: " + apkPath);
 
         var lines = ProcessRunner.runProcess(androidEnvironment.getAaptExecutable(),
                 "dump",

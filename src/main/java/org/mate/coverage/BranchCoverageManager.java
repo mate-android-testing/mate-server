@@ -74,14 +74,12 @@ public final class BranchCoverageManager {
      * @param chromosomes A list of chromosomes separated by '+'.
      * @return Returns the (combined) coverage for a set of chromosomes.
      */
-    public static Message getCombinedCoverage(String packageName, String chromosomes) {
+    public static Message getCombinedCoverage(Path appsDir, String packageName, String chromosomes) {
 
         // TODO: check whether it is necessary to pull again the last traces file
 
         // get list of traces file
-        String workingDir = System.getProperty("user.dir");
-        File appsDir = new File(workingDir, "apps");
-        File appDir = new File(appsDir, packageName);
+        File appDir = new File(appsDir.toFile(), packageName);
         File tracesDir = new File(appDir, "traces");
 
         // the branches.txt should be located within the app directory

@@ -72,7 +72,7 @@ public class Server {
         port = 12345;
         cleanup = true;
         resultsPath = Path.of("results");
-        appsDir = Path.of(System.getProperty("user.dir"));
+        appsDir = Path.of("apps");
         logger = new Log();
         logger.doNotLog();
         Log.registerLogger(logger);
@@ -111,7 +111,7 @@ public class Server {
         router.add("/emulator/interaction", new EmulatorInteractionEndpoint(androidEnvironment));
         router.add("/android", new AndroidEndpoint(androidEnvironment));
         router.add("/accessibility",new AccessibilityEndpoint(imageHandler));
-        router.add("/coverage", new CoverageEndpoint(androidEnvironment, resultsPath));
+        router.add("/coverage", new CoverageEndpoint(androidEnvironment, resultsPath, appsDir));
         router.add("/fuzzer", new FuzzerEndpoint(androidEnvironment));
         router.add("/utility", new UtilityEndpoint(androidEnvironment));
 

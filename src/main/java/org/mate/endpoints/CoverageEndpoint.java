@@ -31,10 +31,12 @@ import java.util.stream.Collectors;
 public class CoverageEndpoint implements Endpoint {
     private final AndroidEnvironment androidEnvironment;
     private final Path resultsPath;
+    private final Path appsDir;
 
-    public CoverageEndpoint(AndroidEnvironment androidEnvironment, Path resultsPath) {
+    public CoverageEndpoint(AndroidEnvironment androidEnvironment, Path resultsPath, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
         this.resultsPath = resultsPath;
+        this.appsDir = appsDir;
     }
 
     @Override
@@ -105,7 +107,7 @@ public class CoverageEndpoint implements Endpoint {
     private Message getCombinedBranchCoverage(Message request) {
         String packageName = request.getParameter("packageName");
         String testcaseIds = request.getParameter("chromosomes");
-        return BranchCoverageManager.getCombinedCoverage(packageName, testcaseIds);
+        return BranchCoverageManager.getCombinedCoverage(appsDir, packageName, testcaseIds);
     }
 
     private Message storeBranchCoverageData(Message request) {
