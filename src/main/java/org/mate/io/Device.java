@@ -8,6 +8,9 @@ import org.mate.util.Log;
 import org.mate.util.Result;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Hashtable;
@@ -240,6 +243,7 @@ public class Device {
      * otherwise {@code false}.
      */
     // TODO: can be removed and replaced with pullTraceFile(String fileName)
+    @Deprecated
     public boolean pullTraceFile() {
 
         // traces are stored on the sd card (external storage)
@@ -270,6 +274,21 @@ public class Device {
     }
 
     /**
+     * Checks whether writing the collected traces onto the external storage has been completed.
+     * This is done by checking if an info.txt file exists in the app-internal storage.
+     *
+     * @return Returns {@code true} if the writing process has been finished,
+     *          otherwise {@code false}.
+     */
+    private boolean completedWritingTraces() {
+        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID,
+                "shell", "run-as", packageName, "ls").getOk();
+        Log.println("Files: " + files);
+
+        return files.stream().anyMatch(str -> str.trim().equals("info.txt"));
+    }
+
+    /**
      * Pulls the traces.txt file from the external storage (sd card) if present.
      * The file is stored in an app specific location.
      *
@@ -285,6 +304,27 @@ public class Device {
         // traces are stored on the sd card (external storage)
         String tracesDir = "storage/emulated/0";
 
+        // check whether writing traces has been completed yet
+        while(!completedWritingTraces()) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Log.println("Waiting for info.txt failed!");
+                throw new IllegalStateException(e);
+            }
+        }
+
+        // get number of traces from info.txt
+        // TODO: check leading slash on Windows!
+        Result<List<String>, String> content = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "shell", "cat", "/data/data/" + packageName + "/info.txt");
+
+        if (content.isErr()) {
+            Log.println("Couldn't read info.txt " + content.getErr());
+            throw new IllegalStateException("Couldn't read info.txt from emulator!");
+        }
+
+        // request files from external storage (sd card)
         Result<List<String>, String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
                 "-s", deviceID, "shell", "ls", tracesDir);
 
@@ -324,10 +364,43 @@ public class Device {
                 "-s", deviceID, "pull", tracesDir + "/traces.txt", String.valueOf(tracesFile));
 
         if (pullOperation.isErr()) {
+            Log.println("Couldn't pull traces.tx from emulator " + pullOperation.getErr());
             throw new IllegalStateException("Couldn't pull traces.txt file from emulator's external storage!");
         } else {
             Log.println("Pull Operation: " + pullOperation.getOk());
         }
+
+        // verify that the traces.txt contains the number of traces according to info.txt
+        try {
+            long numberOfLines = Files.lines(tracesFile.toPath()).count();
+            Log.println("Number of traces according to traces.txt: " + numberOfLines);
+
+            int numberOfTraces = Integer.parseInt(content.getOk().get(0));
+            Log.println("Number of traces according to info.txt: " + numberOfTraces);
+
+            // compare traces.txt with info.txt
+            if (numberOfTraces != numberOfLines) {
+                Log.println("Corrupted traces/info.txt file!");
+                throw new IllegalStateException("Corrupted traces/info.txt file!");
+            }
+        } catch (IOException e) {
+            Log.println("Couldn't count lines in traces.txt");
+            throw new UncheckedIOException(e);
+        }
+
+        // remove trace file from emulator
+        var removeTraceFileOp = ProcessRunner.runProcess(
+                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                "rm", "-f", tracesDir + "/traces.txt");
+
+        Log.println("Removal of trace file succeeded: " + removeTraceFileOp.isOk());
+
+        // remove info file from emulator
+        var removeInfoFileOp = ProcessRunner.runProcess(
+                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                "rm", "-f", "data/data/" + packageName + "/info.txt");
+
+        Log.println("Removal of info file succeeded: " + removeInfoFileOp.isOk());
 
         return tracesFile;
     }
