@@ -1,14 +1,17 @@
 package org.mate.io;
 
-import org.apache.commons.io.FileUtils;
-import org.mate.pdf.Report;
 import org.mate.Server;
 import org.mate.accessibility.ImageHandler;
+import org.mate.pdf.Report;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
 import org.mate.util.Result;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
@@ -25,6 +28,9 @@ public class Device {
     private boolean busy;
     private int APIVersion;
     private String currentScreenShotLocation;
+
+    // defines where the apps, in particular the APKs are located
+    public static Path appsDir;
 
     public Device(String deviceID, AndroidEnvironment androidEnvironment) {
         this.deviceID = deviceID;
@@ -77,6 +83,53 @@ public class Device {
             return Integer.valueOf(result.get(0));
         }
         return 23;
+    }
+
+    /**
+     * Fetches a serialized test case from the internal storage.
+     * Afterwards, the test case file is erased from the emulator.
+     *
+     * @param testCaseDir The test case directory on the emulator.
+     * @param testCase The name of the test case file.
+     * @return Returns {@code true} if the test case file could be fetched,
+     *          otherwise {@code false} is returned.
+     */
+    public boolean fetchTestCase(String testCaseDir, String testCase) {
+
+        // TODO: check whether on Windows the leading slash needs to be removed (it seems as it is not necessary)
+
+        // retrieve test cases inside test case directory
+        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", testCaseDir).getOk();
+
+        // check whether the test case file exists
+        if (!files.stream().anyMatch(str -> str.trim().equals(testCase))) {
+            return false;
+        }
+
+        File appDir = new File(appsDir.toFile(), packageName);
+        File testCasesDir = new File(appDir, "test-cases");
+        File testCaseFile = new File(testCasesDir, testCase);
+
+        // create local test-cases directory if not present
+        if (!testCasesDir.exists()) {
+            Log.println("Creating test-cases directory: " + testCasesDir.mkdirs());
+        }
+
+        // fetch the test case file
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull",
+                testCaseDir + "/" + testCase, String.valueOf(testCaseFile));
+
+        if (!testCaseFile.exists()) {
+            Log.println("Pulling test case file " + testCaseFile + " failed!");
+        }
+
+        // remove test case file from emulator
+        var removeOp = ProcessRunner.runProcess(
+                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                "rm", "-f", testCaseDir + "/" + testCase);
+
+        Log.println("Removal of test case file succeeded: " + removeOp.isOk());
+        return testCaseFile.exists();
     }
 
     /**
@@ -151,7 +204,6 @@ public class Device {
      */
     public boolean pushDummyFiles() {
 
-        var root = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "root");
         var f1 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestBmp.bmp", "sdcard/mateTestBmp.bmp");
         var f2 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestGif.gif", "sdcard/mateTestGif.gif");
         var f3 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestJpg.jpg", "sdcard/mateTestJpg.jpg");
@@ -167,14 +219,13 @@ public class Device {
         var f13 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestOgg.ogg", "sdcard/mateTestOgg.ogg");
         var f14 =ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestMp3.mp3", "sdcard/mateTestMp3.mp3");
 
-        if (root.isErr() || f1.isErr() || f2.isErr() || f3.isErr() || f4.isErr() || f5.isErr() || f6.isErr()
+        if (f1.isErr() || f2.isErr() || f3.isErr() || f4.isErr() || f5.isErr() || f6.isErr()
                 || f7.isErr() || f8.isErr() || f9.isErr() || f10.isErr() || f11.isErr() || f12.isErr()
                 || f13.isErr() || f14.isErr()) {
             return false;
         } else {
-            final String success = "1 file pushed.";
-            return root.getOk().isEmpty()
-                    && f1.getOk().get(0).contains(success) && f2.getOk().get(0).contains(success)
+            final String success = "1 file pushed";
+            return f1.getOk().get(0).contains(success) && f2.getOk().get(0).contains(success)
                     && f3.getOk().get(0).contains(success) && f4.getOk().get(0).contains(success)
                     && f5.getOk().get(0).contains(success) && f6.getOk().get(0).contains(success)
                     && f7.getOk().get(0).contains(success) && f8.getOk().get(0).contains(success)
@@ -192,6 +243,7 @@ public class Device {
      * otherwise {@code false}.
      */
     // TODO: can be removed and replaced with pullTraceFile(String fileName)
+    @Deprecated
     public boolean pullTraceFile() {
 
         // traces are stored on the sd card (external storage)
@@ -205,12 +257,35 @@ public class Device {
             return false;
         }
 
-        // use the working directory (MATE-COMMANDER HOME) as output directory for trace file
-        String workingDir = System.getProperty("user.dir");
+        File appDir = new File(appsDir.toFile(), packageName);
+        File baseTracesDir = new File(appDir, "traces");
 
-        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull", tracesDir + "/traces.txt", workingDir + File.separator + "traces.txt");
+        // create base traces directory if not yet present
+        if (!baseTracesDir.exists()) {
+            Log.println("Creating base traces directory: " + baseTracesDir.mkdirs());
+        }
+
+        File tracesFile = new File(baseTracesDir, "traces.txt");
+
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull",
+                tracesDir + "/traces.txt", String.valueOf(tracesFile));
 
         return true;
+    }
+
+    /**
+     * Checks whether writing the collected traces onto the external storage has been completed.
+     * This is done by checking if an info.txt file exists in the app-internal storage.
+     *
+     * @return Returns {@code true} if the writing process has been finished,
+     *          otherwise {@code false}.
+     */
+    private boolean completedWritingTraces() {
+        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID,
+                "shell", "run-as", packageName, "ls").getOk();
+        Log.println("Files: " + files);
+
+        return files.stream().anyMatch(str -> str.trim().equals("info.txt"));
     }
 
     /**
@@ -233,6 +308,27 @@ public class Device {
         // traces are stored on the sd card (external storage)
         String tracesDir = "storage/emulated/0";
 
+        // check whether writing traces has been completed yet
+        while(!completedWritingTraces()) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Log.println("Waiting for info.txt failed!");
+                throw new IllegalStateException(e);
+            }
+        }
+
+        // get number of traces from info.txt
+        // TODO: check leading slash on Windows!
+        Result<List<String>, String> content = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "shell", "cat", "/data/data/" + packageName + "/info.txt");
+
+        if (content.isErr()) {
+            Log.println("Couldn't read info.txt " + content.getErr());
+            throw new IllegalStateException("Couldn't read info.txt from emulator!");
+        }
+
+        // request files from external storage (sd card)
         Result<List<String>, String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
                 "-s", deviceID, "shell", "ls", tracesDir);
 
@@ -245,9 +341,7 @@ public class Device {
             throw new IllegalStateException("Couldn't locate the traces.txt file!");
         }
 
-        // use the working directory (MATE-COMMANDER HOME) as output directory for trace file
-        String workingDir = System.getProperty("user.dir");
-        File appDir = new File(workingDir, packageName);
+        File appDir = new File(appsDir.toFile(), packageName);
         File baseTracesDir = new File(appDir, "traces");
 
         // create base traces directory if not yet present
@@ -274,10 +368,43 @@ public class Device {
                 "-s", deviceID, "pull", tracesDir + "/traces.txt", String.valueOf(tracesFile));
 
         if (pullOperation.isErr()) {
+            Log.println("Couldn't pull traces.tx from emulator " + pullOperation.getErr());
             throw new IllegalStateException("Couldn't pull traces.txt file from emulator's external storage!");
         } else {
             Log.println("Pull Operation: " + pullOperation.getOk());
         }
+
+        // verify that the traces.txt contains the number of traces according to info.txt
+        try {
+            long numberOfLines = Files.lines(tracesFile.toPath()).count();
+            Log.println("Number of traces according to traces.txt: " + numberOfLines);
+
+            int numberOfTraces = Integer.parseInt(content.getOk().get(0));
+            Log.println("Number of traces according to info.txt: " + numberOfTraces);
+
+            // compare traces.txt with info.txt
+            if (numberOfTraces > numberOfLines) {
+                // FIXME: volatile variable on Android seems to fail, see Tracer.java
+                throw new IllegalStateException("Corrupted traces.txt file!");
+            }
+        } catch (IOException e) {
+            Log.println("Couldn't count lines in traces.txt");
+            throw new UncheckedIOException(e);
+        }
+
+        // remove trace file from emulator
+        var removeTraceFileOp = ProcessRunner.runProcess(
+                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                "rm", "-f", tracesDir + "/traces.txt");
+
+        Log.println("Removal of trace file succeeded: " + removeTraceFileOp.isOk());
+
+        // remove info file from emulator
+        var removeInfoFileOp = ProcessRunner.runProcess(
+                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                "rm", "-f", "data/data/" + packageName + "/info.txt");
+
+        Log.println("Removal of info file succeeded: " + removeInfoFileOp.isOk());
 
         return tracesFile;
     }
@@ -290,7 +417,7 @@ public class Device {
             if (ProcessRunner.isWin) {
                 cmd = "$focused = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[5]";
-                System.out.println(cmd);
+                Log.println(cmd);
             } else {
                 cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
             }
@@ -300,7 +427,7 @@ public class Device {
             if (ProcessRunner.isWin) {
                 cmd = "$focused = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[7]";
-                System.out.println(cmd);
+                Log.println(cmd);
             } else {
                 cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
             }
@@ -319,7 +446,7 @@ public class Device {
                 cmd = "$activity = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string \"realActivity\" ; $focused = $activity[1] ; $final = $focused -split '=' ; echo $final[1]";
                 // Alternatively use: "$focused.Line.split(=)[1] \"";
-                System.out.println(cmd);
+                Log.println(cmd);
             } else {
                 cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
             }
@@ -333,18 +460,22 @@ public class Device {
         }
         if (result != null && result.size() > 0)
             response = result.get(0);
-        System.out.println("activity: " + response);
+        Log.println("activity: " + response);
 
         return response;
     }
 
     public List<String> getActivities() {
+
         String cmd = "";
         List<String> activities = new ArrayList<>();
+
+        String apkPath = appsDir + File.separator + packageName + ".apk";
+
         var lines = ProcessRunner.runProcess(androidEnvironment.getAaptExecutable(),
                 "dump",
                 "xmltree",
-                packageName + ".apk",
+                apkPath,
                 "AndroidManifest.xml").getOk();
         var foundPackage = false;
         var foundAct = false;
@@ -385,9 +516,9 @@ public class Device {
             }
         }
 
-        System.out.println("activities:");
+        Log.println("activities:");
         for (String activity : activities) {
-            System.out.println("\t" + activity);
+            Log.println("\t" + activity);
         }
         return activities;
     }
@@ -415,7 +546,7 @@ public class Device {
     public static void listActiveDevices() {
         for (String devID : devices.keySet()) {
             Device device = devices.get(devID);
-            System.out.println(device.getDeviceID() + " - " + device.isBusy() + ": " + device.getPackageName());
+            Log.println(device.getDeviceID() + " - " + device.isBusy() + ": " + device.getPackageName());
         }
     }
 

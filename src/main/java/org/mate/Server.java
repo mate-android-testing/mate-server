@@ -33,6 +33,9 @@ public class Server {
     private final Log logger;
     private CloseEndpoint closeEndpoint;
 
+    // path to the apps directory
+    private Path appsDir;
+
     public static String emuName = null;
     private AndroidEnvironment androidEnvironment;
     private ImageHandler imageHandler;
@@ -69,6 +72,7 @@ public class Server {
         port = 12345;
         cleanup = true;
         resultsPath = Path.of("results");
+        appsDir = Path.of("apps");
         logger = new Log();
         logger.doNotLog();
         Log.registerLogger(logger);
@@ -90,6 +94,7 @@ public class Server {
         port = Optional.ofNullable(properties.getProperty("port")).map(Integer::valueOf).orElse(port);
         cleanup = Optional.ofNullable(properties.getProperty("cleanup")).map(Boolean::valueOf).orElse(cleanup);
         resultsPath = Optional.ofNullable(properties.getProperty("results_path")).map(Paths::get).orElse(resultsPath);
+        appsDir = Optional.ofNullable(properties.getProperty("apps_dir")).map(Paths::get).orElse(appsDir);
     }
 
     /**
@@ -106,8 +111,9 @@ public class Server {
         router.add("/emulator/interaction", new EmulatorInteractionEndpoint(androidEnvironment));
         router.add("/android", new AndroidEndpoint(androidEnvironment));
         router.add("/accessibility",new AccessibilityEndpoint(imageHandler));
-        router.add("/coverage", new CoverageEndpoint(androidEnvironment, resultsPath));
+        router.add("/coverage", new CoverageEndpoint(androidEnvironment, resultsPath, appsDir));
         router.add("/fuzzer", new FuzzerEndpoint(androidEnvironment));
+        router.add("/utility", new UtilityEndpoint(androidEnvironment));
         router.add("/graph", new GraphEndpoint(androidEnvironment));
 
         cleanup();
@@ -149,6 +155,7 @@ public class Server {
             Socket client;
 
             Device.loadActiveDevices(androidEnvironment);
+            Device.appsDir = appsDir;
 
             while (true) {
                 closeEndpoint.reset();

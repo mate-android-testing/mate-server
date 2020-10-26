@@ -1,6 +1,5 @@
 package org.mate.coverage;
 
-import com.google.common.collect.Lists;
 import org.apache.commons.io.FileUtils;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
@@ -42,19 +41,14 @@ public final class BranchCoverageManager {
             throw new IllegalStateException("Couldn't grant runtime permissions!");
         }
 
-        // run adb as root in order to fire up broadcast
-        var rootOperation = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "root");
-
-        if (rootOperation.isErr()) {
-            throw new IllegalStateException("Couldn't run ADB as root!");
-        }
-
         // send broadcast in order to write out traces
         var broadcastOperation = ProcessRunner.runProcess(
                 androidEnvironment.getAdbExecutable(),
                 "-s",
                 deviceID,
                 "shell",
+                "su",
+                "root",
                 "am",
                 "broadcast",
                 "-a",
@@ -80,16 +74,16 @@ public final class BranchCoverageManager {
      * @param chromosomes A list of chromosomes separated by '+'.
      * @return Returns the (combined) coverage for a set of chromosomes.
      */
-    public static Message getCombinedCoverage(String packageName, String chromosomes) {
+    public static Message getCombinedCoverage(Path appsDir, String packageName, String chromosomes) {
 
         // TODO: check whether it is necessary to pull again the last traces file
 
-        File branchesFile = new File(System.getProperty("user.dir"), "branches.txt");
-
         // get list of traces file
-        String workingDir = System.getProperty("user.dir");
-        File appDir = new File(workingDir, packageName);
+        File appDir = new File(appsDir.toFile(), packageName);
         File tracesDir = new File(appDir, "traces");
+
+        // the branches.txt should be located within the app directory
+        File branchesFile = new File(appDir, "branches.txt");
 
         List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
 
@@ -193,19 +187,26 @@ public final class BranchCoverageManager {
             tracesReader.close();
         }
 
-        double branchCoverage = 0d;
-
         // compute branch coverage per class
         for (String key : branches.keySet()) {
 
             float totalBranches = branches.get(key);
-            float coveredBranches = visitedBranches.get(key);
-            branchCoverage += coveredBranches / totalBranches * 100;
+            float coveredBranches = visitedBranches.getOrDefault(key, 0);
 
-            Log.println("We have for the class " + key
-                    + " a branch coverage of: " + coveredBranches / totalBranches * 100 + "%");
+            // only log classes with coverage > 0
+            if (coveredBranches != 0) {
+                Log.println("We have for the class " + key
+                        + " a branch coverage of: " + coveredBranches / totalBranches * 100 + "%");
+            }
         }
 
+        // compute total branch coverage
+        double branchCoverage = 0d;
+        double totalVisitedBranches = visitedBranches.values().stream().reduce(0, Integer::sum);
+        double totalBranches = branches.values().stream().reduce(0, Integer::sum);
+        branchCoverage = totalVisitedBranches / totalBranches * 100;
+
+        Log.println("Total branch coverage: " + branchCoverage + "%");
         return branchCoverage;
     }
 
