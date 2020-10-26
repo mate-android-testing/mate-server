@@ -379,9 +379,9 @@ public class Device {
             Log.println("Number of traces according to info.txt: " + numberOfTraces);
 
             // compare traces.txt with info.txt
-            if (numberOfTraces != numberOfLines) {
-                Log.println("Corrupted traces/info.txt file!");
-                throw new IllegalStateException("Corrupted traces/info.txt file!");
+            if (numberOfTraces > numberOfLines) {
+                // FIXME: volatile variable on Android seems to fail, see Tracer.java
+                throw new IllegalStateException("Corrupted traces.txt file!");
             }
         } catch (IOException e) {
             Log.println("Couldn't count lines in traces.txt");
