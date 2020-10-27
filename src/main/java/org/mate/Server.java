@@ -114,7 +114,7 @@ public class Server {
         router.add("/coverage", new CoverageEndpoint(androidEnvironment, resultsPath, appsDir));
         router.add("/fuzzer", new FuzzerEndpoint(androidEnvironment));
         router.add("/utility", new UtilityEndpoint(androidEnvironment));
-        router.add("/graph", new GraphEndpoint(androidEnvironment));
+        router.add("/graph", new GraphEndpoint(androidEnvironment, appsDir));
 
         cleanup();
         createFolders();

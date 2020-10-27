@@ -1,5 +1,6 @@
 package org.mate.endpoints;
 
+import org.apache.commons.io.FileUtils;
 import org.mate.graphs.Graph;
 import org.mate.graphs.GraphType;
 import org.mate.graphs.InterCFG;
@@ -9,8 +10,15 @@ import org.mate.io.ProcessRunner;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
+import org.mate.util.Log;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * This endpoint offers an interface to operate with graphs in the background.
@@ -22,9 +30,12 @@ public class GraphEndpoint implements Endpoint {
 
     private final AndroidEnvironment androidEnvironment;
     private Graph graph;
+    private final Path appsDir;
 
-    public GraphEndpoint(AndroidEnvironment androidEnvironment) {
+
+    public GraphEndpoint(AndroidEnvironment androidEnvironment, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
+        this.appsDir = appsDir;
     }
 
     @Override
@@ -34,6 +45,8 @@ public class GraphEndpoint implements Endpoint {
             return initGraph(request);
         } else if (request.getSubject().startsWith("/graph/get_branches")) {
             return getBranches(request);
+        } else if (request.getSubject().startsWith("/graph/store")) {
+            return storeBranchDistanceData(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
             return getBranchDistance(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector")) {
@@ -97,12 +110,12 @@ public class GraphEndpoint implements Endpoint {
                 .build();
     }
 
-    private Message getBranchDistance(Message request) {
+    private Message storeBranchDistanceData(Message request) {
 
         String deviceID = request.getParameter("deviceId");
+        // TODO: use packageName of device
         String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
-        // TODO: check whether we need to separate traces like in the case of coverage
         String entity = request.getParameter("entity");
 
         // grant read/write permission on external storage
@@ -111,13 +124,6 @@ public class GraphEndpoint implements Endpoint {
 
         if (!granted) {
             throw new IllegalStateException("Couldn't grant runtime permissions!");
-        }
-
-        // run adb as root in order to fire up broadcast
-        var rootOperation = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "root");
-
-        if (rootOperation.isErr()) {
-            throw new IllegalStateException("Couldn't run ADB as root!");
         }
 
         // send broadcast in order to write out traces
@@ -131,7 +137,7 @@ public class GraphEndpoint implements Endpoint {
                 "-a",
                 "STORE_TRACES",
                 "-n",
-                packageName + "/de.uni_passau.fim.auermich.branchdistance.tracer.Tracer",
+                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer",
                 "--es",
                 "packageName",
                 packageName);
@@ -140,8 +146,46 @@ public class GraphEndpoint implements Endpoint {
             throw new IllegalStateException("Couldn't send broadcast!");
         }
 
-        // fetch the traces
+        // fetch the traces from emulator
         device.pullTraceFile(chromosome, entity);
+        return new Message("/graph/store");
+    }
+
+    private Message getBranchDistance(Message request) {
+
+        String deviceID = request.getParameter("deviceId");
+        String chromosomes = request.getParameter("chromosomes");
+
+        Device device = Device.getDevice(deviceID);
+
+        // get list of traces file
+        File appDir = new File(appsDir.toFile(), device.getPackageName());
+        File tracesDir = new File(appDir, "traces");
+
+        // the branches.txt should be located within the app directory
+        File branchesFile = new File(appDir, "branches.txt");
+
+        // collect the relevant traces files
+        List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
+
+        if (chromosomes != null) {
+
+            // only consider the traces files described by the chromosome ids
+            tracesFiles = new ArrayList<>();
+
+            for (String chromosome : chromosomes.split("\\+")) {
+                try {
+                    tracesFiles.addAll(
+                            Files.walk(tracesDir.toPath().resolve(chromosome))
+                                    .filter(Files::isRegularFile)
+                                    .map(Path::toFile)
+                                    .collect(Collectors.toList()));
+                } catch (IOException e) {
+                    Log.printError("Couldn't retrieve traces files!");
+                    throw new IllegalArgumentException(e);
+                }
+            }
+        }
 
         // TODO: convert traces to nodes in the graph
 

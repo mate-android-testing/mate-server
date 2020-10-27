@@ -301,10 +301,6 @@ public class Device {
 
         Log.println("Entity: " + entity);
 
-        // TODO: check if 'info.txt' has been created (writing of traces has been completed!)
-        //  ensure that those 'info.txt' files don't overwrite each other
-        //  adjust Tracer (both branch coverage + branch distance) accordingly
-
         // traces are stored on the sd card (external storage)
         String tracesDir = "storage/emulated/0";
 

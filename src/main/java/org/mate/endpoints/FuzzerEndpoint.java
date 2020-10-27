@@ -43,6 +43,7 @@ public class FuzzerEndpoint implements Endpoint {
     private Message executeSystemEvent(Message request) {
 
         String deviceID = request.getParameter("deviceId");
+        // TODO: use packageName of device
         String packageName = request.getParameter("packageName");
         String receiver = request.getParameter("receiver");
         String action = request.getParameter("action");
@@ -67,6 +68,7 @@ public class FuzzerEndpoint implements Endpoint {
     private Message grantRuntimePermissions(Message request) {
 
         String deviceID = request.getParameter("deviceId");
+        // TODO: use packageName of device
         String packageName = request.getParameter("packageName");
 
         Device device = Device.devices.get(deviceID);
