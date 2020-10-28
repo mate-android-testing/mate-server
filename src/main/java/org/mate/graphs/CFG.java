@@ -86,7 +86,7 @@ public abstract class CFG implements Graph {
 
                 for (Vertex entry : entries) {
                     // exclude dummy CFGs solely consisting of entry and exit vertex
-                    if (!entry.isReturnVertex()) {
+                    if (!entry.isExitVertex()) {
                         Statement statement = entry.getStatement();
 
                         // TODO: handle basic statements
@@ -100,7 +100,31 @@ public abstract class CFG implements Graph {
             }
         }
 
-        // TODO: handle exit vertices
+        // handle exit vertices
+        Set<Vertex> exitVertices = baseCFG.getVertices().stream().filter(Vertex::isExitVertex).collect(Collectors.toSet());
+
+        for (Vertex exitVertex : exitVertices) {
+            // exclude global exit vertex
+            if (!exitVertex.equals(baseCFG.getExit())) {
+
+                Set<Vertex> exits = baseCFG.getIncomingEdges(exitVertex).stream()
+                        .map(Edge::getSource).collect(Collectors.toSet());
+
+                for (Vertex exit : exits) {
+                    // exclude dummy CFGs solely consisting of entry and exit vertex
+                    if (!exit.isEntryVertex()) {
+                        Statement statement = exit.getStatement();
+
+                        // TODO: handle basic statements
+                        if (statement instanceof BlockStatement) {
+                            // each statement within a block statement is a basic statement
+                            BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
+                            vertexMap.put(exit.getMethod() + "->exit->" + basicStatement.getInstructionIndex(), exit);
+                        }
+                    }
+                }
+            }
+        }
 
 
         // TODO: handle branch + if stmt vertices
