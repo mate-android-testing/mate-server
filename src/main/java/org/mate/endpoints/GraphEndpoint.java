@@ -262,10 +262,19 @@ public class GraphEndpoint implements Endpoint {
         Log.println("Computing approach level took: " + (end-start) + " seconds");
 
         // TODO: get minimal distance (if distance == 0), then return branch distance
+        String branchDistance;
+
+        // TODO: normalise distance in the range [0,1] where 1 is best
+        if (minDistance.get() == Integer.MAX_VALUE) {
+            // branch not reachable by execution path
+            branchDistance = String.valueOf(0);
+        } else {
+            branchDistance = String.valueOf(1 - ((double) minDistance.get() / (minDistance.get() + 1)));
+        }
 
         // TODO: return message wrapping branch distance value
         return new Message.MessageBuilder("/graph/get_branches")
-                .withParameter("branch_distance", String.valueOf(minDistance.get()))
+                .withParameter("branch_distance", branchDistance)
                 .build();
     }
 
