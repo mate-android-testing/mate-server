@@ -36,7 +36,6 @@ public class GraphEndpoint implements Endpoint {
     private Graph graph;
     private final Path appsDir;
 
-
     public GraphEndpoint(AndroidEnvironment androidEnvironment, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
         this.appsDir = appsDir;
@@ -248,8 +247,6 @@ public class GraphEndpoint implements Endpoint {
         AtomicInteger minDistance = new AtomicInteger(Integer.MAX_VALUE);
 
         visitedVertices.parallelStream().forEach(visitedVertex -> {
-
-            // TODO: introduce cache for already computed distances
 
             int distance= graph.getDistance(visitedVertex);
 

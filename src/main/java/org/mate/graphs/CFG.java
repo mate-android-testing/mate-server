@@ -8,10 +8,10 @@ import de.uni_passau.fim.auermich.statement.BlockStatement;
 import de.uni_passau.fim.auermich.statement.Statement;
 import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
-import org.jgrapht.alg.shortestpath.BidirectionalDijkstraShortestPath;
 import org.mate.util.Log;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public abstract class CFG implements Graph {
@@ -34,6 +34,9 @@ public abstract class CFG implements Graph {
      * A look up of single vertices is quite expensive and this map should speed up the mapping process.
      */
     private final Map<String, Vertex> vertexMap;
+
+    // cache already computed distances to the target vertex
+    private final Map<Vertex, Integer> cachedDistances = new ConcurrentHashMap<>();
 
     /**
      * Constructs a wrapper for a given control-flow graph.
@@ -169,10 +172,21 @@ public abstract class CFG implements Graph {
 
     @Override
     public int getDistance(Vertex source) {
+
+        if (cachedDistances.containsKey(source)) {
+            return cachedDistances.get(source);
+        }
+
         // TODO: adjust path search algorithm (dijkstra, bfs, ...)
         GraphPath<Vertex, Edge> path = dijkstra.getPath(source, target.get(0));
+
         // a negative path length indicates that there is no path between the given vertices
-        return path != null ? path.getLength() : -1;
+        int distance = path != null ? path.getLength() : -1;
+
+        // update cache
+        cachedDistances.put(source, distance);
+
+        return distance;
     }
 
     @Override
