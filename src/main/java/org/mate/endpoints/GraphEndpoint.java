@@ -249,6 +249,8 @@ public class GraphEndpoint implements Endpoint {
 
         visitedVertices.parallelStream().forEach(visitedVertex -> {
 
+            // TODO: introduce cache for already computed distances
+
             int distance= graph.getDistance(visitedVertex);
 
             if (distance < minDistance.get() && distance != -1) {

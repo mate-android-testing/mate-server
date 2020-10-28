@@ -126,8 +126,34 @@ public abstract class CFG implements Graph {
             }
         }
 
+        // handle branch + if stmt vertices
+        for (Vertex branchVertex : branchVertices) {
 
-        // TODO: handle branch + if stmt vertices
+            // a branch can potentially have multiple predecessors (shared branch)
+            Set<Vertex> ifVertices = baseCFG.getIncomingEdges(branchVertex).stream()
+                    .map(Edge::getSource).collect(Collectors.toSet());
+
+            for (Vertex ifVertex : ifVertices) {
+
+                Statement statement = ifVertex.getStatement();
+
+                // TODO: handle basic statements
+                if (statement instanceof BlockStatement) {
+                    // each statement within a block statement is a basic statement
+                    BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
+                    vertexMap.put(ifVertex.getMethod() + "->if->" + basicStatement.getInstructionIndex(), ifVertex);
+                }
+            }
+
+            Statement statement = branchVertex.getStatement();
+
+            // TODO: handle basic statements
+            if (statement instanceof BlockStatement) {
+                // each statement within a block statement is a basic statement
+                BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
+                vertexMap.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
+            }
+        }
 
         long end = System.currentTimeMillis();
         Log.println("VertexMap construction took: " + (end-start) + " seconds");
