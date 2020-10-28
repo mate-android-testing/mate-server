@@ -1,5 +1,6 @@
 package org.mate.endpoints;
 
+import de.uni_passau.fim.auermich.graphs.Vertex;
 import org.apache.commons.io.FileUtils;
 import org.mate.graphs.Graph;
 import org.mate.graphs.GraphType;
@@ -14,11 +15,14 @@ import org.mate.util.Log;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * This endpoint offers an interface to operate with graphs in the background.
@@ -118,6 +122,10 @@ public class GraphEndpoint implements Endpoint {
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
 
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
         // grant read/write permission on external storage
         Device device = Device.getDevice(deviceID);
         boolean granted = device.grantPermissions(packageName);
@@ -156,6 +164,10 @@ public class GraphEndpoint implements Endpoint {
         String deviceID = request.getParameter("deviceId");
         String chromosomes = request.getParameter("chromosomes");
 
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
         Device device = Device.getDevice(deviceID);
 
         // get list of traces file
@@ -187,14 +199,75 @@ public class GraphEndpoint implements Endpoint {
             }
         }
 
-        // TODO: convert traces to nodes in the graph
+        Log.println("Number of considered traces files: " + tracesFiles.size());
 
-        // TODO: mark the nodes as visited and compute distance (approach level) using dijkstra
+        // read traces from trace file(s)
+        long start = System.currentTimeMillis();
+
+        Set<String> traces = new HashSet<>();
+
+        for (File traceFile : tracesFiles) {
+            try (Stream<String> stream = Files.lines(traceFile.toPath(), StandardCharsets.UTF_8)) {
+                traces.addAll(stream.collect(Collectors.toList()));
+            } catch (IOException e) {
+                Log.println("Reading traces.txt failed!");
+                throw new IllegalStateException(e);
+            }
+        }
+
+        Log.println("Number of collected traces: " + traces.size());
+
+        long end = System.currentTimeMillis();
+
+        Log.println("Reading traces from file(s) took: " + (end - start) + " seconds");
+
+        // we need to mark vertices we visited
+        Set<Vertex> visitedVertices = Collections.newSetFromMap(new ConcurrentHashMap<Vertex, Boolean>());
+
+        // map trace to vertex
+        traces.parallelStream().forEach(traceEntry -> {
+
+            // TODO: should we also mark 'virtual' entry/exit vertices as visited?
+
+            Vertex visitedVertex = graph.lookupVertex(traceEntry);
+
+            if (visitedVertex == null) {
+                // Log.printWarning("Couldn't derive vertex for trace entry: " + traceEntry);
+            } else {
+                visitedVertices.add(visitedVertex);
+            }
+        });
+
+        Log.println("Number of visited vertices: " + visitedVertices.size());
+
+        // TODO: compute minimal approach level
+
+        start = System.currentTimeMillis();
+
+        // the minimal distance between a execution path and a chosen target vertex
+        AtomicInteger minDistance = new AtomicInteger(Integer.MAX_VALUE);
+
+        visitedVertices.parallelStream().forEach(visitedVertex -> {
+
+            int distance= graph.getDistance(visitedVertex);
+
+            if (distance < minDistance.get() && distance != -1) {
+                // found shorter path
+                minDistance.set(distance);
+            }
+        });
+
+        Log.println("Shortest path length: " + minDistance.get());
+
+        end = System.currentTimeMillis();
+        Log.println("Computing approach level took: " + (end-start) + " seconds");
 
         // TODO: get minimal distance (if distance == 0), then return branch distance
 
         // TODO: return message wrapping branch distance value
-        return null;
+        return new Message.MessageBuilder("/graph/get_branches")
+                .withParameter("branch_distance", String.valueOf(minDistance.get()))
+                .build();
     }
 
     private Message getBranchDistanceVector(Message request) {
