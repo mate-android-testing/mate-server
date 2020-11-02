@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -245,14 +246,18 @@ public class GraphEndpoint implements Endpoint {
 
         // the minimal distance between a execution path and a chosen target vertex
         AtomicInteger minDistance = new AtomicInteger(Integer.MAX_VALUE);
+        AtomicReference<Vertex> minDistanceVertex = new AtomicReference<>();
 
         visitedVertices.parallelStream().forEach(visitedVertex -> {
 
-            int distance= graph.getDistance(visitedVertex);
+            int distance = graph.getDistance(visitedVertex);
 
-            if (distance < minDistance.get() && distance != -1) {
-                // found shorter path
-                minDistance.set(distance);
+            synchronized (this) {
+                if (distance < minDistance.get() && distance != -1) {
+                    // found shorter path
+                    minDistanceVertex.set(visitedVertex);
+                    minDistance.set(distance);
+                }
             }
         });
 
@@ -260,6 +265,16 @@ public class GraphEndpoint implements Endpoint {
 
         end = System.currentTimeMillis();
         Log.println("Computing approach level took: " + (end-start) + " seconds");
+
+        /*
+        * The fitness value we are interested is a combination of the heuristics
+        * approach level + branch distance. The branch distance has to be normalized
+        * since the approach level gears the search and is more important.
+        * The branch distance is computed based on the closest shared ancestor of
+        * the visited nodes and the target branch node. By construction, this is
+        * the node with the closest approach level and must be an IF node.
+        *
+         */
 
         // TODO: get minimal distance (if distance == 0), then return branch distance
         String branchDistance;
