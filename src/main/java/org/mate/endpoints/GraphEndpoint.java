@@ -54,10 +54,10 @@ public class GraphEndpoint implements Endpoint {
             return getBranches(request);
         } else if (request.getSubject().startsWith("/graph/store")) {
             return storeBranchDistanceData(request);
-        } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
-            return getBranchDistance(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector")) {
             return getBranchDistanceVector(request);
+        } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
+            return getBranchDistance(request);
         } else {
             throw new IllegalArgumentException("Message request with subject: "
                     + request.getSubject() + " can't be handled by GraphEndPoint!");
@@ -310,7 +310,7 @@ public class GraphEndpoint implements Endpoint {
         Log.println("Branch Distance Vector: " + branchDistanceVector);
 
         return new Message.MessageBuilder("/graph/get_branch_distance_vector")
-                .withParameter("branch_distance_vector", String.join("\n", branchDistanceVector))
+                .withParameter("branch_distance_vector", String.join("\\+", branchDistanceVector))
                 .build();
     }
 
