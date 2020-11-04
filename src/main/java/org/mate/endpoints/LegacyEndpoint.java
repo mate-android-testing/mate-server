@@ -74,9 +74,6 @@ public class LegacyEndpoint implements Endpoint {
         if (cmdStr.startsWith("releaseEmulator"))
             return Device.releaseDevice(cmdStr);
 
-        if (cmdStr.startsWith("getBranches"))
-            return getBranches(cmdStr);
-
         if (cmdStr.startsWith("getBranchDistanceVector"))
             return getBranchDistanceVector(cmdStr);
 
@@ -122,37 +119,6 @@ public class LegacyEndpoint implements Endpoint {
             return "ok";
         }
         return null;
-    }
-
-    /**
-     * Returns the list of branches contained in the CFG,
-     * where each branch is composed of class->method->branchID.
-     *
-     * @param cmdStr The command string.
-     * @return Returns the string representation of the branches.
-     */
-    private String getBranches(String cmdStr) {
-
-        List<String> branchIDs = new LinkedList<>();
-
-        if (graph != null) {
-
-            List<Vertex> branches = graph.getBranches();
-
-            for (Vertex branch : branches) {
-                Integer branchID = null;
-                if (branch.getStatement() instanceof BasicStatement) {
-                    branchID = ((BasicStatement) branch.getStatement()).getInstructionIndex();
-                } else if (branch.getStatement() instanceof BlockStatement) {
-                    branchID = ((BasicStatement) ((BlockStatement) branch.getStatement()).getFirstStatement()).getInstructionIndex();
-                }
-
-                if (branchID != null) {
-                    branchIDs.add(branch.getMethod() + "->" + branchID);
-                }
-            }
-        }
-        return String.join("\n", branchIDs);
     }
 
     /**
@@ -323,150 +289,6 @@ public class LegacyEndpoint implements Endpoint {
             branchDistance = String.valueOf(0);
         } else {
             branchDistance = String.valueOf(1 - ((double) min.get() / (min.get() + 1)));
-        }
-
-        System.out.println("Branch Distance: " + branchDistance);
-
-        /*
-        // update target vertex
-        if (branchDistance.equals("1.0")) {
-            graph.updateCoveredTargetVertices();
-            graph.selectTargetVertex(false);
-        }
-        */
-
-        return branchDistance;
-    }
-
-    /**
-     * Returns the branch distance for a given test case evaluated
-     * against a pre-defined target vertex. That is, we evaluate
-     * a given execution path (sequence of vertices) against a single
-     * pre-defined target vertex.
-     *
-     * @param cmdStr The command string specifying the test case.
-     * @return Returns the branch distance for a given test case.
-     */
-    private String getBranchDistanceSequential(String cmdStr) {
-
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        String testCase = parts[2];
-
-        Device device = Device.devices.get(deviceID);
-
-        // check whether writing traces has been completed yet
-        while(!completedWritingTraces(deviceID)) {
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                System.out.println("sleeping failed!");
-                e.printStackTrace();
-                return null;
-            }
-        }
-
-        String tracesDir = System.getProperty("user.dir");
-        File traces = new File(tracesDir, "traces.txt");
-
-        if (!device.pullTraceFile() || !traces.exists()) {
-            // traces.txt was not accessible/found on emulator
-            System.out.println("Couldn't find traces.txt!");
-            return null;
-        }
-
-        List<String> executionPath = new ArrayList<>();
-
-        long start = System.currentTimeMillis();
-
-        try (Stream<String> stream = Files.lines(traces.toPath(), StandardCharsets.UTF_8)) {
-            executionPath = stream.collect(Collectors.toList());
-        }
-        catch (IOException e) {
-            System.out.println("Reading traces.txt failed!");
-            e.printStackTrace();
-            return null;
-        }
-
-        long end = System.currentTimeMillis();
-        System.out.println("Reading traces from file took: " + (end-start));
-
-        System.out.println("Number of visited vertices: " + executionPath.size());
-
-        // we need to mark vertices we visit
-        Set<Vertex> visitedVertices = new HashSet<>();
-
-        // we need to track covered branch vertices for branch coverage
-        Set<Vertex> coveredBranches = new HashSet<>();
-
-        Map<String, Vertex> vertexMap = graph.getVertexMap();
-
-        // map trace to vertex
-        for (String pathNode : executionPath) {
-
-            int index = pathNode.lastIndexOf("->");
-            String type = pathNode.substring(index+2);
-
-            Vertex visitedVertex = vertexMap.get(pathNode);
-            visitedVertices.add(visitedVertex);
-
-            if (!type.equals("entry") && !type.equals("exit")) {
-                // must be a branch
-                coveredBranches.add(visitedVertex);
-            }
-        }
-
-        // track covered branches for coverage measurement
-        graph.addCoveredBranches(coveredBranches);
-        graph.addCoveredBranches(testCase, coveredBranches);
-
-        // the minimal distance between a execution path and a chosen target vertex
-        int min = Integer.MAX_VALUE;
-
-        // cache already computed branch distances
-        Map<Vertex, Double> branchDistances = graph.getBranchDistances();
-
-        // use bidirectional dijkstra
-        ShortestPathAlgorithm<Vertex, Edge> bfs = graph.getBFS();
-
-        // we have a fixed target vertex
-        Vertex targetVertex = graph.getTargetVertex();
-
-        for (Vertex visitedVertex : visitedVertices) {
-
-            int distance = -1;
-
-            if (branchDistances.containsKey(visitedVertex)) {
-                distance = branchDistances.get(visitedVertex).intValue();
-            } else {
-                GraphPath<Vertex, Edge> path = bfs.getPath(visitedVertex, targetVertex);
-                if (path != null) {
-                    distance = path.getLength();
-                    // update branch distance map
-                    branchDistances.put(visitedVertex, Double.valueOf(distance));
-                } else {
-                    // update branch distance map
-                    branchDistances.put(visitedVertex, Double.valueOf(-1));
-                }
-            }
-
-            // int distance = branchDistances.get(visitedVertex).intValue();
-            if (distance < min && distance != -1) {
-                // found shorter path
-                min = distance;
-                System.out.println("Current min distance: " + distance);
-            }
-        }
-
-        // we maximise branch distance in contradiction to its meaning, that means a branch distance of 1 is the best
-        String branchDistance = null;
-
-        // we need to normalise approach level / branch distance to the range [0,1] where 1 is best
-        if (min == Integer.MAX_VALUE) {
-            // branch not reachable by execution path
-            branchDistance = String.valueOf(0);
-        } else {
-            branchDistance = String.valueOf(1 - ((double) min / (min + 1)));
         }
 
         System.out.println("Branch Distance: " + branchDistance);
