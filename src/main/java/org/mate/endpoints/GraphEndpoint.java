@@ -310,7 +310,7 @@ public class GraphEndpoint implements Endpoint {
         Log.println("Branch Distance Vector: " + branchDistanceVector);
 
         return new Message.MessageBuilder("/graph/get_branch_distance_vector")
-                .withParameter("branch_distance_vector", String.join("\\+", branchDistanceVector))
+                .withParameter("branch_distance_vector", String.join("+", branchDistanceVector))
                 .build();
     }
 
