@@ -8,6 +8,7 @@ import de.uni_passau.fim.auermich.statement.BlockStatement;
 import de.uni_passau.fim.auermich.statement.Statement;
 import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
+import org.mate.graphs.util.VertexPair;
 import org.mate.util.Log;
 
 import java.util.*;
@@ -18,9 +19,6 @@ public abstract class CFG implements Graph {
 
     protected final BaseCFG baseCFG;
     private final String appName;
-
-    // the target is either a single branch or all branches (MIO/MOSA)
-    private List<Vertex> target = new ArrayList<>();
 
     // cache the list of branches (the order must be consistent when requesting the branch distance vector)
     protected final List<Vertex> branchVertices;
@@ -36,7 +34,8 @@ public abstract class CFG implements Graph {
     private final Map<String, Vertex> vertexMap;
 
     // cache already computed distances to the target vertex
-    private final Map<Vertex, Integer> cachedDistances = new ConcurrentHashMap<>();
+    private final Map<VertexPair, Integer> cachedDistances = new ConcurrentHashMap<>();
+
 
     /**
      * Constructs a wrapper for a given control-flow graph.
@@ -49,20 +48,7 @@ public abstract class CFG implements Graph {
         this.appName = appName;
         branchVertices = baseCFG.getBranches();
         dijkstra = baseCFG.initBidirectionalDijkstraAlgorithm();
-        // TODO: init target(s) depending on additional param (boolean singleObjective?)
-        selectTargetVertex();
         vertexMap = initVertexMap();
-    }
-
-    /**
-     * Selects a branch vertex as target in a random fashion.
-     */
-    private void selectTargetVertex() {
-        // TODO: check that selected vertex/vertices is/are reachable, otherwise re-select!
-        Random rand = new Random();
-        Vertex randomBranch = branchVertices.get(rand.nextInt(branchVertices.size()));
-        Log.println("Randomly selected target vertex: " + randomBranch);
-        target.add(randomBranch);
     }
 
     /**
@@ -166,35 +152,37 @@ public abstract class CFG implements Graph {
     }
 
     @Override
+    public List<Vertex> getBranchVertices() {
+        return Collections.unmodifiableList(branchVertices);
+    }
+
+    @Override
     public Vertex lookupVertex(String trace) {
         return vertexMap.get(trace);
     }
 
     @Override
-    public int getDistance(Vertex source) {
+    public int getDistance(Vertex source, Vertex target) {
 
-        if (cachedDistances.containsKey(source)) {
-            return cachedDistances.get(source);
+        assert baseCFG.containsVertex(source)
+                && baseCFG.containsVertex(target) : "source and target vertex must be part of graph!";
+
+        VertexPair distancePair = new VertexPair(source, target);
+
+        if (cachedDistances.containsKey(distancePair)) {
+            return cachedDistances.get(distancePair);
         }
 
         // TODO: adjust path search algorithm (dijkstra, bfs, ...)
-        GraphPath<Vertex, Edge> path = dijkstra.getPath(source, target.get(0));
+        GraphPath<Vertex, Edge> path = dijkstra.getPath(source, target);
 
         // a negative path length indicates that there is no path between the given vertices
         int distance = path != null ? path.getLength() : -1;
 
         // update cache
-        cachedDistances.put(source, distance);
+        cachedDistances.put(distancePair, distance);
 
         return distance;
-    }
-
-    @Override
-    public int getDistance(Vertex source, Vertex target) {
-        // TODO: adjust path search algorithm (dijkstra, bfs, ...)
-        GraphPath<Vertex, Edge> path = dijkstra.getPath(source, target);
-        // a negative path length indicates that there is no path between the given vertices
-        return path != null ? path.getLength() : -1;
     }
 
     @Override

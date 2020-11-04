@@ -12,13 +12,14 @@ public interface Graph {
     // package name of app
     String getAppName();
 
+    // a string encoding of the branches
     List<String> getBranches();
+
+    // the actual branch vertices
+    List<Vertex> getBranchVertices();
 
     // get the distance between the target vertex and the source vertex
     int getDistance(Vertex source, Vertex target);
-
-    // get the distance between the given vertex and the pre-defined target vertex
-    int getDistance(Vertex source);
 
     // searches for a vertex in the graph based on the given trace
     Vertex lookupVertex(String trace);

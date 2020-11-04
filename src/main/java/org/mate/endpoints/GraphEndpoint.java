@@ -37,6 +37,9 @@ public class GraphEndpoint implements Endpoint {
     private Graph graph;
     private final Path appsDir;
 
+    // a target vertex (a random branch)
+    private Vertex target;
+
     public GraphEndpoint(AndroidEnvironment androidEnvironment, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
         this.appsDir = appsDir;
@@ -61,7 +64,20 @@ public class GraphEndpoint implements Endpoint {
         }
     }
 
+    /**
+     * Selects a branch vertex as target in a random fashion.
+     */
+    private Vertex selectTargetVertex(List<Vertex> branchVertices) {
+        // TODO: check that selected vertex/vertices is/are reachable, otherwise re-select!
+        Random rand = new Random();
+        Vertex randomBranch = branchVertices.get(rand.nextInt(branchVertices.size()));
+        Log.println("Randomly selected target vertex: " + randomBranch);
+        return randomBranch;
+    }
+
     private Message initGraph(Message request) {
+
+        // TODO: add param that describes how the target vertex should be selected (no, random, random branch, ...)
 
         String deviceID = request.getParameter("deviceId");
         String packageName = request.getParameter("packageName");
@@ -88,11 +104,13 @@ public class GraphEndpoint implements Endpoint {
 
     private Message initIntraCFG(File apkPath, String methodName, boolean useBasicBlocks, String packageName) {
         graph = new IntraCFG(apkPath, methodName, useBasicBlocks, packageName);
+        target = selectTargetVertex(graph.getBranchVertices());
         return new Message("/graph/init");
     }
 
     private Message initInterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses, String packageName) {
         graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, packageName);
+        target = selectTargetVertex(graph.getBranchVertices());
         return new Message("/graph/init");
     }
 
@@ -174,8 +192,136 @@ public class GraphEndpoint implements Endpoint {
         File appDir = new File(appsDir.toFile(), device.getPackageName());
         File tracesDir = new File(appDir, "traces");
 
-        // the branches.txt should be located within the app directory
-        File branchesFile = new File(appDir, "branches.txt");
+        // collect the relevant traces files
+        List<File> tracesFiles = getTraceFiles(tracesDir, chromosomes);
+
+        // read traces from trace file(s)
+        Set<String> traces = readTraces(tracesFiles);
+
+        // we need to mark vertices we visited
+        Set<Vertex> visitedVertices = mapTracesToVertices(traces);
+
+        // TODO: compute minimal approach level
+
+        long start = System.currentTimeMillis();
+
+        // the minimal distance between a execution path and a chosen target vertex
+        AtomicInteger minDistance = new AtomicInteger(Integer.MAX_VALUE);
+        AtomicReference<Vertex> minDistanceVertex = new AtomicReference<>();
+
+        visitedVertices.parallelStream().forEach(visitedVertex -> {
+
+            int distance = graph.getDistance(visitedVertex, target);
+
+            synchronized (this) {
+                if (distance < minDistance.get() && distance != -1) {
+                    // found shorter path
+                    minDistanceVertex.set(visitedVertex);
+                    minDistance.set(distance);
+                }
+            }
+        });
+
+        Log.println("Shortest path length: " + minDistance.get());
+
+        long end = System.currentTimeMillis();
+        Log.println("Computing approach level took: " + (end-start) + " seconds");
+
+        /*
+        * The fitness value we are interested is a combination of the heuristics
+        * approach level + branch distance. The branch distance has to be normalized
+        * since the approach level gears the search and is more important.
+        * The branch distance is computed based on the closest shared ancestor of
+        * the visited nodes and the target branch node. By construction, this is
+        * the node with the closest approach level and must be an IF node.
+         */
+        String branchDistance;
+
+        // TODO: normalise distance in the range [0,1] where 1 is best
+        if (minDistance.get() == Integer.MAX_VALUE) {
+            // branch not reachable by execution path
+            branchDistance = String.valueOf(0);
+        } else {
+            branchDistance = String.valueOf(1 - ((double) minDistance.get() / (minDistance.get() + 1)));
+        }
+
+        return new Message.MessageBuilder("/graph/get_branch_distance")
+                .withParameter("branch_distance", branchDistance)
+                .build();
+    }
+
+    private Message getBranchDistanceVector(Message request) {
+
+        String deviceID = request.getParameter("deviceId");
+        String chromosomes = request.getParameter("chromosomes");
+
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
+        Device device = Device.getDevice(deviceID);
+
+        // get list of traces file
+        File appDir = new File(appsDir.toFile(), device.getPackageName());
+        File tracesDir = new File(appDir, "traces");
+
+        // collect the relevant traces files
+        List<File> tracesFiles = getTraceFiles(tracesDir, chromosomes);
+
+        // read the traces from the traces files
+        Set<String> traces = readTraces(tracesFiles);
+
+        // we need to mark vertices we visited
+        Set<Vertex> visitedVertices = mapTracesToVertices(traces);
+
+        // evaluate fitness value (approach level + branch distance) for each single branch
+        List<String> branchDistanceVector = new LinkedList<>();
+
+        for (Vertex branch : graph.getBranchVertices()) {
+
+            // find the shortest distance (approach level) to the given branch
+            AtomicInteger minDistance = new AtomicInteger(Integer.MAX_VALUE);
+            AtomicReference<Vertex> minDistanceVertex = new AtomicReference<>();
+
+            visitedVertices.parallelStream().forEach(visitedVertex -> {
+
+                int distance = graph.getDistance(visitedVertex, branch);
+
+                synchronized (this) {
+                    if (distance < minDistance.get() && distance != -1) {
+                        // found shorter path
+                        minDistanceVertex.set(visitedVertex);
+                        minDistance.set(distance);
+                    }
+                }
+            });
+
+            // TODO: compute branch distance (approach level + 'branch distance')
+
+            // we need to normalise approach level / branch distance to the range [0,1] where 1 is best
+            if (minDistance.get() == Integer.MAX_VALUE) {
+                // branch not reachable by execution path
+                branchDistanceVector.add(String.valueOf(0));
+            } else {
+                branchDistanceVector.add(String.valueOf(1 - ((double) minDistance.get() / (minDistance.get() + 1))));
+            }
+        }
+
+        Log.println("Branch Distance Vector: " + branchDistanceVector);
+
+        return new Message.MessageBuilder("/graph/get_branch_distance_vector")
+                .withParameter("branch_distance_vector", String.join("\n", branchDistanceVector))
+                .build();
+    }
+
+    /**
+     * Gets the list of traces files specified by the given chromosomes.
+     *
+     * @param tracesDir The base directory containing the traces files.
+     * @param chromosomes Encodes a mapping to one or several traces files.
+     * @return Returns the list of traces files described by the given chromosomes.
+     */
+    private List<File> getTraceFiles(File tracesDir, String chromosomes) {
 
         // collect the relevant traces files
         List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
@@ -200,6 +346,16 @@ public class GraphEndpoint implements Endpoint {
         }
 
         Log.println("Number of considered traces files: " + tracesFiles.size());
+        return tracesFiles;
+    }
+
+    /**
+     * Reads the traces from the given list of traces files.
+     *
+     * @param tracesFiles A list of traces files.
+     * @return Returns the unique traces contained in the given traces files.
+     */
+    private Set<String> readTraces(List<File> tracesFiles) {
 
         // read traces from trace file(s)
         long start = System.currentTimeMillis();
@@ -215,11 +371,23 @@ public class GraphEndpoint implements Endpoint {
             }
         }
 
-        Log.println("Number of collected traces: " + traces.size());
-
         long end = System.currentTimeMillis();
-
         Log.println("Reading traces from file(s) took: " + (end - start) + " seconds");
+
+        Log.println("Number of collected traces: " + traces.size());
+        return traces;
+    }
+
+    /**
+     * Maps the given set of traces to vertices in the graph.
+     *
+     * @param traces The set of traces that should be mapped to vertices.
+     * @return Returns the vertices described by the given set of traces.
+     */
+    private Set<Vertex> mapTracesToVertices(Set<String> traces) {
+
+        // read traces from trace file(s)
+        long start = System.currentTimeMillis();
 
         // we need to mark vertices we visited
         Set<Vertex> visitedVertices = Collections.newSetFromMap(new ConcurrentHashMap<Vertex, Boolean>());
@@ -238,62 +406,10 @@ public class GraphEndpoint implements Endpoint {
             }
         });
 
+        long end = System.currentTimeMillis();
+        Log.println("Mapping traces to vertices took: " + (end - start) + " seconds");
+
         Log.println("Number of visited vertices: " + visitedVertices.size());
-
-        // TODO: compute minimal approach level
-
-        start = System.currentTimeMillis();
-
-        // the minimal distance between a execution path and a chosen target vertex
-        AtomicInteger minDistance = new AtomicInteger(Integer.MAX_VALUE);
-        AtomicReference<Vertex> minDistanceVertex = new AtomicReference<>();
-
-        visitedVertices.parallelStream().forEach(visitedVertex -> {
-
-            int distance = graph.getDistance(visitedVertex);
-
-            synchronized (this) {
-                if (distance < minDistance.get() && distance != -1) {
-                    // found shorter path
-                    minDistanceVertex.set(visitedVertex);
-                    minDistance.set(distance);
-                }
-            }
-        });
-
-        Log.println("Shortest path length: " + minDistance.get());
-
-        end = System.currentTimeMillis();
-        Log.println("Computing approach level took: " + (end-start) + " seconds");
-
-        /*
-        * The fitness value we are interested is a combination of the heuristics
-        * approach level + branch distance. The branch distance has to be normalized
-        * since the approach level gears the search and is more important.
-        * The branch distance is computed based on the closest shared ancestor of
-        * the visited nodes and the target branch node. By construction, this is
-        * the node with the closest approach level and must be an IF node.
-        *
-         */
-
-        // TODO: get minimal distance (if distance == 0), then return branch distance
-        String branchDistance;
-
-        // TODO: normalise distance in the range [0,1] where 1 is best
-        if (minDistance.get() == Integer.MAX_VALUE) {
-            // branch not reachable by execution path
-            branchDistance = String.valueOf(0);
-        } else {
-            branchDistance = String.valueOf(1 - ((double) minDistance.get() / (minDistance.get() + 1)));
-        }
-
-        // TODO: return message wrapping branch distance value
-        return new Message.MessageBuilder("/graph/get_branches")
-                .withParameter("branch_distance", branchDistance)
-                .build();
-    }
-
-    private Message getBranchDistanceVector(Message request) {
-        return null;
+        return visitedVertices;
     }
 }
