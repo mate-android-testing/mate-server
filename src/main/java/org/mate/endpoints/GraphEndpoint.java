@@ -1,6 +1,9 @@
 package org.mate.endpoints;
 
 import de.uni_passau.fim.auermich.graphs.Vertex;
+import de.uni_passau.fim.auermich.statement.BasicStatement;
+import de.uni_passau.fim.auermich.statement.BlockStatement;
+import de.uni_passau.fim.auermich.statement.Statement;
 import org.apache.commons.io.FileUtils;
 import org.mate.graphs.Graph;
 import org.mate.graphs.GraphType;
@@ -68,11 +71,15 @@ public class GraphEndpoint implements Endpoint {
      * Selects a branch vertex as target in a random fashion.
      */
     private Vertex selectTargetVertex(List<Vertex> branchVertices) {
-        // TODO: check that selected vertex/vertices is/are reachable, otherwise re-select!
-        Random rand = new Random();
-        Vertex randomBranch = branchVertices.get(rand.nextInt(branchVertices.size()));
-        Log.println("Randomly selected target vertex: " + randomBranch);
-        return randomBranch;
+        while (true) {
+            Random rand = new Random();
+            Vertex randomBranch = branchVertices.get(rand.nextInt(branchVertices.size()));
+
+            if (graph.isReachable(randomBranch)) {
+                Log.println("Randomly selected target vertex: " + randomBranch + " [" + randomBranch.getMethod() + "]");
+                return randomBranch;
+            }
+        }
     }
 
     private Message initGraph(Message request) {
@@ -201,8 +208,6 @@ public class GraphEndpoint implements Endpoint {
         // we need to mark vertices we visited
         Set<Vertex> visitedVertices = mapTracesToVertices(traces);
 
-        // TODO: compute minimal approach level
-
         long start = System.currentTimeMillis();
 
         // the minimal distance between a execution path and a chosen target vertex
@@ -227,22 +232,72 @@ public class GraphEndpoint implements Endpoint {
         long end = System.currentTimeMillis();
         Log.println("Computing approach level took: " + (end-start) + " seconds");
 
+        // TODO: draw graph with visited vertices if graph is not too big
+
         /*
-        * The fitness value we are interested is a combination of the heuristics
-        * approach level + branch distance. The branch distance has to be normalized
-        * since the approach level gears the search and is more important.
-        * The branch distance is computed based on the closest shared ancestor of
-        * the visited nodes and the target branch node. By construction, this is
-        * the node with the closest approach level and must be an IF node.
+         * We compute the fitness value according to the paper 'Reformulating Branch Coverage as
+         * a Many-Objective Optimization Problem' in the context of the MOSA algorithm, although
+         * the algorithm itself should be responsible for the normalization of the fitness value.
+         * In contrast to traditional approaches, the fitness value lies in the range [0,1] where
+         * 1 is the best value, i.e. the target branch has been covered.
          */
         String branchDistance;
 
-        // TODO: normalise distance in the range [0,1] where 1 is best
         if (minDistance.get() == Integer.MAX_VALUE) {
             // branch not reachable by execution path
             branchDistance = String.valueOf(0);
+        } else if (minDistance.get() == 0) {
+            // target branch covered (recall that '1' is the best fitness value)
+            branchDistance = String.valueOf(1);
         } else {
-            branchDistance = String.valueOf(1 - ((double) minDistance.get() / (minDistance.get() + 1)));
+            // we need to combine approach level + branch distance
+            int approachLevel = minDistance.get();
+
+            /*
+            * The vertex with the closest distance represents an if stmt, at which
+            * the execution path took the wrong direction. We need to find the shortest
+            * branch distance value for the given if stmt. Note that the if stmt could have been
+            * visited multiple times.
+             */
+            Vertex ifVertex = minDistanceVertex.get();
+            Statement stmt = ifVertex.getStatement();
+
+            // we only support basic blocks right now
+            assert stmt.getType() == Statement.StatementType.BLOCK_STATEMENT;
+
+            // the if stmt is located the last position of the block
+            BasicStatement ifStmt = (BasicStatement) ((BlockStatement) stmt).getLastStatement();
+
+            // find the branch distance trace(s) that describes the if stmt
+            String prefix = ifVertex.getMethod() + "->" + ifStmt.getInstructionIndex() + ":";
+            // if the if vertex is itself a branch vertex
+            // String traceAlternative = ifVertex.getMethod() + "->" + ifStmt.getInstructionIndex();
+
+            Log.println("Trace describing closest if stmt: " + prefix);
+
+            double minBranchDistance = Double.MAX_VALUE;
+
+            for (String trace: traces) {
+                if (trace.startsWith(prefix)) {
+
+                    // found a branch distance value for the given if stmt
+                    double distance = Double.parseDouble(trace.split(":")[1]);
+                    Log.println("Distance value: " + distance);
+
+                    // we need to track minimal distance
+                    if (distance < minBranchDistance) {
+                        minBranchDistance = distance;
+                    }
+                }
+            }
+
+            Log.println("Approach level: " + approachLevel);
+            Log.println("Minimal branch distance: " + minBranchDistance);
+
+            // combine and normalise
+            double combined = approachLevel + minBranchDistance;
+            branchDistance = String.valueOf(1 - (combined / (combined + 1)));
+            // branchDistance = String.valueOf(1 - ((double) minDistance.get() / (minDistance.get() + 1)));
         }
 
         return new Message.MessageBuilder("/graph/get_branch_distance")
@@ -296,14 +351,60 @@ public class GraphEndpoint implements Endpoint {
                 }
             });
 
-            // TODO: compute branch distance (approach level + 'branch distance')
-
-            // we need to normalise approach level / branch distance to the range [0,1] where 1 is best
             if (minDistance.get() == Integer.MAX_VALUE) {
                 // branch not reachable by execution path
                 branchDistanceVector.add(String.valueOf(0));
+            } else if (minDistance.get() == 0) {
+                // target branch covered (recall that '1' is the best fitness value)
+                branchDistanceVector.add(String.valueOf(1));
             } else {
-                branchDistanceVector.add(String.valueOf(1 - ((double) minDistance.get() / (minDistance.get() + 1))));
+                // we need to combine approach level + branch distance
+                int approachLevel = minDistance.get();
+
+                /*
+                 * The vertex with the closest distance represents an if stmt, at which
+                 * the execution path took the wrong direction. We need to find the shortest
+                 * branch distance value for the given if stmt. Note that the if stmt could have been
+                 * visited multiple times.
+                 */
+                Vertex ifVertex = minDistanceVertex.get();
+                Statement stmt = ifVertex.getStatement();
+
+                // we only support basic blocks right now
+                assert stmt.getType() == Statement.StatementType.BLOCK_STATEMENT;
+
+                // the if stmt is located the last position of the block
+                BasicStatement ifStmt = (BasicStatement) ((BlockStatement) stmt).getLastStatement();
+
+                // find the branch distance trace(s) that describes the if stmt
+                String prefix = ifVertex.getMethod() + "->" + ifStmt.getInstructionIndex() + ":";
+                // if the if vertex is itself a branch vertex
+                // String traceAlternative = ifVertex.getMethod() + "->" + ifStmt.getInstructionIndex();
+
+                Log.println("Trace describing closest if stmt: " + prefix);
+
+                double minBranchDistance = Double.MAX_VALUE;
+
+                for (String trace : traces) {
+                    if (trace.startsWith(prefix)) {
+
+                        // found a branch distance value for the given if stmt
+                        double distance = Double.parseDouble(trace.split(":")[1]);
+                        Log.println("Distance value: " + distance);
+
+                        // we need to track minimal distance
+                        if (distance < minBranchDistance) {
+                            minBranchDistance = distance;
+                        }
+                    }
+                }
+
+                Log.println("Approach level: " + approachLevel);
+                Log.println("Minimal branch distance: " + minBranchDistance);
+
+                // combine and normalise
+                double combined = approachLevel + minBranchDistance;
+                branchDistanceVector.add(String.valueOf(1 - (combined / (combined + 1))));
             }
         }
 
