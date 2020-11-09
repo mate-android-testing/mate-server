@@ -23,4 +23,7 @@ public interface Graph {
 
     // searches for a vertex in the graph based on the given trace
     Vertex lookupVertex(String trace);
+
+    // checks whether vertex is reachable in graph from global entry point
+    boolean isReachable(Vertex vertex);
 }

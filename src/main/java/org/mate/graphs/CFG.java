@@ -52,6 +52,17 @@ public abstract class CFG implements Graph {
     }
 
     /**
+     * Checks whether the given vertex is reachable from the global entry point.
+     *
+     * @param vertex The vertex to be checked for reachability.
+     * @return Returns whether the given vertex is reachable or not.
+     */
+    @Override
+    public boolean isReachable(Vertex vertex) {
+        return dijkstra.getPath(baseCFG.getEntry(), vertex) != null;
+    }
+
+    /**
      * Pre-computes a mapping between certain traces and its vertices in the graph.
      *
      * @return Returns a mapping between a trace and its vertex in the graph.
