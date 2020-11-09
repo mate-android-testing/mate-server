@@ -171,8 +171,8 @@ public final class BranchCoverageManager {
                 // each trace consists of className->methodName->branchID
                 String[] triple = trace.split("->");
 
-                if (triple.length != 3) {
-                    // ignore traces related to branch distance
+                if (triple.length != 3 || trace.contains(":")) {
+                    // ignore traces related to if statements or branch distance
                     continue;
                 }
 
