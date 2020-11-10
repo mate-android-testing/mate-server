@@ -17,6 +17,9 @@ import java.util.stream.Collectors;
 
 public abstract class CFG implements Graph {
 
+    // defines the maximal number of vertices the graph can have for drawing
+    private static final int MAX_DRAWING_SIZE = 1000;
+
     protected final BaseCFG baseCFG;
     private final String appName;
 
@@ -60,6 +63,41 @@ public abstract class CFG implements Graph {
     @Override
     public boolean isReachable(Vertex vertex) {
         return dijkstra.getPath(baseCFG.getEntry(), vertex) != null;
+    }
+
+    /**
+     * Returns the vertices contained in the graph.
+     *
+     * @return Returns all vertices in the graph.
+     */
+    @Override
+    public List<Vertex> getVertices() {
+        return new ArrayList<>(baseCFG.getVertices());
+    }
+
+    /**
+     * Draws the graph if it is not too big.
+     */
+    @Override
+    public void draw() {
+      if (size() < MAX_DRAWING_SIZE) {
+          baseCFG.drawGraph();
+      }
+    }
+
+    /**
+     * Draws the graph where target and visited vertices are marked.
+     *
+     * @param targets The list of target vertices.
+     * @param visitedVertices The list of visited vertices.
+     */
+    @Override
+    public void draw(List<Vertex> targets, List<Vertex> visitedVertices) {
+        if (size() < MAX_DRAWING_SIZE) {
+            // TODO: provide path
+            // TODO: how to mark a visited target branch
+            baseCFG.drawGraph();
+        }
     }
 
     /**

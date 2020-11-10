@@ -41,7 +41,7 @@ public class GraphEndpoint implements Endpoint {
     private final Path appsDir;
 
     // a target vertex (a random branch)
-    private Vertex target;
+    private Vertex targetVertex;
 
     public GraphEndpoint(AndroidEnvironment androidEnvironment, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
@@ -68,17 +68,34 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Selects a branch vertex as target in a random fashion.
+     * Selects a target vertex based on the given target criteria.
+     *
+     * @param target Describes how a target should be selected.
+     * @return Returns the selected target vertex.
      */
-    private Vertex selectTargetVertex(List<Vertex> branchVertices) {
-        while (true) {
-            Random rand = new Random();
-            Vertex randomBranch = branchVertices.get(rand.nextInt(branchVertices.size()));
+    private Vertex selectTargetVertex(String target) {
 
-            if (graph.isReachable(randomBranch)) {
-                Log.println("Randomly selected target vertex: " + randomBranch + " [" + randomBranch.getMethod() + "]");
-                return randomBranch;
-            }
+        Log.println("Target vertex selection strategy: " + target);
+
+        switch (target) {
+            case "no_target":
+                return null;
+            case "random_target":
+            case "random_branch":
+                List<Vertex> targets = target.equals("random_target") ? graph.getVertices() : graph.getBranchVertices();
+
+                while (true) {
+                    Random rand = new Random();
+                    Vertex randomVertex = targets.get(rand.nextInt(targets.size()));
+
+                    if (graph.isReachable(randomVertex)) {
+                        Log.println("Randomly selected target vertex: " + randomVertex + " [" + randomVertex.getMethod() + "]");
+                        return randomVertex;
+                    }
+                }
+            default:
+                // TODO: enable custom target vertex
+                throw new UnsupportedOperationException("Custom target vertex selection not yet supported!");
         }
     }
 
@@ -90,6 +107,7 @@ public class GraphEndpoint implements Endpoint {
         String packageName = request.getParameter("packageName");
         GraphType graphType = GraphType.valueOf(request.getParameter("graph_type"));
         File apkPath = new File(request.getParameter("apk"));
+        String target = request.getParameter("target");
 
         if (!apkPath.exists()) {
             throw new IllegalArgumentException("Can't locate APK: " + apkPath.getAbsolutePath() + "!");
@@ -100,24 +118,26 @@ public class GraphEndpoint implements Endpoint {
         switch (graphType) {
             case INTRA_CFG:
                 String methodName = request.getParameter("method");
-                return initIntraCFG(apkPath, methodName, useBasicBlocks, packageName);
+                return initIntraCFG(apkPath, methodName, useBasicBlocks, packageName, target);
             case INTER_CFG:
                 boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
-                return initInterCFG(apkPath, useBasicBlocks, excludeARTClasses, packageName);
+                return initInterCFG(apkPath, useBasicBlocks, excludeARTClasses, packageName, target);
             default:
                 throw new UnsupportedOperationException("Graph type not yet supported!");
         }
     }
 
-    private Message initIntraCFG(File apkPath, String methodName, boolean useBasicBlocks, String packageName) {
+    private Message initIntraCFG(File apkPath, String methodName, boolean useBasicBlocks,
+                                 String packageName, String target) {
         graph = new IntraCFG(apkPath, methodName, useBasicBlocks, packageName);
-        target = selectTargetVertex(graph.getBranchVertices());
+        targetVertex = selectTargetVertex(target);
         return new Message("/graph/init");
     }
 
-    private Message initInterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses, String packageName) {
+    private Message initInterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
+                                 String packageName, String target) {
         graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, packageName);
-        target = selectTargetVertex(graph.getBranchVertices());
+        targetVertex = selectTargetVertex(target);
         return new Message("/graph/init");
     }
 
@@ -216,7 +236,7 @@ public class GraphEndpoint implements Endpoint {
 
         visitedVertices.parallelStream().forEach(visitedVertex -> {
 
-            int distance = graph.getDistance(visitedVertex, target);
+            int distance = graph.getDistance(visitedVertex, targetVertex);
 
             synchronized (this) {
                 if (distance < minDistance.get() && distance != -1) {
@@ -230,7 +250,7 @@ public class GraphEndpoint implements Endpoint {
         Log.println("Shortest path length: " + minDistance.get());
 
         long end = System.currentTimeMillis();
-        Log.println("Computing approach level took: " + (end-start) + " seconds");
+        Log.println("Computing approach level took: " + (end - start) + " seconds");
 
         // TODO: draw graph with visited vertices if graph is not too big
 
@@ -254,10 +274,10 @@ public class GraphEndpoint implements Endpoint {
             int approachLevel = minDistance.get();
 
             /*
-            * The vertex with the closest distance represents an if stmt, at which
-            * the execution path took the wrong direction. We need to find the shortest
-            * branch distance value for the given if stmt. Note that the if stmt could have been
-            * visited multiple times.
+             * The vertex with the closest distance represents an if stmt, at which
+             * the execution path took the wrong direction. We need to find the shortest
+             * branch distance value for the given if stmt. Note that the if stmt could have been
+             * visited multiple times.
              */
             Vertex ifVertex = minDistanceVertex.get();
             Statement stmt = ifVertex.getStatement();
@@ -277,7 +297,7 @@ public class GraphEndpoint implements Endpoint {
 
             double minBranchDistance = Double.MAX_VALUE;
 
-            for (String trace: traces) {
+            for (String trace : traces) {
                 if (trace.startsWith(prefix)) {
 
                     // found a branch distance value for the given if stmt
@@ -418,7 +438,7 @@ public class GraphEndpoint implements Endpoint {
     /**
      * Gets the list of traces files specified by the given chromosomes.
      *
-     * @param tracesDir The base directory containing the traces files.
+     * @param tracesDir   The base directory containing the traces files.
      * @param chromosomes Encodes a mapping to one or several traces files.
      * @return Returns the list of traces files described by the given chromosomes.
      */
@@ -497,11 +517,10 @@ public class GraphEndpoint implements Endpoint {
         traces.parallelStream().forEach(traceEntry -> {
 
             // TODO: should we also mark 'virtual' entry/exit vertices as visited?
-
             Vertex visitedVertex = graph.lookupVertex(traceEntry);
 
             if (visitedVertex == null) {
-                // Log.printWarning("Couldn't derive vertex for trace entry: " + traceEntry);
+                Log.printWarning("Couldn't derive vertex for trace entry: " + traceEntry);
             } else {
                 visitedVertices.add(visitedVertex);
             }

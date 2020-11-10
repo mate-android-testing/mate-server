@@ -18,6 +18,9 @@ public interface Graph {
     // the actual branch vertices
     List<Vertex> getBranchVertices();
 
+    // get all vertices
+    List<Vertex> getVertices();
+
     // get the distance between the target vertex and the source vertex
     int getDistance(Vertex source, Vertex target);
 
@@ -26,4 +29,10 @@ public interface Graph {
 
     // checks whether vertex is reachable in graph from global entry point
     boolean isReachable(Vertex vertex);
+
+    // draws the raw graph if it is not too big
+    void draw();
+
+    // draws the graph where target and visited vertices are marked
+    void draw(List<Vertex> targets, List<Vertex> visitedVertices);
 }
