@@ -50,7 +50,6 @@ public class GraphEndpoint implements Endpoint {
 
     @Override
     public Message handle(Message request) {
-        // TODO: do we need a command to set the target vertex or always select it randomly?
         if (request.getSubject().startsWith("/graph/init")) {
             return initGraph(request);
         } else if (request.getSubject().startsWith("/graph/get_branches")) {
@@ -61,10 +60,66 @@ public class GraphEndpoint implements Endpoint {
             return getBranchDistanceVector(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
             return getBranchDistance(request);
+        } else if (request.getSubject().startsWith("/graph/draw")) {
+            return drawGraph(request);
         } else {
             throw new IllegalArgumentException("Message request with subject: "
                     + request.getSubject() + " can't be handled by GraphEndPoint!");
         }
+    }
+
+    private Message drawGraph(Message request) {
+
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
+        boolean raw = Boolean.parseBoolean(request.getParameter("raw"));
+
+        File appDir = new File(appsDir.toFile(), graph.getAppName());
+        File drawDir = new File(appDir, "graph-drawings");
+        drawDir.mkdirs();
+
+        if (raw) {
+            Log.println("Drawing raw graph...");
+            File outputPath = new File(drawDir, "graph-raw.png");
+            graph.draw(outputPath);
+        } else {
+            Log.println("Drawing graph...");
+
+            File outputPath = new File(drawDir, "graph.png");
+
+            // determine the target vertices (e.g. single branch or all branches)
+            Set<Vertex> targetVertices = new HashSet<>();
+
+            if (targetVertex != null) {
+                targetVertices.add(targetVertex);
+            } else {
+                targetVertices.addAll(new HashSet<>(graph.getBranchVertices()));
+            }
+
+            // retrieve the visited vertices
+            Set<Vertex> visitedVertices = getVisitedVertices(appDir);
+
+            // draw the graph where target and visited vertices are marked in different colours
+            graph.draw(targetVertices, visitedVertices, outputPath);
+        }
+
+        return new Message("/graph/draw");
+    }
+
+    private Set<Vertex> getVisitedVertices(File appDir) {
+
+        // get list of traces file
+        File tracesDir = new File(appDir, "traces");
+
+        // collect the relevant traces files
+        List<File> tracesFiles = getTraceFiles(tracesDir, null);
+
+        // read traces from trace file(s)
+        Set<String> traces = readTraces(tracesFiles);
+
+        return mapTracesToVertices(traces);
     }
 
     /**
@@ -100,8 +155,6 @@ public class GraphEndpoint implements Endpoint {
     }
 
     private Message initGraph(Message request) {
-
-        // TODO: add param that describes how the target vertex should be selected (no, random, random branch, ...)
 
         String deviceID = request.getParameter("deviceId");
         String packageName = request.getParameter("packageName");
@@ -514,13 +567,35 @@ public class GraphEndpoint implements Endpoint {
         Set<Vertex> visitedVertices = Collections.newSetFromMap(new ConcurrentHashMap<Vertex, Boolean>());
 
         // map trace to vertex
-        traces.parallelStream().forEach(traceEntry -> {
+        traces.parallelStream().forEach(trace -> {
 
-            // TODO: should we also mark 'virtual' entry/exit vertices as visited?
-            Vertex visitedVertex = graph.lookupVertex(traceEntry);
+            // mark virtual entry/exit vertices
+            if (trace.contains("->entry")) {
 
-            if (visitedVertex == null) {
-                Log.printWarning("Couldn't derive vertex for trace entry: " + traceEntry);
+                String entryTrace = trace.split("->entry")[0] + "->entry";
+                Vertex visitedEntry = graph.lookupVertex(entryTrace);
+
+                if (visitedEntry == null) {
+                    Log.printWarning("Couldn't derive vertex for entry trace: " + entryTrace);
+                } else {
+                    visitedVertices.add(visitedEntry);
+                }
+            } else if (trace.contains("->exit")) {
+
+                String exitTrace = trace.split("->exit")[0] + "->exit";
+                Vertex visitedExit = graph.lookupVertex(exitTrace);
+
+                if (visitedExit == null) {
+                    Log.printWarning("Couldn't derive vertex for exit trace: " + exitTrace);
+                } else {
+                    visitedVertices.add(visitedExit);
+                }
+            }
+
+            Vertex visitedVertex = graph.lookupVertex(trace);
+
+            if (visitedVertex == null && !trace.contains(":")) {
+                Log.printWarning("Couldn't derive vertex for trace: " + trace);
             } else {
                 visitedVertices.add(visitedVertex);
             }

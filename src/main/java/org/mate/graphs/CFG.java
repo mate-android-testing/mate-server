@@ -11,6 +11,7 @@ import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.mate.graphs.util.VertexPair;
 import org.mate.util.Log;
 
+import java.io.File;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -79,9 +80,9 @@ public abstract class CFG implements Graph {
      * Draws the graph if it is not too big.
      */
     @Override
-    public void draw() {
+    public void draw(File outputPath) {
       if (size() < MAX_DRAWING_SIZE) {
-          baseCFG.drawGraph();
+          baseCFG.drawGraph(outputPath);
       }
     }
 
@@ -92,11 +93,9 @@ public abstract class CFG implements Graph {
      * @param visitedVertices The list of visited vertices.
      */
     @Override
-    public void draw(List<Vertex> targets, List<Vertex> visitedVertices) {
+    public void draw(Set<Vertex> targets, Set<Vertex> visitedVertices, File outputPath) {
         if (size() < MAX_DRAWING_SIZE) {
-            // TODO: provide path
-            // TODO: how to mark a visited target branch
-            baseCFG.drawGraph();
+            baseCFG.drawGraph(targets, visitedVertices, outputPath);
         }
     }
 
@@ -117,6 +116,9 @@ public abstract class CFG implements Graph {
         for (Vertex entryVertex : entryVertices) {
             // exclude global entry vertex
             if (!entryVertex.equals(baseCFG.getEntry())) {
+
+                // virtual entry vertex
+                vertexMap.put(entryVertex.getMethod() + "->entry", entryVertex);
 
                 // there are potentially several entry vertices when dealing with try-catch blocks at the beginning
                 Set<Vertex> entries = baseCFG.getOutgoingEdges(entryVertex).stream()
@@ -144,6 +146,9 @@ public abstract class CFG implements Graph {
         for (Vertex exitVertex : exitVertices) {
             // exclude global exit vertex
             if (!exitVertex.equals(baseCFG.getExit())) {
+
+                // virtual exit vertex
+                vertexMap.put(exitVertex.getMethod() + "->exit", exitVertex);
 
                 Set<Vertex> exits = baseCFG.getIncomingEdges(exitVertex).stream()
                         .map(Edge::getSource).collect(Collectors.toSet());
@@ -205,6 +210,9 @@ public abstract class CFG implements Graph {
         return Collections.unmodifiableList(branchVertices);
     }
 
+    // TODO: lookup trace in graph if not present in cache
+    //  the search strategy can be a parallel forward/backward search
+    //  assuming that the input is in the format 'class->method->instruction_index'
     @Override
     public Vertex lookupVertex(String trace) {
         return vertexMap.get(trace);

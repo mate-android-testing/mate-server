@@ -2,7 +2,9 @@ package org.mate.graphs;
 
 import de.uni_passau.fim.auermich.graphs.Vertex;
 
+import java.io.File;
 import java.util.List;
+import java.util.Set;
 
 public interface Graph {
 
@@ -31,8 +33,8 @@ public interface Graph {
     boolean isReachable(Vertex vertex);
 
     // draws the raw graph if it is not too big
-    void draw();
+    void draw(File outputPath);
 
     // draws the graph where target and visited vertices are marked
-    void draw(List<Vertex> targets, List<Vertex> visitedVertices);
+    void draw(Set<Vertex> targets, Set<Vertex> visitedVertices, File outputPath);
 }
