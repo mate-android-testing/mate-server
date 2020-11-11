@@ -3,7 +3,9 @@ package org.mate.endpoints;
 import de.uni_passau.fim.auermich.graphs.Vertex;
 import de.uni_passau.fim.auermich.statement.BasicStatement;
 import de.uni_passau.fim.auermich.statement.BlockStatement;
+import de.uni_passau.fim.auermich.statement.ReturnStatement;
 import de.uni_passau.fim.auermich.statement.Statement;
+import de.uni_passau.fim.auermich.utility.Utility;
 import org.apache.commons.io.FileUtils;
 import org.mate.graphs.Graph;
 import org.mate.graphs.GraphType;
@@ -292,7 +294,7 @@ public class GraphEndpoint implements Endpoint {
             int distance = graph.getDistance(visitedVertex, targetVertex);
 
             synchronized (this) {
-                if (distance < minDistance.get() && distance != -1) {
+                if (distance < minDistance.get() && distance != -1 && isIfVertex(visitedVertex)) {
                     // found shorter path
                     minDistanceVertex.set(visitedVertex);
                     minDistance.set(distance);
@@ -304,8 +306,6 @@ public class GraphEndpoint implements Endpoint {
 
         long end = System.currentTimeMillis();
         Log.println("Computing approach level took: " + (end - start) + " seconds");
-
-        // TODO: draw graph with visited vertices if graph is not too big
 
         /*
          * We compute the fitness value according to the paper 'Reformulating Branch Coverage as
@@ -335,6 +335,8 @@ public class GraphEndpoint implements Endpoint {
             Vertex ifVertex = minDistanceVertex.get();
             Statement stmt = ifVertex.getStatement();
 
+            Log.println("Closest if vertex: " + ifVertex.getMethod() + "[" + ifVertex.getStatement() + "]");
+
             // we only support basic blocks right now
             assert stmt.getType() == Statement.StatementType.BLOCK_STATEMENT;
 
@@ -343,8 +345,6 @@ public class GraphEndpoint implements Endpoint {
 
             // find the branch distance trace(s) that describes the if stmt
             String prefix = ifVertex.getMethod() + "->" + ifStmt.getInstructionIndex() + ":";
-            // if the if vertex is itself a branch vertex
-            // String traceAlternative = ifVertex.getMethod() + "->" + ifStmt.getInstructionIndex();
 
             Log.println("Trace describing closest if stmt: " + prefix);
 
@@ -370,7 +370,6 @@ public class GraphEndpoint implements Endpoint {
             // combine and normalise
             double combined = approachLevel + minBranchDistance;
             branchDistance = String.valueOf(1 - (combined / (combined + 1)));
-            // branchDistance = String.valueOf(1 - ((double) minDistance.get() / (minDistance.get() + 1)));
         }
 
         return new Message.MessageBuilder("/graph/get_branch_distance")
@@ -416,7 +415,7 @@ public class GraphEndpoint implements Endpoint {
                 int distance = graph.getDistance(visitedVertex, branch);
 
                 synchronized (this) {
-                    if (distance < minDistance.get() && distance != -1) {
+                    if (distance < minDistance.get() && distance != -1 && isIfVertex(visitedVertex)) {
                         // found shorter path
                         minDistanceVertex.set(visitedVertex);
                         minDistance.set(distance);
@@ -443,6 +442,8 @@ public class GraphEndpoint implements Endpoint {
                 Vertex ifVertex = minDistanceVertex.get();
                 Statement stmt = ifVertex.getStatement();
 
+                Log.println("Closest if vertex: " + ifVertex.getMethod() + "[" + ifVertex.getStatement() + "]");
+
                 // we only support basic blocks right now
                 assert stmt.getType() == Statement.StatementType.BLOCK_STATEMENT;
 
@@ -451,8 +452,6 @@ public class GraphEndpoint implements Endpoint {
 
                 // find the branch distance trace(s) that describes the if stmt
                 String prefix = ifVertex.getMethod() + "->" + ifStmt.getInstructionIndex() + ":";
-                // if the if vertex is itself a branch vertex
-                // String traceAlternative = ifVertex.getMethod() + "->" + ifStmt.getInstructionIndex();
 
                 Log.println("Trace describing closest if stmt: " + prefix);
 
@@ -486,6 +485,33 @@ public class GraphEndpoint implements Endpoint {
         return new Message.MessageBuilder("/graph/get_branch_distance_vector")
                 .withParameter("branch_distance_vector", String.join("+", branchDistanceVector))
                 .build();
+    }
+
+    /**
+     * Checks whether the vertex wraps an if statement.
+     *
+     * @param vertex The vertex to be inspected.
+     * @return Returns {@code true} if the vertex contains an if statement,
+     * otherwise {@code false} is returned.
+     */
+    private boolean isIfVertex(Vertex vertex) {
+
+        if (vertex.isEntryVertex() || vertex.isExitVertex()) {
+            return false;
+        }
+
+        Statement statement = vertex.getStatement();
+
+        if (statement instanceof ReturnStatement) {
+            return false;
+        } else if (statement instanceof BasicStatement) {
+            return Utility.isBranchingInstruction(((BasicStatement) statement).getInstruction());
+        } else if (statement instanceof BlockStatement) {
+            // the if instruction can only be the last instruction of a block
+            BasicStatement stmt = (BasicStatement) ((BlockStatement) statement).getLastStatement();
+            return Utility.isBranchingInstruction(stmt.getInstruction());
+        }
+        throw new UnsupportedOperationException("Statement type not recognized" + vertex.getStatement());
     }
 
     /**
@@ -569,6 +595,11 @@ public class GraphEndpoint implements Endpoint {
         // map trace to vertex
         traces.parallelStream().forEach(trace -> {
 
+            if (trace.contains(":")) {
+                // skip branch distance trace
+                return;
+            }
+
             // mark virtual entry/exit vertices
             if (trace.contains("->entry")) {
 
@@ -592,9 +623,10 @@ public class GraphEndpoint implements Endpoint {
                 }
             }
 
+            // mark actual vertex corresponding to trace
             Vertex visitedVertex = graph.lookupVertex(trace);
 
-            if (visitedVertex == null && !trace.contains(":")) {
+            if (visitedVertex == null) {
                 Log.printWarning("Couldn't derive vertex for trace: " + trace);
             } else {
                 visitedVertices.add(visitedVertex);
