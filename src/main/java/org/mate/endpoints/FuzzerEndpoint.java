@@ -6,6 +6,10 @@ import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
 
+/**
+ * This endpoint is responsible for handling intent fuzzing requests.
+ * This includes primarily the broadcasting of system events.
+ */
 public class FuzzerEndpoint implements Endpoint {
 
     private final AndroidEnvironment androidEnvironment;
@@ -39,6 +43,7 @@ public class FuzzerEndpoint implements Endpoint {
     private Message executeSystemEvent(Message request) {
 
         String deviceID = request.getParameter("deviceId");
+        // TODO: use packageName of device
         String packageName = request.getParameter("packageName");
         String receiver = request.getParameter("receiver");
         String action = request.getParameter("action");
@@ -63,6 +68,7 @@ public class FuzzerEndpoint implements Endpoint {
     private Message grantRuntimePermissions(Message request) {
 
         String deviceID = request.getParameter("deviceId");
+        // TODO: use packageName of device
         String packageName = request.getParameter("packageName");
 
         Device device = Device.devices.get(deviceID);

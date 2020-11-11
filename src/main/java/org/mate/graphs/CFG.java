@@ -5,366 +5,271 @@ import de.uni_passau.fim.auermich.graphs.Vertex;
 import de.uni_passau.fim.auermich.graphs.cfg.BaseCFG;
 import de.uni_passau.fim.auermich.statement.BasicStatement;
 import de.uni_passau.fim.auermich.statement.BlockStatement;
-import de.uni_passau.fim.auermich.statement.ExitStatement;
 import de.uni_passau.fim.auermich.statement.Statement;
 import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
-import org.jgrapht.alg.shortestpath.AllDirectedPaths;
-import org.jgrapht.alg.shortestpath.DijkstraShortestPath;
+import org.mate.graphs.util.VertexPair;
+import org.mate.util.Log;
 
 import java.io.File;
-import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
-public class CFG {
+public abstract class CFG implements Graph {
 
-    private final BaseCFG interCFG;
-    private final int numberOfBranches;
-    private final String packageName;
+    // defines the maximal number of vertices the graph can have for drawing
+    private static final int MAX_DRAWING_SIZE = 1000;
 
-    // tracks how often branch distance is queried
-    public static int branchDistanceRetrievalCounter = 0;
+    protected final BaseCFG baseCFG;
+    private final String appName;
 
-    private Vertex targetVertex;
+    // cache the list of branches (the order must be consistent when requesting the branch distance vector)
+    protected final List<Vertex> branchVertices;
 
-    private Map<String, Vertex> vertexMap = new ConcurrentHashMap<>();
-
-    // cache computed branch distances to target vertex (single objective case)
-    private Map<Vertex, Double> branchDistances = new ConcurrentHashMap<>();
-
-    private Set<Vertex> coveredTargetVertices = new HashSet<>();
-
-    // TODO: may use int -> for coverage sufficient
-    private Set<Vertex> coveredBranches = new HashSet<>();
-
-    private ShortestPathAlgorithm<Vertex, Edge> dijkstra;
-    private ShortestPathAlgorithm<Vertex, Edge> bfs;
-
-    // track branch coverage per test case (key: test case id, value: covered branches)
-    private Map<String, Set<Vertex>> testCaseBranchCoverage = new HashMap<>();
-
-    public CFG(BaseCFG interCFG, String packageName) {
-        this.interCFG = interCFG;
-        numberOfBranches = interCFG.getBranches().size();
-        this.packageName = packageName;
-        // init dijkstra
-        dijkstra = interCFG.initBidirectionalDijkstraAlgorithm();
-        // bfs = interCFG.initBFSAlgorithm();
-
-        /*
-        targetVertex = interCFG.getVertices().stream().filter(v
-                -> v.containsInstruction("Lcom/zola/bmi/BMIMain;->interpretBMI(D)Ljava/lang/String;", 8)).findFirst().get();
-        */
-
-        selectTargetVertex(true);
-        init();
-    }
-
-    public void markIntermediatePathVertices(Vertex entry, Vertex exit, Set<Vertex> visitedVertices) {
-
-        /*
-        *
-        * current_vertex = entry;
-        *
-        * while not reached exit vertex (current_vertex != exit)
-        *
-        *   if entered new method (reached entry vertex with different method name)
-        *       // check outgoing edges of corresponding exit vertex to return to original method
-        *       current_vertex = return_vertex;
-        *       visitedVertices.add(current_vertex);
-        *       // should be inherently done as each entry vertex is part of the traces
-        *       call recursively markIntermediatePathVertices(..) for new method
-        *       continue;
-        *
-        *   if outgoingEdges(current_vertex) == 1
-        *       current_vertex = successor(current_vertex);
-        *       visitedVertices.add(current_vertex);
-        *   else
-        *       // assuming there are no try catch blocks (for termination we need a boolean which
-        *       // indicates whether we found a branch vertex, otherwise we need to abort)
-        *       for succ in successors(current_vertex):
-        *           if visitedVertices.contain(succ) // this branch was taken
-        *               call recursively markIntermediatePathVertices(..) with succ as entry vertex
-         */
-
-        Vertex currentVertex = entry;
-
-        while (!currentVertex.equals(exit)) {
-
-            Set<Edge> outgoingEdges = interCFG.getOutgoingEdges(currentVertex);
-
-            if (outgoingEdges.size() == 1) {
-                // single successors -> follow the path
-                currentVertex = outgoingEdges.stream().findFirst().get().getTarget();
-            } else {
-
-                outgoingEdges.parallelStream().forEach(e -> {
-                    Vertex targetVertex = e.getTarget();
-                    if (targetVertex.isBranchVertex()
-                            && visitedVertices.contains(targetVertex)) {
-                        markIntermediatePathVertices(targetVertex, exit, visitedVertices);
-                    }
-                });
-                break;
-            }
-
-            if (!entry.getMethod().equals(currentVertex.getMethod())) {
-                // we entered a new method
-
-                // search for return vertex, which must be a successor of the method's exit vertex
-                Vertex exitVertex = new Vertex(new ExitStatement(currentVertex.getMethod()));
-                currentVertex = getReturnVertex(currentVertex, exitVertex, visitedVertices);
-            }
-
-            visitedVertices.add(currentVertex);
-        }
-    }
+    // the search algorithm (bi-directional dijkstra seems to be the fastest one)
+    private final ShortestPathAlgorithm<Vertex, Edge> dijkstra;
 
     /**
-     * Searches for the return vertex belonging to the invocation stmt included in the
-     * given vertex.
+     * Contains a mapping between a trace and its vertex within the graph. The mapping
+     * is only defined for traces describing branches, if statements and entry/exit statements.
+     * A look up of single vertices is quite expensive and this map should speed up the mapping process.
+     */
+    private final Map<String, Vertex> vertexMap;
+
+    // cache already computed distances to the target vertex
+    private final Map<VertexPair, Integer> cachedDistances = new ConcurrentHashMap<>();
+
+
+    /**
+     * Constructs a wrapper for a given control-flow graph.
      *
-     * @param vertex The vertex including the invocation stmt.
-     * @param exit The exit vertex of the invoked method.
-     * @param visitedVertices The set of currently visited vertices. Needs to be updated
-     *                        as a side effect in case no basic blocks are used.
-     * @return Returns the corresponding return vertex. In case no basic blocks are used,
-     *          the appropriate successor vertex is returned.
-     * @throws IllegalStateException If the return vertex couldn't be found.
+     * @param baseCFG The actual control flow graph.
+     * @param appName The name of the app (the package name).
      */
-    private Vertex getReturnVertex(Vertex vertex, Vertex exit, Set<Vertex> visitedVertices) {
-
-        // the vertex contains an invoke instruction as last statement
-        Statement stmt = vertex.getStatement();
-
-        // we need to know instruction index of the invoke stmt
-        int index = -1;
-
-        if (stmt.getType() == Statement.StatementType.BASIC_STATEMENT) {
-            BasicStatement basicStatement = (BasicStatement) stmt;
-            index = basicStatement.getInstructionIndex();
-        } else if (stmt.getType() == Statement.StatementType.BLOCK_STATEMENT) {
-            BlockStatement blockStatement = (BlockStatement) stmt;
-            BasicStatement basicStatement = (BasicStatement) blockStatement.getLastStatement();
-            index = basicStatement.getInstructionIndex();
-        }
-
-        // find the return vertices that return to the original method
-        List<Vertex> returnVertices = interCFG.getOutgoingEdges(exit).stream().filter(edge ->
-                edge.getTarget().getMethod().equals(vertex.getMethod())).map(Edge::getTarget)
-                .collect(Collectors.toList());
-
-        // the return vertex that has index + 1 as next instruction index is the right one
-        for (Vertex returnVertex : returnVertices) {
-
-            // the vertex contains an invoke instruction as last statement
-            Statement returnStmt = returnVertex.getStatement();
-
-            // we need to know instruction index of the invoke stmt
-            int nextIndex = -1;
-
-            if (returnStmt.getType() == Statement.StatementType.BASIC_STATEMENT) {
-
-                // we need to inspect the successor vertices since the return stmt is shared
-                List<Vertex> successors = interCFG.getOutgoingEdges(returnVertex).stream().
-                        map(Edge::getTarget).collect(Collectors.toList());
-
-                for (Vertex successor : successors) {
-                    // each successor is a basic stmt
-                    BasicStatement basicStatement = (BasicStatement) successor.getStatement();
-                    nextIndex = basicStatement.getInstructionIndex();
-
-                    if (nextIndex == index + 1) {
-
-                        // we can't return the return stmt, but we need to mark it as visited as a side effect
-                        visitedVertices.add(returnVertex);
-
-                        // here we return the successor of the return vertex directly
-                        // otherwise we don't know again which is the actual successor
-                        return successor;
-                    }
-                }
-            } else if (returnStmt.getType() == Statement.StatementType.BLOCK_STATEMENT) {
-
-                BlockStatement blockStatement = (BlockStatement) returnStmt;
-
-                // the stmt after the return stmt is the next actual instruction stmt
-                BasicStatement basicStatement = (BasicStatement) blockStatement.getStatements().get(1);
-                index = basicStatement.getInstructionIndex();
-            }
-
-            if (nextIndex == index + 1) {
-                return returnVertex;
-            }
-        }
-        throw new IllegalStateException("Couldn't find corresponding return vertex for " + vertex);
+    public CFG(BaseCFG baseCFG, String appName) {
+        this.baseCFG = baseCFG;
+        this.appName = appName;
+        branchVertices = baseCFG.getBranches();
+        dijkstra = baseCFG.initBidirectionalDijkstraAlgorithm();
+        vertexMap = initVertexMap();
     }
 
     /**
-     * Initialises a vertex map, which basically maps each entry,
-     * exit and branch vertex to a unique id. This speeds up the
-     * mapping process of a collected trace entry.
-     * Since traces only contain entry, exit and branch vertices, we can ommit
-     * other vertex types.
+     * Checks whether the given vertex is reachable from the global entry point.
+     *
+     * @param vertex The vertex to be checked for reachability.
+     * @return Returns whether the given vertex is reachable or not.
      */
-    private void init() {
+    @Override
+    public boolean isReachable(Vertex vertex) {
+        return dijkstra.getPath(baseCFG.getEntry(), vertex) != null;
+    }
+
+    /**
+     * Returns the vertices contained in the graph.
+     *
+     * @return Returns all vertices in the graph.
+     */
+    @Override
+    public List<Vertex> getVertices() {
+        return new ArrayList<>(baseCFG.getVertices());
+    }
+
+    /**
+     * Draws the graph if it is not too big.
+     */
+    @Override
+    public void draw(File outputPath) {
+      if (size() < MAX_DRAWING_SIZE) {
+          baseCFG.drawGraph(outputPath);
+      }
+    }
+
+    /**
+     * Draws the graph where target and visited vertices are marked.
+     *
+     * @param targets The list of target vertices.
+     * @param visitedVertices The list of visited vertices.
+     */
+    @Override
+    public void draw(Set<Vertex> targets, Set<Vertex> visitedVertices, File outputPath) {
+        if (size() < MAX_DRAWING_SIZE) {
+            baseCFG.drawGraph(targets, visitedVertices, outputPath);
+        }
+    }
+
+    /**
+     * Pre-computes a mapping between certain traces and its vertices in the graph.
+     *
+     * @return Returns a mapping between a trace and its vertex in the graph.
+     */
+    private Map<String, Vertex> initVertexMap() {
 
         long start = System.currentTimeMillis();
 
-        interCFG.getVertices().parallelStream().forEach(vertex -> {
-            if (vertex.isEntryVertex()) {
-                vertexMap.put(vertex.getMethod() + "->entry", vertex);
-            } else if (vertex.isExitVertex()) {
-                vertexMap.put(vertex.getMethod() + "->exit", vertex);
-            } else if (vertex.isBranchVertex()) {
-                // get instruction id of first stmt
-                Statement statement = vertex.getStatement();
+        Map<String, Vertex> vertexMap = new HashMap<>();
 
-                if (statement.getType() == Statement.StatementType.BASIC_STATEMENT) {
-                    BasicStatement basicStmt = (BasicStatement) statement;
-                    vertexMap.put(vertex.getMethod() + "->" + basicStmt.getInstructionIndex(), vertex);
-                } else {
-                    // should be a block stmt, other stmt types shouldn't be branch targets
-                    BlockStatement blockStmt = (BlockStatement) statement;
-                    // a branch target can only be the first instruction in a basic block since it has to be a leader
-                    BasicStatement basicStmt = (BasicStatement) blockStmt.getFirstStatement();
-                    // identify a basic block by its first instruction (the branch target)
-                    vertexMap.put(vertex.getMethod() + "->" + basicStmt.getInstructionIndex(), vertex);
+        // handle entry vertices
+        Set<Vertex> entryVertices = baseCFG.getVertices().stream().filter(Vertex::isEntryVertex).collect(Collectors.toSet());
+
+        for (Vertex entryVertex : entryVertices) {
+            // exclude global entry vertex
+            if (!entryVertex.equals(baseCFG.getEntry())) {
+
+                // virtual entry vertex
+                vertexMap.put(entryVertex.getMethod() + "->entry", entryVertex);
+
+                // there are potentially several entry vertices when dealing with try-catch blocks at the beginning
+                Set<Vertex> entries = baseCFG.getOutgoingEdges(entryVertex).stream()
+                        .map(Edge::getTarget).collect(Collectors.toSet());
+
+                for (Vertex entry : entries) {
+                    // exclude dummy CFGs solely consisting of entry and exit vertex
+                    if (!entry.isExitVertex()) {
+                        Statement statement = entry.getStatement();
+
+                        // TODO: handle basic statements
+                        if (statement instanceof BlockStatement) {
+                            // each statement within a block statement is a basic statement
+                            BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
+                            vertexMap.put(entry.getMethod() + "->entry->" + basicStatement.getInstructionIndex(), entry);
+                        }
+                    }
                 }
             }
-        });
+        }
+
+        // handle exit vertices
+        Set<Vertex> exitVertices = baseCFG.getVertices().stream().filter(Vertex::isExitVertex).collect(Collectors.toSet());
+
+        for (Vertex exitVertex : exitVertices) {
+            // exclude global exit vertex
+            if (!exitVertex.equals(baseCFG.getExit())) {
+
+                // virtual exit vertex
+                vertexMap.put(exitVertex.getMethod() + "->exit", exitVertex);
+
+                Set<Vertex> exits = baseCFG.getIncomingEdges(exitVertex).stream()
+                        .map(Edge::getSource).collect(Collectors.toSet());
+
+                for (Vertex exit : exits) {
+                    // exclude dummy CFGs solely consisting of entry and exit vertex
+                    if (!exit.isEntryVertex()) {
+                        Statement statement = exit.getStatement();
+
+                        // TODO: handle basic statements
+                        if (statement instanceof BlockStatement) {
+                            // each statement within a block statement is a basic statement
+                            BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
+                            vertexMap.put(exit.getMethod() + "->exit->" + basicStatement.getInstructionIndex(), exit);
+                        }
+                    }
+                }
+            }
+        }
+
+        // handle branch + if stmt vertices
+        for (Vertex branchVertex : branchVertices) {
+
+            // a branch can potentially have multiple predecessors (shared branch)
+            Set<Vertex> ifVertices = baseCFG.getIncomingEdges(branchVertex).stream()
+                    .map(Edge::getSource).collect(Collectors.toSet());
+
+            for (Vertex ifVertex : ifVertices) {
+
+                Statement statement = ifVertex.getStatement();
+
+                // TODO: handle basic statements
+                if (statement instanceof BlockStatement) {
+                    // each statement within a block statement is a basic statement
+                    BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
+                    vertexMap.put(ifVertex.getMethod() + "->if->" + basicStatement.getInstructionIndex(), ifVertex);
+                }
+            }
+
+            Statement statement = branchVertex.getStatement();
+
+            // TODO: handle basic statements
+            if (statement instanceof BlockStatement) {
+                // each statement within a block statement is a basic statement
+                BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
+                vertexMap.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
+            }
+        }
 
         long end = System.currentTimeMillis();
-        System.out.println("Concurrent VertexMap construction took: " + (end-start));
-        System.out.println("Size of VertexMap: " + vertexMap.size());
-    }
+        Log.println("VertexMap construction took: " + (end-start) + " seconds");
+        Log.println("Size of VertexMap: " + vertexMap.size());
 
-    public Map<Vertex, Double> getBranchDistances() {
-        return branchDistances;
-    }
-
-    public Map<String, Vertex> getVertexMap() {
         return vertexMap;
     }
 
-    /**
-     * Selects a new target vertex in either a purely random fashion or
-     * a yet uncovered target vertex.
-     *
-     * @param random Whether to perform the selection purely random.
-     */
-    public void selectTargetVertex(boolean random) {
+    @Override
+    public List<Vertex> getBranchVertices() {
+        return Collections.unmodifiableList(branchVertices);
+    }
 
-        if (random) {
-            targetVertex = selectRandomTargetVertex();
-        } else {
+    // TODO: lookup trace in graph if not present in cache
+    //  the search strategy can be a parallel forward/backward search
+    //  assuming that the input is in the format 'class->method->instruction_index'
+    @Override
+    public Vertex lookupVertex(String trace) {
+        return vertexMap.get(trace);
+    }
 
-            // select a yet uncovered target vertex
-            while (true) {
-                Vertex vertex = selectRandomTargetVertex();
-                if (!coveredTargetVertices.contains(vertex)) {
-                    targetVertex = vertex;
-                    break;
-                }
+    @Override
+    public int getDistance(Vertex source, Vertex target) {
+
+        assert baseCFG.containsVertex(source)
+                && baseCFG.containsVertex(target) : "source and target vertex must be part of graph!";
+
+        VertexPair distancePair = new VertexPair(source, target);
+
+        if (cachedDistances.containsKey(distancePair)) {
+            return cachedDistances.get(distancePair);
+        }
+
+        // TODO: adjust path search algorithm (dijkstra, bfs, ...)
+        GraphPath<Vertex, Edge> path = dijkstra.getPath(source, target);
+
+        // a negative path length indicates that there is no path between the given vertices
+        int distance = path != null ? path.getLength() : -1;
+
+        // update cache
+        cachedDistances.put(distancePair, distance);
+
+        return distance;
+    }
+
+    @Override
+    public int size() {
+        return baseCFG.size();
+    }
+
+    @Override
+    public String getAppName() {
+        return appName;
+    }
+
+    @Override
+    public List<String> getBranches() {
+
+        List<String> branches = new LinkedList<>();
+
+        for (Vertex branchVertex : branchVertices) {
+            Integer branchID = null;
+            if (branchVertex.getStatement() instanceof BasicStatement) {
+                branchID = ((BasicStatement) branchVertex.getStatement()).getInstructionIndex();
+            } else if (branchVertex.getStatement() instanceof BlockStatement) {
+                branchID = ((BasicStatement) ((BlockStatement) branchVertex.getStatement()).getFirstStatement()).getInstructionIndex();
+            }
+
+            if (branchID != null) {
+                // convert a branch (vertex) to its trace
+                branches.add(branchVertex.getMethod() + "->" + branchID);
             }
         }
-        System.out.println("Selected Target Vertex: " + targetVertex + " " + targetVertex.getMethod());
-    }
-
-    /**
-     * Marks the currently selected target vertex as covered.
-     */
-    public void updateCoveredTargetVertices() {
-        coveredTargetVertices.add(targetVertex);
-    }
-
-    /**
-     * Selects randomly a target vertex from the set of vertices.
-     *
-     * @return Returns a randomly selected target vertex.
-     */
-    private Vertex selectRandomTargetVertex() {
-
-        Set<Vertex> vertices = getVertices();
-        Vertex entryVertex = interCFG.getEntry();
-
-        while (true) {
-
-            Random rand = new Random(System.currentTimeMillis());
-            int index = rand.nextInt(vertices.size());
-            Iterator<Vertex> iter = vertices.iterator();
-            for (int i = 0; i < index; i++) {
-                iter.next();
-            }
-
-            Vertex targetVertex = iter.next();
-
-            // check if target vertex is reachable from global entry point
-            if (getShortestDistance(entryVertex, targetVertex) != -1) {
-                return targetVertex;
-            }
-        }
-    }
-
-    public ShortestPathAlgorithm<Vertex, Edge> getDijkstra() {
-        return dijkstra;
-    }
-
-    public ShortestPathAlgorithm<Vertex, Edge> getBFS() { return bfs; }
-
-    public Vertex getTargetVertex() {
-        return targetVertex;
-    }
-
-    public List<Vertex> getBranches() {
-        return interCFG.getBranches();
-    }
-
-    public Set<Vertex> getVertices() {
-        return interCFG.getVertices();
-    }
-
-    public int getNumberOfBranches() {
-        return numberOfBranches;
-    }
-
-    public void addCoveredBranches(Set<Vertex> branches) {
-        coveredBranches.addAll(branches);
-    }
-
-    public void addCoveredBranches(String testCase, Set<Vertex> branches) {
-        testCaseBranchCoverage.put(testCase, branches);
-    }
-
-    public int getShortestDistance(Vertex src, Vertex dest) {
-
-        // assert bfs != null;
-        assert dijkstra != null;
-
-        GraphPath<Vertex, Edge> path = dijkstra.getPath(src, dest);
-        return path != null ? path.getLength() : -1;
-    }
-
-    public double getBranchCoverage() {
-        return ((double) coveredBranches.size()) / numberOfBranches;
-    }
-
-    public double getBranchCoverage(String testCase) {
-        if (!testCaseBranchCoverage.containsKey(testCase)) {
-            return 0;
-        } else {
-            return ((double) testCaseBranchCoverage.get(testCase).size()) / numberOfBranches;
-        }
-    }
-
-    public String getPackageName() {
-        return packageName;
-    }
-
-    public void drawGraph(Set<Vertex> visitedVertices, File outputPath) {
-        interCFG.drawGraph(visitedVertices, targetVertex, outputPath);
+        return branches;
     }
 }

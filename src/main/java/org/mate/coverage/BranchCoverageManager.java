@@ -54,7 +54,7 @@ public final class BranchCoverageManager {
                 "-a",
                 "STORE_TRACES",
                 "-n",
-                packageName + "/de.uni_passau.fim.auermich.branchcoverage.tracer.Tracer",
+                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer",
                 "--es",
                 "packageName",
                 packageName);
@@ -170,6 +170,12 @@ public final class BranchCoverageManager {
 
                 // each trace consists of className->methodName->branchID
                 String[] triple = trace.split("->");
+
+                if (triple.length != 3 || trace.contains(":")
+                        || trace.endsWith("->exit") || trace.endsWith("->entry")) {
+                    // ignore traces related to if statements or branch distance or virtual entry/exit vertices
+                    continue;
+                }
 
                 if (visitedBranches.containsKey(triple[0])) {
                     // only new not yet covered branches are interesting
