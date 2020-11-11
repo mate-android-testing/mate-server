@@ -289,6 +289,10 @@ public class GraphEndpoint implements Endpoint {
         AtomicInteger minDistance = new AtomicInteger(Integer.MAX_VALUE);
         AtomicReference<Vertex> minDistanceVertex = new AtomicReference<>();
 
+        // track global minimum distance + vertex (solely for debugging)
+        AtomicInteger minDistanceGlobal = new AtomicInteger(Integer.MAX_VALUE);
+        AtomicReference<Vertex> minDistanceVertexGlobal = new AtomicReference<>();
+
         visitedVertices.parallelStream().forEach(visitedVertex -> {
 
             int distance = graph.getDistance(visitedVertex, targetVertex);
@@ -299,10 +303,19 @@ public class GraphEndpoint implements Endpoint {
                     minDistanceVertex.set(visitedVertex);
                     minDistance.set(distance);
                 }
+
+                if (distance < minDistanceGlobal.get() && distance != -1) {
+                    // found global shorter path
+                    minDistanceGlobal.set(distance);
+                    minDistanceVertexGlobal.set(visitedVertex);
+                }
             }
         });
 
         Log.println("Shortest path length: " + minDistance.get());
+        Log.println("Shortest path length (global): " + minDistanceGlobal.get());
+        Log.println("Closest global vertex: " + minDistanceVertexGlobal.get().getMethod()
+                + "->[ " + minDistanceVertexGlobal.get().getStatement() + "]");
 
         long end = System.currentTimeMillis();
         Log.println("Computing approach level took: " + (end - start) + " seconds");
@@ -355,7 +368,6 @@ public class GraphEndpoint implements Endpoint {
 
                     // found a branch distance value for the given if stmt
                     double distance = Double.parseDouble(trace.split(":")[1]);
-                    Log.println("Distance value: " + distance);
 
                     // we need to track minimal distance
                     if (distance < minBranchDistance) {
@@ -406,9 +418,16 @@ public class GraphEndpoint implements Endpoint {
 
         for (Vertex branch : graph.getBranchVertices()) {
 
+            Log.println("Target branch vertex: " + branch.getMethod() + "->["
+                        + branch.getStatement() + "]");
+
             // find the shortest distance (approach level) to the given branch
             AtomicInteger minDistance = new AtomicInteger(Integer.MAX_VALUE);
             AtomicReference<Vertex> minDistanceVertex = new AtomicReference<>();
+
+            // track global minimum distance + vertex (solely for debugging)
+            AtomicInteger minDistanceGlobal = new AtomicInteger(Integer.MAX_VALUE);
+            AtomicReference<Vertex> minDistanceVertexGlobal = new AtomicReference<>();
 
             visitedVertices.parallelStream().forEach(visitedVertex -> {
 
@@ -420,8 +439,19 @@ public class GraphEndpoint implements Endpoint {
                         minDistanceVertex.set(visitedVertex);
                         minDistance.set(distance);
                     }
+
+                    if (distance < minDistanceGlobal.get() && distance != -1) {
+                        // found global shorter path
+                        minDistanceGlobal.set(distance);
+                        minDistanceVertexGlobal.set(visitedVertex);
+                    }
                 }
             });
+
+            Log.println("Shortest path length: " + minDistance.get());
+            Log.println("Shortest path length (global): " + minDistanceGlobal.get());
+            Log.println("Closest global vertex: " + minDistanceVertexGlobal.get().getMethod()
+                    + "->[ " + minDistanceVertexGlobal.get().getStatement() + "]");
 
             if (minDistance.get() == Integer.MAX_VALUE) {
                 // branch not reachable by execution path
@@ -462,7 +492,6 @@ public class GraphEndpoint implements Endpoint {
 
                         // found a branch distance value for the given if stmt
                         double distance = Double.parseDouble(trace.split(":")[1]);
-                        Log.println("Distance value: " + distance);
 
                         // we need to track minimal distance
                         if (distance < minBranchDistance) {
