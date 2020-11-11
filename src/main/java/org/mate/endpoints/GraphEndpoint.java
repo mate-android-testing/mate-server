@@ -298,10 +298,12 @@ public class GraphEndpoint implements Endpoint {
             int distance = graph.getDistance(visitedVertex, targetVertex);
 
             synchronized (this) {
-                if (distance < minDistance.get() && distance != -1 && isIfVertex(visitedVertex)) {
+                if (distance < minDistance.get() && distance != -1) {
                     // found shorter path
-                    minDistanceVertex.set(visitedVertex);
-                    minDistance.set(distance);
+                    if (distance == 0 || isIfVertex(visitedVertex)) {
+                        minDistanceVertex.set(visitedVertex);
+                        minDistance.set(distance);
+                    }
                 }
 
                 if (distance < minDistanceGlobal.get() && distance != -1) {
@@ -434,10 +436,12 @@ public class GraphEndpoint implements Endpoint {
                 int distance = graph.getDistance(visitedVertex, branch);
 
                 synchronized (this) {
-                    if (distance < minDistance.get() && distance != -1 && isIfVertex(visitedVertex)) {
+                    if (distance < minDistance.get() && distance != -1) {
                         // found shorter path
-                        minDistanceVertex.set(visitedVertex);
-                        minDistance.set(distance);
+                        if (distance == 0 || isIfVertex(visitedVertex)) {
+                            minDistanceVertex.set(visitedVertex);
+                            minDistance.set(distance);
+                        }
                     }
 
                     if (distance < minDistanceGlobal.get() && distance != -1) {
