@@ -4,6 +4,7 @@ import org.apache.commons.io.FileUtils;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
 import org.mate.network.message.Message;
+import org.mate.network.message.Messages;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
 
@@ -14,6 +15,53 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public final class BranchCoverageManager {
+
+    /**
+     * Copies the coverage data, i.e. traces of test cases, specified through the list of entities
+     * from the source chromosome (test suite) to the target chromosome (test suite).
+     *
+     * @param appsDir The apps directory containing all app directories.
+     * @param deviceID The emulator identifier.
+     * @param sourceChromosome The source chromosome (test suite).
+     * @param targetChromosome The target chromosome (test suite).
+     * @param entities A list of test cases.
+     * @return Returns a message describing the success/failure of the operation.
+     */
+    public static Message copyCoverageData(Path appsDir, String deviceID, String sourceChromosome,
+                                           String targetChromosome, String[] entities) {
+
+        Device device = Device.devices.get(deviceID);
+        String packageName = device.getPackageName();
+
+        File appDir = new File(appsDir.toFile(), packageName);
+        File tracesDir = new File(appDir, "traces");
+
+        File srcDir = new File(tracesDir, sourceChromosome);
+        File targetDir = new File(tracesDir, targetChromosome);
+
+        if (!targetDir.mkdirs() && !targetDir.isDirectory()) {
+            final var errorMsg = "Chromosome copy failed: target directory could not be created.";
+            Log.printError(errorMsg);
+            return Messages.errorMessage(errorMsg);
+        }
+        for (String entity : entities) {
+
+            if (Path.of(targetDir.getPath(), entity).toFile().exists()) {
+                // traces of chromosome have been already copied previously
+                continue;
+            }
+
+            try {
+                Files.copy(Path.of(srcDir.getPath(), entity), Path.of(targetDir.getPath(), entity));
+            } catch (IOException e) {
+                final var errorMsg = "Chromosome copy failed: entity " + entity + " could not be copied from "
+                        + srcDir + " to " + targetDir;
+                Log.printError(errorMsg);
+                return Messages.errorMessage(errorMsg);
+            }
+        }
+        return new Message("/coverage/copy");
+    }
 
     /**
      * Stores the branch coverage data for a chromosome, which can be either a test case or a test suite.

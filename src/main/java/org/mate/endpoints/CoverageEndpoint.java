@@ -49,12 +49,7 @@ public class CoverageEndpoint implements Endpoint {
         } else if (request.getSubject().startsWith("/coverage/lineCoveredPercentages")) {
             return getLineCoveredPercentages(request);
         } else if (request.getSubject().startsWith("/coverage/copy")) {
-            final var errorMsg = copyCoverageData(request);
-            if (errorMsg == null) {
-                return new Message("/coverage/copy");
-            } else {
-                return Messages.errorMessage(errorMsg);
-            }
+            return copyCoverageData(request);
         } else if (request.getSubject().startsWith("/coverage/getSourceLines")) {
             final var result = getSourceLines(request);
             if (result.isOk()) {
@@ -67,6 +62,35 @@ public class CoverageEndpoint implements Endpoint {
         }
         throw new IllegalArgumentException("Message request with subject: "
                 + request.getSubject() + " can't be handled by CoverageEndPoint!");
+    }
+
+    private Message copyCoverageData(Message request) {
+
+        // get the coverage type, e.g. BRANCH_COVERAGE
+        Coverage coverage = Coverage.valueOf(request.getParameter("coverage_type"));
+
+        switch (coverage) {
+            case LINE_COVERAGE:
+                final var errorMsg = copyLineCoverageData(request);
+                if (errorMsg == null) {
+                    return new Message("/coverage/copy");
+                } else {
+                    return Messages.errorMessage(errorMsg);
+                }
+            case BRANCH_COVERAGE:
+                return copyBranchCoverageData(request);
+            default:
+                throw new UnsupportedOperationException("Coverage type not yet supported!");
+        }
+
+    }
+
+    private Message copyBranchCoverageData(Message request) {
+        var deviceId = request.getParameter("deviceId");
+        var chromosomeSrc = request.getParameter("chromosome_src");
+        var chromosomeTarget = request.getParameter("chromosome_target");
+        var entities = request.getParameter("entities").split(",");
+        return BranchCoverageManager.copyCoverageData(appsDir, deviceId, chromosomeSrc, chromosomeTarget, entities);
     }
 
     private Message storeCoverageData(Message request) {
@@ -256,7 +280,7 @@ public class CoverageEndpoint implements Endpoint {
         return null;
     }
 
-    private String copyCoverageData(Message request) {
+    private String copyLineCoverageData(Message request) {
         var deviceId = request.getParameter("deviceId");
         var packageName = Device.getDevice(deviceId).getPackageName();
         var chromosomeSrc = request.getParameter("chromosome_src");
@@ -271,6 +295,12 @@ public class CoverageEndpoint implements Endpoint {
             return errorMsg;
         }
         for (String entity : entities) {
+
+            if (targetDir.resolve(entity).toFile().exists()) {
+                // line coverage data of chromosome have been already copied previously
+                continue;
+            }
+
             try {
                 Files.copy(srcDir.resolve(entity), targetDir.resolve(entity));
             } catch (IOException e) {
