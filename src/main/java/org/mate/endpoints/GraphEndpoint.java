@@ -12,7 +12,6 @@ import org.mate.graphs.GraphType;
 import org.mate.graphs.InterCFG;
 import org.mate.graphs.IntraCFG;
 import org.mate.io.Device;
-import org.mate.io.ProcessRunner;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
@@ -56,8 +55,6 @@ public class GraphEndpoint implements Endpoint {
             return initGraph(request);
         } else if (request.getSubject().startsWith("/graph/get_branches")) {
             return getBranches(request);
-        } else if (request.getSubject().startsWith("/graph/store")) {
-            return storeBranchDistanceData(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector")) {
             return getBranchDistanceVector(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
@@ -212,51 +209,6 @@ public class GraphEndpoint implements Endpoint {
         return new Message.MessageBuilder("/graph/get_branches")
                 .withParameter("branches", branches)
                 .build();
-    }
-
-    private Message storeBranchDistanceData(Message request) {
-
-        String deviceID = request.getParameter("deviceId");
-        // TODO: use packageName of device
-        String packageName = request.getParameter("packageName");
-        String chromosome = request.getParameter("chromosome");
-        String entity = request.getParameter("entity");
-
-        if (graph == null) {
-            throw new IllegalStateException("Graph hasn't been initialised!");
-        }
-
-        // grant read/write permission on external storage
-        Device device = Device.getDevice(deviceID);
-        boolean granted = device.grantPermissions(packageName);
-
-        if (!granted) {
-            throw new IllegalStateException("Couldn't grant runtime permissions!");
-        }
-
-        // send broadcast in order to write out traces
-        var broadcastOperation = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(),
-                "-s",
-                deviceID,
-                "shell",
-                "am",
-                "broadcast",
-                "-a",
-                "STORE_TRACES",
-                "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer",
-                "--es",
-                "packageName",
-                packageName);
-
-        if (broadcastOperation.isErr()) {
-            throw new IllegalStateException("Couldn't send broadcast!");
-        }
-
-        // fetch the traces from emulator
-        device.pullTraceFile(chromosome, entity);
-        return new Message("/graph/store");
     }
 
     private Message getBranchDistance(Message request) {
