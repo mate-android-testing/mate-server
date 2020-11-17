@@ -160,7 +160,7 @@ public class UtilityEndpoint implements Endpoint {
     }
 
     private Path getCoverageBaseDir(String packageName) {
-        return resultsPath.resolve(packageName + ".coverage");
+        return appsDir.resolve(packageName).resolve("coverage");
     }
 
     private Path getCoverageChromosomeDir(String packageName, String chromosome) {
