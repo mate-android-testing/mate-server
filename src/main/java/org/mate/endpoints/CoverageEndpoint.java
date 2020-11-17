@@ -148,7 +148,7 @@ public class CoverageEndpoint implements Endpoint {
         var lines = Arrays.stream(request.getParameter("lines").split("\\*"))
                 .map(LineCoverageManager.Line::valueOf)
                 .collect(Collectors.toList());
-        var baseCoverageDir = resultsPath.resolve(packageName + ".coverage");
+        var baseCoverageDir = getCoverageBaseDir(packageName);
         final var execFiles = getExecFiles(chromosomes, baseCoverageDir);
         if (execFiles.isErr()) {
             return Messages.errorMessage(execFiles.getErr());
@@ -170,7 +170,7 @@ public class CoverageEndpoint implements Endpoint {
         var deviceId = request.getParameter("deviceId");
         var packageName = Device.getDevice(deviceId).getPackageName();
         var chromosomes = request.getParameter("chromosomes");
-        var baseCoverageDir = resultsPath.resolve(packageName + ".coverage");
+        var baseCoverageDir = getCoverageBaseDir(packageName);
         final var execFiles = getExecFiles(chromosomes, baseCoverageDir);
         if (execFiles.isErr()) {
             return Messages.errorMessage(execFiles.getErr());
@@ -217,7 +217,7 @@ public class CoverageEndpoint implements Endpoint {
     }
 
     private Path getCoverageBaseDir(String packageName) {
-        return resultsPath.resolve(packageName + ".coverage");
+        return appsDir.resolve(packageName).resolve("coverage");
     }
 
     private Path getCoverageChromosomeDir(String packageName, String chromosome) {
