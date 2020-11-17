@@ -156,7 +156,7 @@ public class CoverageEndpoint implements Endpoint {
 
         var lineCoveredPercentages = LineCoverageManager.getLineCoveredPercentages(
                 execFiles.getOk(),
-                Path.of(packageName + ".src", "classes"),
+                appsDir.resolve(packageName).resolve("src").resolve("classes"),
                 lines);
 
         return new Message.MessageBuilder("/coverage/lineCoveredPercentages")
@@ -178,7 +178,7 @@ public class CoverageEndpoint implements Endpoint {
 
         Double combinedCoverage = LineCoverageManager.getCombinedCoverage(
                 execFiles.getOk(),
-                Path.of(packageName + ".src", "classes"));
+                appsDir.resolve(packageName).resolve("src").resolve("classes"));
 
         return new Message.MessageBuilder("/coverage/combined")
                 .withParameter("coverage", String.valueOf(combinedCoverage))
@@ -316,7 +316,7 @@ public class CoverageEndpoint implements Endpoint {
     private Result<String, String> getSourceLines(Message request) {
         var deviceId = request.getParameter("deviceId");
         var packageName = Device.getDevice(deviceId).getPackageName();
-        var reportFile = Path.of(packageName + ".report");
+        var reportFile = appsDir.resolve(packageName).resolve(packageName + ".report");
         var separator = "+";
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         try {
