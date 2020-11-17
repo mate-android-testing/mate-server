@@ -50,6 +50,7 @@ public class UtilityEndpoint implements Endpoint {
             case "branch_distance_fitness_function":
             case "branch_distance_fitness_function_multi_objective":
                 return copyBranchFitnessData(request);
+            case "line_coverage_fitness_function":
             case "line_covered_percentage_fitness_function":
                 return copyLineFitnessData(request);
             default:
@@ -148,6 +149,7 @@ public class UtilityEndpoint implements Endpoint {
             case "branch_distance_fitness_function":
             case "branch_distance_fitness_function_multi_objective":
                 return storeBranchFitnessData(request);
+            case "line_coverage_fitness_function":
             case "line_covered_percentage_fitness_function":
                 return storeLineFitnessData(request);
             default:
