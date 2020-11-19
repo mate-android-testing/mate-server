@@ -148,8 +148,12 @@ public class GraphEndpoint implements Endpoint {
                     }
                 }
             default:
-                // TODO: enable custom target vertex
-                throw new UnsupportedOperationException("Custom target vertex selection not yet supported!");
+                Vertex targetVertex = graph.lookupVertex(target);
+
+                if (targetVertex == null) {
+                    throw new UnsupportedOperationException("Custom target vertex not found: " + target);
+                }
+                return targetVertex;
         }
     }
 
