@@ -210,12 +210,26 @@ public abstract class CFG implements Graph {
         return Collections.unmodifiableList(branchVertices);
     }
 
-    // TODO: lookup trace in graph if not present in cache
-    //  the search strategy can be a parallel forward/backward search
-    //  assuming that the input is in the format 'class->method->instruction_index'
+    /**
+     * Looks up a trace corresponding to a vertex in the graph.
+     *
+     * @param trace The trace describing the vertex.
+     * @return Returns the vertex corresponding to the trace
+     *          or {@code null} if no vertex matches the trace.
+     */
     @Override
     public Vertex lookupVertex(String trace) {
-        return vertexMap.get(trace);
+        if (vertexMap.containsKey(trace)) {
+            return vertexMap.get(trace);
+        } else {
+            try {
+                Log.println("Non cached vertex lookup for trace: " + trace);
+                return baseCFG.lookUpVertex(trace);
+            } catch (Exception e) {
+                Log.printWarning(e.getMessage());
+                return null;
+            }
+        }
     }
 
     @Override
