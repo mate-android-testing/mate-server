@@ -63,7 +63,7 @@ public class GraphEndpoint implements Endpoint {
             return drawGraph(request);
         } else {
             throw new IllegalArgumentException("Message request with subject: "
-                    + request.getSubject() + " can't be handled by GraphEndPoint!");
+                    + request.getSubject() + " can't be handled by GraphEndpoint!");
         }
     }
 

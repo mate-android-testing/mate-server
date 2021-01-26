@@ -41,12 +41,6 @@ public class LegacyEndpoint implements Endpoint {
             return Report.addFlaw(cmdStr, imageHandler);
         }
 
-        if (cmdStr.startsWith("getActivity"))
-            return getActivity(cmdStr);
-
-        if (cmdStr.startsWith("getActivities"))
-            return getActivities(cmdStr);
-
         if (cmdStr.startsWith("getEmulator"))
             return Device.allocateDevice(cmdStr, imageHandler, androidEnvironment);
 
@@ -92,19 +86,5 @@ public class LegacyEndpoint implements Endpoint {
             return "ok";
         }
         return null;
-    }
-
-    private String getActivity(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        Device device = Device.devices.get(deviceID);
-        return device.getCurrentActivity();
-    }
-
-    private String getActivities(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        Device device = Device.devices.get(deviceID);
-        return String.join("\n", device.getActivities());
     }
 }

@@ -27,8 +27,35 @@ public class AndroidEndpoint implements Endpoint {
             } else {
                 return Messages.errorMessage(errMsg);
             }
+        } else if (request.getSubject().startsWith("/android/get_activities")) {
+            return getActivities(request);
+        } else if (request.getSubject().startsWith("/android/get_current_activity")) {
+            return getCurrentActivity(request);
+        } else {
+            throw new IllegalArgumentException("Message request with subject: "
+                    + request.getSubject() + " can't be handled by AndroidEndpoint!");
         }
-        return null;
+    }
+
+    private Message getActivities(Message request) {
+
+        var deviceId = request.getParameter("deviceId");
+        Device device = Device.devices.get(deviceId);
+        var activities  = String.join("\n", device.getActivities());
+
+        return new Message.MessageBuilder("/android/get_activities")
+                .withParameter("activities", activities)
+                .build();
+    }
+
+    private Message getCurrentActivity(Message request) {
+
+        var deviceId = request.getParameter("deviceId");
+        Device device = Device.devices.get(deviceId);
+
+        return new Message.MessageBuilder("/android/get_current_activity")
+                .withParameter("activity", device.getCurrentActivity())
+                .build();
     }
 
     private String clearApp(Message request) {
