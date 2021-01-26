@@ -236,44 +236,6 @@ public class Device {
     }
 
     /**
-     * Pulls the traces.txt file from the external storage (sd card) if present.
-     * The file is stored in the working directory, that is the mate-commander directory by default.
-     *
-     * @return Returns {@code true} if the trace file could be pulled,
-     * otherwise {@code false}.
-     */
-    // TODO: can be removed and replaced with pullTraceFile(String fileName)
-    @Deprecated
-    public boolean pullTraceFile() {
-
-        // traces are stored on the sd card (external storage)
-        String tracesDir = "storage/emulated/0"; // + packageName;
-        // String checkFileCmd = "adb -s " + deviceID + " shell " + "\"run-as " + packageName + " ls\"";
-
-        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", tracesDir).getOk();
-
-        // check whether there is some traces file
-        if (!files.stream().anyMatch(str -> str.trim().equals("traces.txt"))) {
-            return false;
-        }
-
-        File appDir = new File(appsDir.toFile(), packageName);
-        File baseTracesDir = new File(appDir, "traces");
-
-        // create base traces directory if not yet present
-        if (!baseTracesDir.exists()) {
-            Log.println("Creating base traces directory: " + baseTracesDir.mkdirs());
-        }
-
-        File tracesFile = new File(baseTracesDir, "traces.txt");
-
-        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull",
-                tracesDir + "/traces.txt", String.valueOf(tracesFile));
-
-        return true;
-    }
-
-    /**
      * Checks whether writing the collected traces onto the external storage has been completed.
      * This is done by checking if an info.txt file exists in the app-internal storage.
      *
@@ -405,6 +367,14 @@ public class Device {
         return tracesFile;
     }
 
+    /**
+     * Returns the name of the currently visible activity or
+     * 'unknown' if the activity name couldn't be extracted.
+     * If the AUT crashed, it can happen that no activity
+     * appears to be in foreground.
+     *
+     * @return Returns the name of the currently visible activity.
+     */
     public String getCurrentActivity() {
 
         String response = "unknown";
@@ -461,9 +431,13 @@ public class Device {
         return response;
     }
 
+    /**
+     * Returns the activity names belonging to the AUT.
+     *
+     * @return Returns the activities of the AUT.
+     */
     public List<String> getActivities() {
 
-        String cmd = "";
         List<String> activities = new ArrayList<>();
 
         String apkPath = appsDir + File.separator + packageName + ".apk";
@@ -519,6 +493,11 @@ public class Device {
         return activities;
     }
 
+    /**
+     * Allocates emulator instances that are attached according to 'adb devices'.
+     *
+     * @param androidEnvironment A reference to the android environment, e.g. access to adb.
+     */
     public static void loadActiveDevices(AndroidEnvironment androidEnvironment) {
         if (devices == null)
             devices = new Hashtable<String, Device>();
@@ -539,6 +518,9 @@ public class Device {
         }
     }
 
+    /**
+     * Prints the discovered emulators and its running AUT's package name.
+     */
     public static void listActiveDevices() {
         for (String devID : devices.keySet()) {
             Device device = devices.get(devID);
@@ -546,6 +528,14 @@ public class Device {
         }
     }
 
+    /**
+     * Returns the name of the emulator running the given AUT.
+     *
+     * @param cmdStr Identifies the AUT by its package name.
+     * @param imageHandler A reference to the image handler.
+     * @param androidEnvironment A reference to the android environment, e.g. access to adb.
+     * @return Returns the name of the emulator.
+     */
     public static String allocateDevice(String cmdStr, ImageHandler imageHandler, AndroidEnvironment androidEnvironment) {
         String parts[] = cmdStr.split(":");
         String packageName = parts[1];
@@ -563,26 +553,6 @@ public class Device {
             device.setPackageName(packageName);
             device.setBusy(true);
         }
-/*
-        if (deviceID.equals("")){
-            int i=0;
-            boolean emulatorFound = false;
-            Enumeration<String> keys = emulatorsAllocated.keys();
-            while (keys.hasMoreElements() && !emulatorFound){
-                String key = keys.nextElement();
-                boolean allocated = emulatorsAllocated.get(key);
-                if (!allocated){
-                    response = key;
-                    emulatorFound=true;
-                    emulatorsAllocated.put(response, Boolean.TRUE);
-                    emulatorsPackage.put(response,packageName);
-                    System.out.println("found: " + response);
-                }
-            }
-            if (!emulatorFound)
-                response="";
-        }*/
-        //response = "4f60d1bb";
 
         Report.createHeader(deviceID, packageName);
         imageHandler.createPicturesFolder(deviceID, packageName);
@@ -590,6 +560,14 @@ public class Device {
         return deviceID;
     }
 
+    /**
+     * Returns the emulator name running the given package name.
+     *
+     * @param packageName The package name of the AUT.
+     * @param androidEnvironment A reference to the android environment, e.g. access to adb.
+     * @return Returns the name of the emulator running the given app. If no such emulator is
+     *          found, the emtpy string is returned.
+     */
     public static String getDeviceRunningPackage(String packageName, AndroidEnvironment androidEnvironment) {
         for (String key : devices.keySet()) {
             List<String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", key, "shell", "ps", packageName).getOk();
@@ -602,6 +580,13 @@ public class Device {
         return "";
     }
 
+    /**
+     * Marks the emulator as released.
+     *
+     * @param cmdStr Defines the emulator name, e.g. emulator-5554.
+     * @return Returns the string 'released' if the operation succeeded,
+     *          otherwise an empty string is returned.
+     */
     public static String releaseDevice(String cmdStr) {
         String response = "";
         String[] parts = cmdStr.split(":");
@@ -617,6 +602,12 @@ public class Device {
         return response;
     }
 
+    /**
+     * Returns the emulator with the given emulator id.
+     *
+     * @param deviceId The id of the emulator.
+     * @return Returns the emulator associated with the given id.
+     */
     public static Device getDevice(String deviceId) {
         return devices.get(deviceId);
     }
