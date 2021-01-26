@@ -236,44 +236,6 @@ public class Device {
     }
 
     /**
-     * Pulls the traces.txt file from the external storage (sd card) if present.
-     * The file is stored in the working directory, that is the mate-commander directory by default.
-     *
-     * @return Returns {@code true} if the trace file could be pulled,
-     * otherwise {@code false}.
-     */
-    // TODO: can be removed and replaced with pullTraceFile(String fileName)
-    @Deprecated
-    public boolean pullTraceFile() {
-
-        // traces are stored on the sd card (external storage)
-        String tracesDir = "storage/emulated/0"; // + packageName;
-        // String checkFileCmd = "adb -s " + deviceID + " shell " + "\"run-as " + packageName + " ls\"";
-
-        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", tracesDir).getOk();
-
-        // check whether there is some traces file
-        if (!files.stream().anyMatch(str -> str.trim().equals("traces.txt"))) {
-            return false;
-        }
-
-        File appDir = new File(appsDir.toFile(), packageName);
-        File baseTracesDir = new File(appDir, "traces");
-
-        // create base traces directory if not yet present
-        if (!baseTracesDir.exists()) {
-            Log.println("Creating base traces directory: " + baseTracesDir.mkdirs());
-        }
-
-        File tracesFile = new File(baseTracesDir, "traces.txt");
-
-        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull",
-                tracesDir + "/traces.txt", String.valueOf(tracesFile));
-
-        return true;
-    }
-
-    /**
      * Checks whether writing the collected traces onto the external storage has been completed.
      * This is done by checking if an info.txt file exists in the app-internal storage.
      *
