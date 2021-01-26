@@ -41,12 +41,6 @@ public class LegacyEndpoint implements Endpoint {
             return Report.addFlaw(cmdStr, imageHandler);
         }
 
-        if (cmdStr.startsWith("getEmulator"))
-            return Device.allocateDevice(cmdStr, imageHandler, androidEnvironment);
-
-        if (cmdStr.startsWith("releaseEmulator"))
-            return Device.releaseDevice(cmdStr);
-
         //format commands
         if (cmdStr.startsWith("screenshot"))
             return imageHandler.takeScreenshot(cmdStr);

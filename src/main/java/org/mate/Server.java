@@ -44,10 +44,13 @@ public class Server {
         Server server = new Server();
 
         server.loadConfig();
+
+        // TODO: remove command line arguments completely
         if (args.length > 0) {
             // Read configuration from commandline arguments for backwards compatibility
             server.timeout = Long.parseLong(args[0]);
 
+            // TODO: remove this parameter since it is not used anywhere
             if (args.length > 1) {
                 server.length = Long.parseLong(args[1]);
             }
@@ -108,7 +111,7 @@ public class Server {
         router.add("/close", closeEndpoint);
         router.add("/crash", new CrashEndpoint(androidEnvironment));
         router.add("/properties", new PropertiesEndpoint());
-        router.add("/emulator/interaction", new EmulatorInteractionEndpoint(androidEnvironment));
+        router.add("/emulator/interaction", new EmulatorInteractionEndpoint(androidEnvironment, imageHandler));
         router.add("/android", new AndroidEndpoint(androidEnvironment));
         router.add("/accessibility",new AccessibilityEndpoint(imageHandler));
         router.add("/coverage", new CoverageEndpoint(androidEnvironment, resultsPath, appsDir));

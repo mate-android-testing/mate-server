@@ -383,7 +383,6 @@ public class Device {
             if (ProcessRunner.isWin) {
                 cmd = "$focused = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[5]";
-                Log.println(cmd);
             } else {
                 cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
             }
@@ -393,7 +392,6 @@ public class Device {
             if (ProcessRunner.isWin) {
                 cmd = "$focused = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[7]";
-                Log.println(cmd);
             } else {
                 cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
             }
@@ -412,7 +410,6 @@ public class Device {
                 cmd = "$activity = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string \"realActivity\" ; $focused = $activity[1] ; $final = $focused -split '=' ; echo $final[1]";
                 // Alternatively use: "$focused.Line.split(=)[1] \"";
-                Log.println(cmd);
             } else {
                 cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
             }
@@ -529,17 +526,16 @@ public class Device {
     }
 
     /**
-     * Returns the name of the emulator running the given AUT.
+     * Requests the name of the emulator that is running the AUT specified through the
+     * given package name.
      *
-     * @param cmdStr Identifies the AUT by its package name.
      * @param imageHandler A reference to the image handler.
      * @param androidEnvironment A reference to the android environment, e.g. access to adb.
      * @return Returns the name of the emulator.
      */
-    public static String allocateDevice(String cmdStr, ImageHandler imageHandler, AndroidEnvironment androidEnvironment) {
-        String parts[] = cmdStr.split(":");
-        String packageName = parts[1];
+    public static String allocateDevice(String packageName, ImageHandler imageHandler, AndroidEnvironment androidEnvironment) {
 
+        // check whether the emulator has been already initialised
         if (Server.emuName != null) {
             Device device = devices.get(Server.emuName);
             device.setPackageName(packageName);
@@ -547,6 +543,7 @@ public class Device {
             return Server.emuName;
         }
 
+        // check which emulator is running the AUT
         String deviceID = getDeviceRunningPackage(packageName, androidEnvironment);
         Device device = devices.get(deviceID);
         if (device != null) {
@@ -572,7 +569,7 @@ public class Device {
         for (String key : devices.keySet()) {
             List<String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", key, "shell", "ps", packageName).getOk();
             for (String res : result) {
-                System.out.println(res);
+                Log.println(res);
                 if (res.contains(packageName))
                     return key;
             }
@@ -583,23 +580,13 @@ public class Device {
     /**
      * Marks the emulator as released.
      *
-     * @param cmdStr Defines the emulator name, e.g. emulator-5554.
      * @return Returns the string 'released' if the operation succeeded,
      *          otherwise an empty string is returned.
      */
-    public static String releaseDevice(String cmdStr) {
-        String response = "";
-        String[] parts = cmdStr.split(":");
-        if (parts.length > 0) {
-            String deviceID = parts[1];
-            Device device = devices.get(deviceID);
-            if (device != null) {
-                device.setPackageName("");
-                device.setBusy(false);
-                response = "released";
-            }
-        }
-        return response;
+    public String releaseDevice() {
+        setPackageName("");
+        setBusy(false);
+        return "released";
     }
 
     /**
