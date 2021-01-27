@@ -60,9 +60,6 @@ public class LegacyEndpoint implements Endpoint {
         if (cmdStr.startsWith("rm emulator"))
             return "";
 
-        if (cmdStr.startsWith("timeout"))
-            return String.valueOf(timeout);
-
         if (cmdStr.startsWith("randomlength"))
             return String.valueOf(length);
 
