@@ -567,10 +567,13 @@ public class Device {
      */
     public static String getDeviceRunningPackage(String packageName, AndroidEnvironment androidEnvironment) {
         for (String key : devices.keySet()) {
-            List<String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", key, "shell", "ps", packageName).getOk();
+            // prints the pid of the app process or an empty string if no process is executing the app
+            // see for recent change: https://stackoverflow.com/questions/16691487/how-to-detect-running-app-using-adb-command
+            List<String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", key, "shell", "pidof", packageName).getOk();
             for (String res : result) {
-                Log.println(res);
-                if (res.contains(packageName))
+                Log.println("PID: " + res);
+                // non empty response indicates that emulator is running app
+                if (!res.isEmpty())
                     return key;
             }
         }
