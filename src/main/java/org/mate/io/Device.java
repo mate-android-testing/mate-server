@@ -535,14 +535,6 @@ public class Device {
      */
     public static String allocateDevice(String packageName, ImageHandler imageHandler, AndroidEnvironment androidEnvironment) {
 
-        // check whether the emulator has been already initialised
-        if (Server.emuName != null) {
-            Device device = devices.get(Server.emuName);
-            device.setPackageName(packageName);
-            device.setBusy(true);
-            return Server.emuName;
-        }
-
         // check which emulator is running the AUT
         String deviceID = getDeviceRunningPackage(packageName, androidEnvironment);
         Device device = devices.get(deviceID);

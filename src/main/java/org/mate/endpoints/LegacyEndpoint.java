@@ -1,7 +1,6 @@
 package org.mate.endpoints;
 
 import org.mate.accessibility.ImageHandler;
-import org.mate.io.Device;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.network.message.Messages;
@@ -12,12 +11,10 @@ public class LegacyEndpoint implements Endpoint {
     private final AndroidEnvironment androidEnvironment;
     private final ImageHandler imageHandler;
     private final long timeout;
-    private final long length;
     private final boolean generatePDFReport = false;
 
-    public LegacyEndpoint(long timeout, long length, AndroidEnvironment androidEnvironment, ImageHandler imageHandler) {
+    public LegacyEndpoint(long timeout, AndroidEnvironment androidEnvironment, ImageHandler imageHandler) {
         this.timeout = timeout;
-        this.length = length;
         this.androidEnvironment = androidEnvironment;
         this.imageHandler = imageHandler;
     }
@@ -59,9 +56,6 @@ public class LegacyEndpoint implements Endpoint {
 
         if (cmdStr.startsWith("rm emulator"))
             return "";
-
-        if (cmdStr.startsWith("randomlength"))
-            return String.valueOf(length);
 
         if (cmdStr.startsWith("FINISH") && generatePDFReport) {
             try {
