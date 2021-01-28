@@ -5,6 +5,10 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Created by marceloeler on 04/07/17.
@@ -106,6 +110,34 @@ public class AccessibilityUtils {
         return luminance;
     }
 
+    /**
+     * Checks the given samples for flickering.
+     *
+     * @param targetDir Refers to directory containing the screenshot samples.
+     * @param screenshotName The name of the original screenshot.
+     * @param samples The screenshot names of taken samples.
+     * @return Returns {@code true} if flickering was detected,
+     *          otherwise {@code false} is returned.
+     */
+    public static boolean checkFlickering(Path targetDir, String screenshotName, List<String> samples){
+
+        for (String sample : samples) {
+            File screenshotSample = targetDir.resolve(sample).toFile();
+            BufferedImage screenshot = null;
+            try {
+                screenshot = ImageIO.read(screenshotSample);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+
+            // TODO: the actual check how flickering is detected is missing
+            int[] histogram = CalculateHist(screenshot);
+            int sum = Arrays.stream(histogram).sum();
+        }
+        return false;
+    }
+
+    @Deprecated
     public static boolean checkFlickering(String targetFolder, String imgPath){
 
         for (int i=0; i<50; i++){

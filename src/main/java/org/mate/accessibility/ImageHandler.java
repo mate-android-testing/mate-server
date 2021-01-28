@@ -13,6 +13,8 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.Writer;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.ArrayList;
 
 public class ImageHandler {
 
@@ -70,30 +72,42 @@ public class ImageHandler {
         //device.setCurrentScreenShotLocation(targetFolder+"/"+imgPath);
     }
 
-    public String takeFlickerScreenshot(String cmdStr) {
+    /**
+     * Checks whether there is a flickering observable between the given screenshot
+     * and multiple samples of it.
+     *
+     * @param device The emulator instance.
+     * @param packageName The package name identifies the location of the screenshot.
+     * @param nodeId Represents the name of the screenshot.
+     * @return Returns {@code true} if flickering could be observed, otherwise
+     *              {@code false} is returned.
+     */
+    public boolean checkForFlickering(Device device, String packageName, String nodeId) {
 
-        String targetFolder = screenshotDir + cmdStr.split("_")[1];
-        System.out.println("target folder: " + targetFolder);
+        Path targetDir = screenshotDir.resolve(packageName);
+        String screenshotName = nodeId + ".png";
 
-        String[] parts = cmdStr.split(":");
-        String emulator = parts[1];
-        String imgPath = parts[2];
-        String originalImgPath = imgPath;
-        int index = imgPath.lastIndexOf("_");
-        //String packageName = parts[1].substring(0,index-1);
-
-        for (int i=0; i<20; i++) {
-            imgPath = originalImgPath.replace(".png","_flicker_"+i+".png");
-            ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", emulator, "shell", "screencap", "-p", "/sdcard/" + imgPath);
+        // check whether original screenshot is present (the one we check for flickering)
+        if (!targetDir.resolve(screenshotName).toFile().exists()) {
+            throw new IllegalStateException("Screenshot to check for flickering is not present!");
         }
-        for (int i=0; i<20; i++) {
-            imgPath = originalImgPath.replace(".png","_flicker_"+i+".png");
-            ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", emulator, "pull", "/sdcard/" + imgPath, targetFolder);
+
+        List<String> samples = new ArrayList<>();
+
+        // take 20 screenshot samples and pull them
+        for (int i = 0; i < 20; i++) {
+
+            String screenshotSampleName = screenshotName.replace(".png","_flicker_"+i+".png");
+            samples.add(screenshotSampleName);
+
+            ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", device.getDeviceID(),
+                    "shell", "screencap", "-p", "/sdcard/" + screenshotSampleName);
+
+            ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", device.getDeviceID(),
+                    "pull", "/sdcard/" + screenshotSampleName, String.valueOf(targetDir.resolve(screenshotSampleName)));
         }
 
-        boolean flickering = AccessibilityUtils.checkFlickering(targetFolder,originalImgPath);
-
-        return imgPath;
+        return AccessibilityUtils.checkFlickering(targetDir, screenshotName, samples);
     }
 
     public String markImage(String originalImgPath,int x1, int y1, int x2, int y2,String flawType) {

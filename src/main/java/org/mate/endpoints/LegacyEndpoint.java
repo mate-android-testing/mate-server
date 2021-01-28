@@ -38,9 +38,6 @@ public class LegacyEndpoint implements Endpoint {
             return Report.addFlaw(cmdStr, imageHandler);
         }
 
-        if (cmdStr.startsWith("flickerScreenshot"))
-            return imageHandler.takeFlickerScreenshot(cmdStr);
-
         if (cmdStr.startsWith("mark-image") && generatePDFReport)
             return imageHandler.markImage(cmdStr);
 
