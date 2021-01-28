@@ -78,14 +78,14 @@ public class ImageHandler {
      *
      * @param device The emulator instance.
      * @param packageName The package name identifies the location of the screenshot.
-     * @param nodeId Represents the name of the screenshot.
+     * @param stateId Represents the name of the screenshot.
      * @return Returns {@code true} if flickering could be observed, otherwise
      *              {@code false} is returned.
      */
-    public boolean checkForFlickering(Device device, String packageName, String nodeId) {
+    public boolean checkForFlickering(Device device, String packageName, String stateId) {
 
         Path targetDir = screenshotDir.resolve(packageName);
-        String screenshotName = nodeId + ".png";
+        String screenshotName = stateId + ".png";
 
         // check whether original screenshot is present (the one we check for flickering)
         if (!targetDir.resolve(screenshotName).toFile().exists()) {
@@ -244,46 +244,29 @@ public class ImageHandler {
         return response;
     }
 
-    public String calculateConstratRatio(String cmdStr) {
+    /**
+     * Calculates the contrast ratio.
+     *
+     * @param packageName Identifies the directory containing the screenshot.
+     * @param stateId Identifies the name of the screenshot.
+     * @param x1 The x1 coordinate of the widget.
+     * @param x2 The x2 coordinate of the widget.
+     * @param y1 The y1 coordinate of the widget.
+     * @param y2 The y2 coordinate of the widget.
+     * @return Returns the contrast ratio.
+     */
+    public double calculateContrastRatio(String packageName, String stateId, int x1, int x2, int y1, int y2) {
 
-        String response = "21";
-        try {
+        Path targetDir = screenshotDir.resolve(packageName);
+        File screenshot = new File(targetDir.toFile(), stateId + ".png");
 
-
-            System.out.println(cmdStr);
-            String[] parts = cmdStr.split(":");
-            String packageName = parts[1];
-
-            String targetFolder = screenshotDir+packageName.split("_")[1];
-
-            String stateId = parts[2];
-            String coord = parts[3];
-
-
-
-            String[] positions = coord.split(",");
-            int x1 = Integer.valueOf(positions[0]);
-            int y1 = Integer.valueOf(positions[1]);
-            int x2 = Integer.valueOf(positions[2]);
-            int y2 = Integer.valueOf(positions[3]);
-
-            String fileName = targetFolder+ "/"+packageName + "_" + stateId + ".png";
-
-            double contrastRatio = AccessibilityUtils.getContrastRatio(fileName, x1, y1, x2, y2);
-            System.out.println("contrast ratio: " + contrastRatio);
-            response = String.valueOf(contrastRatio);
-        } catch (Exception e) {
-            System.out.println("PROBLEMS CALCULATING CONTRAST RATIO");
-            response = "21";
-        }
-        return response;
-    }
-
-    public void createPicturesFolder(String deviceID, String packageName) {
-        try {
-            new File(screenshotDir+packageName).mkdir();
-        } catch(Exception e){
+        if (!screenshot.exists()) {
+            throw new IllegalStateException("Screenshot not present for contrast ratio computation!");
         }
 
+        double contrastRatio = AccessibilityUtils.getContrastRatio(screenshot.getPath(), x1, y1, x2, y2);
+        Log.println("Contrast Ratio: " + contrastRatio);
+
+        return contrastRatio;
     }
 }

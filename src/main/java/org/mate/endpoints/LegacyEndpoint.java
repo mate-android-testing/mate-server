@@ -41,9 +41,6 @@ public class LegacyEndpoint implements Endpoint {
         if (cmdStr.startsWith("mark-image") && generatePDFReport)
             return imageHandler.markImage(cmdStr);
 
-        if (cmdStr.startsWith("contrastratio"))
-            return imageHandler.calculateConstratRatio(cmdStr);
-
         if (cmdStr.startsWith("luminance"))
             return imageHandler.calculateLuminance(cmdStr);
 

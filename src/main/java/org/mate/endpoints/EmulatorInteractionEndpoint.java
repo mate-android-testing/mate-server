@@ -111,8 +111,6 @@ public class EmulatorInteractionEndpoint implements Endpoint {
                 return allocateEmulator(request);
             } else if ("take_screenshot".equals(request.getParameter("type"))) {
                 return takeScreenshot(request);
-            } else if ("check_for_flickering".equals(request.getParameter("type"))) {
-                return checkForFlickering(request);
             }
         }
         throw new IllegalArgumentException("Message request with subject: "
@@ -131,21 +129,6 @@ public class EmulatorInteractionEndpoint implements Endpoint {
         imageHandler.takeScreenshot(device, packageName, nodeID);
 
         return new Message.MessageBuilder("/emulator/interaction").build();
-    }
-
-    private Message checkForFlickering(Message request) {
-
-        Log.println("Check for flickering...");
-
-        var deviceID = request.getParameter("deviceId");
-        var packageName = request.getParameter("packageName");
-        var nodeID = request.getParameter("nodeId");
-
-        Device device = Device.devices.get(deviceID);
-        boolean flickering = imageHandler.checkForFlickering(device, packageName, nodeID);
-
-        return new Message.MessageBuilder("/emulator/interaction")
-                .withParameter("flickering", String.valueOf(flickering)).build();
     }
 
     private Message releaseEmulator(Message request) {

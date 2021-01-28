@@ -544,7 +544,6 @@ public class Device {
         }
 
         Report.createHeader(deviceID, packageName);
-        imageHandler.createPicturesFolder(deviceID, packageName);
 
         return deviceID;
     }
