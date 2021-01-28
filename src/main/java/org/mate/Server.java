@@ -53,6 +53,7 @@ public class Server {
         timeout = 5;
         port = 12345;
         cleanup = true;
+        // TODO: store results within app directory, e.g. apps/com.zola.bmi/results/
         resultsPath = Path.of("results");
         appsDir = Path.of("apps");
         logger = new Log();
@@ -198,7 +199,7 @@ public class Server {
             Log.printError("unable to create pictures dir (" + picturesDir.getPath() + ")");
         }
 
-        Report.reportDir = csvsDir.getPath() + "/";
-        ImageHandler.screenShotDir = picturesDir.getPath() + "/";
+        Report.reportDir = csvsDir.getPath() + File.pathSeparator;
+        imageHandler.setScreenshotDir(picturesDir.toPath());
     }
 }

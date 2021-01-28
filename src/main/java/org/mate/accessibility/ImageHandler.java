@@ -1,48 +1,78 @@
 package org.mate.accessibility;
 
+import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
 import org.mate.util.AndroidEnvironment;
-import org.mate.io.Device;
+import org.mate.util.Log;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.*;
-import java.util.List;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.Writer;
+import java.nio.file.Path;
 
 public class ImageHandler {
 
-    public static String screenShotDir;
-
     public static int contImg = 0;
     private final AndroidEnvironment androidEnvironment;
+    private Path screenshotDir;
 
     public ImageHandler(AndroidEnvironment androidEnvironment) {
         this.androidEnvironment = androidEnvironment;
     }
 
-    public String takeScreenshot(String cmdStr) {
+    /**
+     * Sets the screenshot directory.
+     *
+     * @param screenshotDir The new screenshot directory.
+     */
+    public void setScreenshotDir(Path screenshotDir) {
+        this.screenshotDir = screenshotDir;
+    }
 
-        String targetFolder = screenShotDir + cmdStr.split("_")[1];
-        System.out.println("target folder: " + targetFolder);
+    /**
+     * Takes a screenshot of the given screen state.
+     *
+     * @param device The emulator instance.
+     * @param packageName The package name corresponding to the screen state.
+     * @param nodeId Identifies the screen state.
+     */
+    public void takeScreenshot(Device device, String packageName, String nodeId) {
 
-        String[] parts = cmdStr.split(":");
-        String emulator = parts[1];
-        String imgPath = parts[2];
-        int index = imgPath.lastIndexOf("_");
+        Path targetDir = screenshotDir.resolve(packageName);
 
-        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", emulator, "shell", "screencap", "-p", "/sdcard/" + imgPath);
-        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", emulator, "pull", "/sdcard/"+parts[2], targetFolder);
+        if (!targetDir.toFile().exists()) {
+            if (!targetDir.toFile().mkdirs()) {
+                Log.printError("Unable to create screenshot directory!");
+                return;
+            }
+        }
 
-        Device device = Device.getDevice(emulator);
-        device.setCurrentScreenShotLocation(targetFolder+"/"+imgPath);
+        String screenshotName = nodeId + ".png";
 
-        return imgPath;
+        // take screenshot and pull it from emulator
+        var takeSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", device.getDeviceID(),
+                "shell", "screencap", "-p", "/sdcard/" + screenshotName);
+
+        if (takeSS.isErr()) {
+            Log.printWarning("Taking screenshot failed: " + takeSS.getErr());
+        } else {
+            // only pull if taking screenshot succeeded
+            var pullSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", device.getDeviceID(),
+                    "pull", "/sdcard/" + screenshotName, String.valueOf(targetDir.resolve(screenshotName)));
+            if (pullSS.isErr()) {
+                Log.printWarning("Pulling screenshot failed: " + pullSS.getErr());
+            }
+        }
+        //device.setCurrentScreenShotLocation(targetFolder+"/"+imgPath);
     }
 
     public String takeFlickerScreenshot(String cmdStr) {
 
-        String targetFolder = screenShotDir + cmdStr.split("_")[1];
+        String targetFolder = screenshotDir + cmdStr.split("_")[1];
         System.out.println("target folder: " + targetFolder);
 
         String[] parts = cmdStr.split(":");
@@ -140,7 +170,7 @@ public class ImageHandler {
             String[] parts = cmdStr.split(":");
             String packageName = parts[1];
 
-            String targetFolder = screenShotDir+packageName.split("_")[1];
+            String targetFolder = screenshotDir+packageName.split("_")[1];
 
             String stateId = parts[2];
             String coord = parts[3];
@@ -174,7 +204,7 @@ public class ImageHandler {
             String[] parts = cmdStr.split(":");
             String packageName = parts[1];
 
-            String targetFolder = screenShotDir + packageName.split("_")[1];
+            String targetFolder = screenshotDir + packageName.split("_")[1];
 
             String stateId = parts[2];
             String coord = parts[3];
@@ -210,7 +240,7 @@ public class ImageHandler {
             String[] parts = cmdStr.split(":");
             String packageName = parts[1];
 
-            String targetFolder = screenShotDir+packageName.split("_")[1];
+            String targetFolder = screenshotDir+packageName.split("_")[1];
 
             String stateId = parts[2];
             String coord = parts[3];
@@ -237,7 +267,7 @@ public class ImageHandler {
 
     public void createPicturesFolder(String deviceID, String packageName) {
         try {
-            new File(screenShotDir+packageName).mkdir();
+            new File(screenshotDir+packageName).mkdir();
         } catch(Exception e){
         }
 

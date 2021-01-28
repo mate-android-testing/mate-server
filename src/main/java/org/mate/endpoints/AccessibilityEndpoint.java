@@ -3,6 +3,7 @@ package org.mate.endpoints;
 import org.mate.accessibility.ImageHandler;
 import org.mate.network.message.Message;
 import org.mate.network.Endpoint;
+import org.mate.util.Log;
 
 public class AccessibilityEndpoint implements Endpoint {
     private final ImageHandler imageHandler;
@@ -20,7 +21,7 @@ public class AccessibilityEndpoint implements Endpoint {
 
     private String handleRequest(String cmdStr){
         if (cmdStr.startsWith("surroundingColor")) {
-            System.out.println("matches color");
+            Log.println("matches color");
             return imageHandler.matchesSurroundingColor(cmdStr);
         }
         return "";

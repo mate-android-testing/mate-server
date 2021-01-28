@@ -106,13 +106,41 @@ public class EmulatorInteractionEndpoint implements Endpoint {
                             .build();
                 }
             } else if ("release_emulator".equals(request.getParameter("type"))) {
-                    return releaseEmulator(request);
+                return releaseEmulator(request);
             } else if ("allocate_emulator".equals(request.getParameter("type"))) {
-                    return allocateEmulator(request);
+                return allocateEmulator(request);
+            } else if ("screenshot".equals(request.getParameter("type"))) {
+                return takeScreenshot(request);
+            } else if ("flicker_screenshot".equals(request.getParameter("type"))) {
+                return takeFlickerScreenshot(request);
             }
         }
         throw new IllegalArgumentException("Message request with subject: "
                 + request.getSubject() + " can't be handled by EmulatorInteractionEndpoint!");
+    }
+
+    private Message takeScreenshot(Message request) {
+
+        Log.println("Taking screenshot...");
+
+        var deviceID = request.getParameter("deviceId");
+        var packageName = request.getParameter("packageName");
+        var nodeID = request.getParameter("nodeId");
+
+        Device device = Device.devices.get(deviceID);
+        imageHandler.takeScreenshot(device, packageName, nodeID);
+
+        return new Message.MessageBuilder("/emulator/interaction").build();
+    }
+
+    private Message takeFlickerScreenshot(Message request) {
+
+        Log.println("Taking flicker screenshot...");
+
+
+
+
+        return new Message.MessageBuilder("/emulator/interaction").build();
     }
 
     private Message releaseEmulator(Message request) {

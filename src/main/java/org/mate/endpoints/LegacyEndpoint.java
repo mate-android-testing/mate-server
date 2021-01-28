@@ -38,10 +38,6 @@ public class LegacyEndpoint implements Endpoint {
             return Report.addFlaw(cmdStr, imageHandler);
         }
 
-        //format commands
-        if (cmdStr.startsWith("screenshot"))
-            return imageHandler.takeScreenshot(cmdStr);
-
         if (cmdStr.startsWith("flickerScreenshot"))
             return imageHandler.takeFlickerScreenshot(cmdStr);
 
