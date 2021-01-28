@@ -44,9 +44,6 @@ public class LegacyEndpoint implements Endpoint {
         if (cmdStr.startsWith("luminance"))
             return imageHandler.calculateLuminance(cmdStr);
 
-        if (cmdStr.startsWith("rm emulator"))
-            return "";
-
         if (cmdStr.startsWith("FINISH") && generatePDFReport) {
             try {
                 Report.generateReport(cmdStr);
