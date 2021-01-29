@@ -22,10 +22,30 @@ public class AccessibilityEndpoint implements Endpoint {
             return checkForFlickering(request);
         } else if (request.getSubject().startsWith("/accessibility/matches_surrounding_color")) {
             return matchesSurroundingColor(request);
+        } else if (request.getSubject().startsWith("/accessibility/get_luminance")) {
+            return getLuminance(request);
         }
 
         throw new IllegalArgumentException("Message request with subject: "
                 + request.getSubject() + " can't be handled by AccessibilityEndpoint!");
+    }
+
+    private Message getLuminance(Message request) {
+
+        Log.println("Getting luminance...");
+
+        var packageName = request.getParameter("packageName");
+        var stateID = request.getParameter("stateId");
+
+        int x1 = Integer.parseInt(request.getParameter("x1"));
+        int x2 = Integer.parseInt(request.getParameter("x2"));
+        int y1 = Integer.parseInt(request.getParameter("y1"));
+        int y2 = Integer.parseInt(request.getParameter("y2"));
+
+        String luminance = imageHandler.calculateLuminance(packageName, stateID, x1, x2, y1, y2);
+
+        return new Message.MessageBuilder("/accessibility/get_luminance")
+                .withParameter("luminance", luminance).build();
     }
 
     private Message getContrastRatio(Message request) {
