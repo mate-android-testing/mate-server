@@ -208,40 +208,28 @@ public class ImageHandler {
         return response;
     }
 
-    public String matchesSurroundingColor(String cmdStr){
+    /**
+     * Checks the surrounding color of a widget based on a screenshot.
+     *
+     * @param packageName Identifies the directory containing the screenshot.
+     * @param stateId Identifies the name of the screenshot.
+     * @param x1 The x1 coordinate of the widget.
+     * @param x2 The x2 coordinate of the widget.
+     * @param y1 The y1 coordinate of the widget.
+     * @param y2 The y2 coordinate of the widget.
+     * @return Returns a value indicating too which degree the surrounding color of
+     *          the widget matches.
+     */
+    public double matchSurroundingColor(String packageName, String stateId, int x1, int x2, int y1, int y2) {
 
-        System.out.println(cmdStr);
-        String response = "false";
+        Path targetDir = screenshotDir.resolve(packageName);
+        File screenshot = new File(targetDir.toFile(), stateId + ".png");
 
-        try {
-
-            String[] parts = cmdStr.split(":");
-            String packageName = parts[1];
-
-            String targetFolder = screenshotDir + packageName.split("_")[1];
-
-            String stateId = parts[2];
-            String coord = parts[3];
-
-            String[] positions = coord.split(",");
-            int x1 = Integer.valueOf(positions[0]);
-            int y1 = Integer.valueOf(positions[1]);
-            int x2 = Integer.valueOf(positions[2]);
-            int y2 = Integer.valueOf(positions[3]);
-
-            String fileName = targetFolder + "/" + packageName + "_" + stateId + ".png";
-            //System.out.println(fileName);
-            //System.out.println(coord);
-            double matchesBackground = AccessibilityUtils.matchesSurroundingColor(fileName, x1, y1, x2, y2);
-
-            return String.valueOf(matchesBackground);
-        }
-        catch(Exception e){
-            System.out.println("Problems matching color background");
-            response = "false";
+        if (!screenshot.exists()) {
+            throw new IllegalStateException("Screenshot not present for surrounding color check!");
         }
 
-        return response;
+        return AccessibilityUtils.matchesSurroundingColor(screenshot.getPath(), x1, y1, x2, y2);
     }
 
     /**

@@ -13,11 +13,13 @@ import java.util.List;
 /**
  * Created by marceloeler on 04/07/17.
  */
+@Deprecated
 public class AccessibilityUtils {
 
     public static BufferedImage image=null;
     public static String lastImagePath="";
 
+    @Deprecated
     public static double  getContrastRatio(String imagePath,int x1, int y1, int x2, int y2){
         System.out.println("get contrast ratio");
         String path = imagePath;
@@ -58,7 +60,7 @@ public class AccessibilityUtils {
         return contrastRatio;
     }
 
-
+    @Deprecated
     public static double  matchesSurroundingColor(String imagePath,int x1, int y1, int x2, int y2){
         String path = imagePath;
         if (!imagePath.equals(lastImagePath)){
@@ -82,6 +84,7 @@ public class AccessibilityUtils {
         return matches;
     }
 
+    @Deprecated
     public static String getLuminance(String imagePath,int x1, int y1, int x2, int y2){
         String path = imagePath;
         if (!imagePath.equals(lastImagePath)){
@@ -164,6 +167,7 @@ public class AccessibilityUtils {
         return false;
     }
 
+    @Deprecated
     public static int[] CalculateHist(BufferedImage img) {
         int k;
         int pixel[];
@@ -180,9 +184,7 @@ public class AccessibilityUtils {
         return levels;
     }
 
-
-
-
+    @SuppressWarnings("unused")
     public void histEqualize(BufferedImage img) {
         //call CalculateHist method to get the histogram
         int[] h = CalculateHist(img);

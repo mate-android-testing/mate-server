@@ -62,8 +62,19 @@ public class AccessibilityEndpoint implements Endpoint {
     }
 
     private Message matchesSurroundingColor(Message request) {
-        String match = imageHandler.matchesSurroundingColor(request.getParameter("cmd"));
+
+        Log.println("Check for surrounding color match...");
+
+        var packageName = request.getParameter("packageName");
+        var stateID = request.getParameter("stateId");
+
+        int x1 = Integer.parseInt(request.getParameter("x1"));
+        int x2 = Integer.parseInt(request.getParameter("x2"));
+        int y1 = Integer.parseInt(request.getParameter("y1"));
+        int y2 = Integer.parseInt(request.getParameter("y2"));
+
+        double match = imageHandler.matchSurroundingColor(packageName, stateID, x1, x2, y1, y2);
         return new Message.MessageBuilder("/accessibility/matches_surrounding_color")
-                .withParameter("match", match).build();
+                .withParameter("match", String.valueOf(match)).build();
     }
 }
