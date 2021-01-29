@@ -25,7 +25,6 @@ public class Server {
     private static final String MATE_SERVER_PROPERTIES_PATH = "mate-server.properties";
 
     private final Router router;
-    private long timeout;
     private int port;
     private boolean cleanup;
     private Path resultsPath;
@@ -50,7 +49,6 @@ public class Server {
      */
     public Server() {
         router = new Router();
-        timeout = 5;
         port = 12345;
         cleanup = true;
         // TODO: store results within app directory, e.g. apps/com.zola.bmi/results/
@@ -72,7 +70,6 @@ public class Server {
             Log.printWarning("failed to load " + MATE_SERVER_PROPERTIES_PATH + " file: " + e.getLocalizedMessage());
         }
 
-        timeout = Optional.ofNullable(properties.getProperty("timeout")).map(Long::valueOf).orElse(timeout);
         port = Optional.ofNullable(properties.getProperty("port")).map(Integer::valueOf).orElse(port);
         cleanup = Optional.ofNullable(properties.getProperty("cleanup")).map(Boolean::valueOf).orElse(cleanup);
         resultsPath = Optional.ofNullable(properties.getProperty("results_path")).map(Paths::get).orElse(resultsPath);
@@ -85,11 +82,11 @@ public class Server {
     public void init() {
         androidEnvironment = new AndroidEnvironment();
         imageHandler = new ImageHandler(androidEnvironment);
-        router.add("/legacy", new LegacyEndpoint(timeout, androidEnvironment, imageHandler));
+        router.add("/legacy", new LegacyEndpoint(androidEnvironment, imageHandler));
         closeEndpoint = new CloseEndpoint();
         router.add("/close", closeEndpoint);
         router.add("/crash", new CrashEndpoint(androidEnvironment));
-        router.add("/properties", new PropertiesEndpoint(timeout));
+        router.add("/properties", new PropertiesEndpoint());
         router.add("/emulator/interaction", new EmulatorInteractionEndpoint(androidEnvironment, imageHandler));
         router.add("/android", new AndroidEndpoint(androidEnvironment));
         router.add("/accessibility",new AccessibilityEndpoint(imageHandler));

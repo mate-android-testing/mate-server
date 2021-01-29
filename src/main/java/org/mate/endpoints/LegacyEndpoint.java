@@ -10,11 +10,9 @@ import org.mate.util.AndroidEnvironment;
 public class LegacyEndpoint implements Endpoint {
     private final AndroidEnvironment androidEnvironment;
     private final ImageHandler imageHandler;
-    private final long timeout;
     private final boolean generatePDFReport = false;
 
-    public LegacyEndpoint(long timeout, AndroidEnvironment androidEnvironment, ImageHandler imageHandler) {
-        this.timeout = timeout;
+    public LegacyEndpoint(AndroidEnvironment androidEnvironment, ImageHandler imageHandler) {
         this.androidEnvironment = androidEnvironment;
         this.imageHandler = imageHandler;
     }

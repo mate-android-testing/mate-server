@@ -12,21 +12,11 @@ import java.util.Properties;
 
 public class PropertiesEndpoint implements Endpoint {
 
-    private final long timeout;
-
-    public PropertiesEndpoint(long timeout) {
-        this.timeout = timeout;
-    }
-
     @Override
     public Message handle(Message request) {
 
         if (request.getSubject().startsWith("/properties/get_mate_properties")) {
             return getProperties();
-        } else if (request.getSubject().startsWith("/properties/get_timeout")) {
-            return new Message.MessageBuilder("/properties/get_timeout")
-                    .withParameter("timeout", String.valueOf(timeout))
-                    .build();
         } else {
             throw new IllegalArgumentException("Message request with subject: "
                     + request.getSubject() + " can't be handled by PropertiesEndpoint!");
