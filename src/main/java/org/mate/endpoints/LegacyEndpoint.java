@@ -38,9 +38,11 @@ public class LegacyEndpoint implements Endpoint {
             return Report.addFlaw(cmdStr, imageHandler);
         }
 
+        // TODO: there is no corresponding method present in MATE
         if (cmdStr.startsWith("mark-image") && generatePDFReport)
             return imageHandler.markImage(cmdStr);
 
+        // TODO: there is no corresponding method present in MATE
         if (cmdStr.startsWith("FINISH") && generatePDFReport) {
             try {
                 Report.generateReport(cmdStr);
@@ -48,11 +50,6 @@ public class LegacyEndpoint implements Endpoint {
                 e.printStackTrace();
             }
             return "Finished PDF report";
-        }
-
-        if (cmdStr.startsWith("reportAccFlaw")){
-
-            return "ok";
         }
         return null;
     }
