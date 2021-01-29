@@ -557,6 +557,7 @@ public class Device {
      *          found, the emtpy string is returned.
      */
     public static String getDeviceRunningPackage(String packageName, AndroidEnvironment androidEnvironment) {
+        // FIXME: if multiple emulators are running the same app, we always return the first emulator match
         for (String key : devices.keySet()) {
             // prints the pid of the app process or an empty string if no process is executing the app
             // see for recent change: https://stackoverflow.com/questions/16691487/how-to-detect-running-app-using-adb-command
