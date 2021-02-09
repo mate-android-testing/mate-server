@@ -110,6 +110,7 @@ public class ImageHandler {
         return AccessibilityUtils.checkFlickering(targetDir, screenshotName, samples);
     }
 
+    @Deprecated
     public String markImage(String originalImgPath,int x1, int y1, int x2, int y2,String flawType) {
 
         System.out.println("MARK IMAGE");
