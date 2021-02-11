@@ -63,7 +63,7 @@ public class AccessibilityEndpoint implements Endpoint {
         double contrastRatio = imageHandler.calculateContrastRatio(packageName, stateID, x1, x2, y1, y2);
 
         return new Message.MessageBuilder("/accessibility/get_contrast_ratio")
-                .withParameter("contrast_ratio", String.valueOf(contrastRatio)).build();
+                .withParameter("contrastRatio", String.valueOf(contrastRatio)).build();
     }
 
     private Message checkForFlickering(Message request) {
