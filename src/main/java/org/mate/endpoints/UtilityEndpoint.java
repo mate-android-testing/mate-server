@@ -6,6 +6,7 @@ import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.network.message.Messages;
 import org.mate.util.AndroidEnvironment;
+import org.mate.util.FitnessFunction;
 import org.mate.util.Log;
 
 import java.io.File;
@@ -46,12 +47,13 @@ public class UtilityEndpoint implements Endpoint {
 
         String fitnessFunction = request.getParameter("fitnessFunction");
 
-        switch (fitnessFunction) {
-            case "branch_distance_fitness_function":
-            case "branch_distance_fitness_function_multi_objective":
+        switch (FitnessFunction.valueOf(fitnessFunction)) {
+            case BRANCH_COVERAGE:
+            case BRANCH_DISTANCE:
+            case BRANCH_DISTANCE_MULTI_OBJECTIVE:
                 return copyBranchFitnessData(request);
-            case "line_coverage_fitness_function":
-            case "line_covered_percentage_fitness_function":
+            case LINE_COVERAGE:
+            case LINE_PERCENTAGE_COVERAGE:
                 return copyLineFitnessData(request);
             default:
                 final String errorMsg = "Fitness function " + fitnessFunction + " not yet supported!";
@@ -145,12 +147,13 @@ public class UtilityEndpoint implements Endpoint {
 
         String fitnessFunction = request.getParameter("fitnessFunction");
 
-        switch (fitnessFunction) {
-            case "branch_distance_fitness_function":
-            case "branch_distance_fitness_function_multi_objective":
+        switch (FitnessFunction.valueOf(fitnessFunction)) {
+            case BRANCH_COVERAGE:
+            case BRANCH_DISTANCE:
+            case BRANCH_DISTANCE_MULTI_OBJECTIVE:
                 return storeBranchFitnessData(request);
-            case "line_coverage_fitness_function":
-            case "line_covered_percentage_fitness_function":
+            case LINE_COVERAGE:
+            case LINE_PERCENTAGE_COVERAGE:
                 return storeLineFitnessData(request);
             default:
                 final String errorMsg = "Fitness function " + fitnessFunction + " not yet supported!";
