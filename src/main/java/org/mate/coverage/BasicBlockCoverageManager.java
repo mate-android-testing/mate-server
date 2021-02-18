@@ -123,50 +123,7 @@ public final class BasicBlockCoverageManager {
      * @return Returns the (combined) coverage for a set of chromosomes.
      */
     public static Message getCombinedBranchCoverage(Path appsDir, String packageName, String chromosomes) {
-
-        // TODO: check whether it is necessary to pull again the last traces file
-
-        // get list of traces file
-        File appDir = new File(appsDir.toFile(), packageName);
-        File tracesDir = new File(appDir, "traces");
-
-        // the branches.txt should be located within the app directory
-        File branchesFile = new File(appDir, "blocks.txt");
-
-        List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
-
-        if (chromosomes != null) {
-
-            // only consider the traces files described by the chromosome ids
-            tracesFiles = new ArrayList<>();
-
-            for (String chromosome : chromosomes.split("\\+")) {
-                try {
-                    tracesFiles.addAll(
-                            Files.walk(tracesDir.toPath().resolve(chromosome))
-                                    .filter(Files::isRegularFile)
-                                    .map(Path::toFile)
-                                    .collect(Collectors.toList()));
-                } catch (IOException e) {
-                    Log.printError("Couldn't retrieve traces files!");
-                    throw new IllegalArgumentException(e);
-                }
-            }
-        }
-
-        // evaluate branch coverage over all traces files
-        double branchCoverage = 0d;
-
-        try {
-            branchCoverage = evaluateBranchCoverage(branchesFile, tracesFiles);
-        } catch (IOException e) {
-            Log.printError(e.getMessage());
-            throw new IllegalStateException("Branch coverage couldn't be evaluated!");
-        }
-
-        return new Message.MessageBuilder("/coverage/combined")
-                .withParameter("coverage", String.valueOf(branchCoverage))
-                .build();
+        return getCombinedCoverage(appsDir, packageName, chromosomes, false);
     }
 
     /**
@@ -177,15 +134,16 @@ public final class BasicBlockCoverageManager {
      * @return Returns the (combined) coverage for a set of chromosomes.
      */
     public static Message getCombinedLineCoverage(Path appsDir, String packageName, String chromosomes) {
+        return getCombinedCoverage(appsDir, packageName, chromosomes, true);
+    }
 
-        // TODO: check whether it is necessary to pull again the last traces file
-
+    private static Message getCombinedCoverage(Path appsDir, String packageName, String chromosomes, boolean lineCoverage) {
         // get list of traces file
         File appDir = new File(appsDir.toFile(), packageName);
         File tracesDir = new File(appDir, "traces");
 
         // the branches.txt should be located within the app directory
-        File branchesFile = new File(appDir, "blocks.txt");
+        File blocksFile = new File(appDir, "blocks.txt");
 
         List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
 
@@ -209,17 +167,21 @@ public final class BasicBlockCoverageManager {
         }
 
         // evaluate branch coverage over all traces files
-        double branchCoverage = 0d;
+        double coverage = 0d;
 
         try {
-            branchCoverage = evaluateLineCoverage(branchesFile, tracesFiles);
+            if(lineCoverage) {
+                coverage = evaluateLineCoverage(blocksFile, tracesFiles);
+            } else {
+                coverage = evaluateLineCoverage(blocksFile, tracesFiles);
+            }
         } catch (IOException e) {
             Log.printError(e.getMessage());
             throw new IllegalStateException("Branch coverage couldn't be evaluated!");
         }
 
         return new Message.MessageBuilder("/coverage/combined")
-                .withParameter("coverage", String.valueOf(branchCoverage))
+                .withParameter("coverage", String.valueOf(coverage))
                 .build();
     }
 
@@ -341,7 +303,7 @@ public final class BasicBlockCoverageManager {
         final int totalInstructions = totalBranchesPerClass.values().stream().mapToInt(Integer::intValue).sum();
         final int coveredInstructions = coveredBranchesPerClass.values().stream().mapToInt(Integer::intValue).sum();
         final double totalLineCoverage = (double) coveredInstructions / (double) totalInstructions * 100d;
-        Log.println("Total line coverage: " + totalLineCoverage + "%");
+        Log.println("Total branch coverage: " + totalLineCoverage + "%");
         return totalLineCoverage;
     }
 
