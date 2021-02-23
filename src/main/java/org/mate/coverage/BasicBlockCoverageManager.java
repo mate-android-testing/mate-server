@@ -173,7 +173,7 @@ public final class BasicBlockCoverageManager {
             if(lineCoverage) {
                 coverage = evaluateLineCoverage(blocksFile, tracesFiles);
             } else {
-                coverage = evaluateLineCoverage(blocksFile, tracesFiles);
+                coverage = evaluateBranchCoverage(blocksFile, tracesFiles);
             }
         } catch (IOException e) {
             Log.printError(e.getMessage());
@@ -232,18 +232,21 @@ public final class BasicBlockCoverageManager {
                 String line;
                 while ((line = branchesReader.readLine()) != null) {
                     final String[] tuple = line.split("->");
-                    final String clazz = tuple[0].trim();
-                    final String method = tuple[1].trim();
-                    final Integer blockId = Integer.parseInt(tuple[2].trim());
-                    final int count = Integer.parseInt(tuple[3].trim());
+                    if (tuple.length == 5) {
+                        final String clazz = tuple[0].trim();
+                        final String method = tuple[1].trim();
+                        final Integer blockId = Integer.parseInt(tuple[2].trim());
+                        final int count = Integer.parseInt(tuple[3].trim());
 
-                    instruction_count.putIfAbsent(clazz, new HashMap<>());
-                    instruction_count.get(clazz).putIfAbsent(method, new HashMap<>());
-                    instruction_count.get(clazz).get(method).putIfAbsent(blockId, count);
+                        instruction_count.putIfAbsent(clazz, new HashMap<>());
+                        instruction_count.get(clazz).putIfAbsent(method, new HashMap<>());
+                        instruction_count.get(clazz).get(method).putIfAbsent(blockId, count);
+                    } else {
+                        Log.printWarning("Found incomplete line \"" + line + "\" in traces file \"" + path.toString() + "\"");
+                    }
                 }
             }
         }
-
 
         final Map<String, Integer> coveredInstructionsPerClass = new HashMap<>();
         instruction_count.keySet().forEach(clazz -> {
@@ -339,15 +342,19 @@ public final class BasicBlockCoverageManager {
                 String line;
                 while ((line = branchesReader.readLine()) != null) {
                     final String[] tuple = line.split("->");
-                    final String clazz = tuple[0].trim();
-                    final String method = tuple[1].trim();
-                    final Integer blockId = Integer.parseInt(tuple[2].trim());
-                    final boolean isBranch = tuple[4].trim().equals("isBranch");
+                    if (tuple.length == 5) {
+                        final String clazz = tuple[0].trim();
+                        final String method = tuple[1].trim();
+                        final Integer blockId = Integer.parseInt(tuple[2].trim());
+                        final boolean isBranch = tuple[4].trim().equals("isBranch");
 
-                    if (isBranch) {
-                        covered_branches.putIfAbsent(clazz, new HashMap<>());
-                        covered_branches.get(clazz).putIfAbsent(method, new HashSet<>());
-                        covered_branches.get(clazz).get(method).add(blockId);
+                        if (isBranch) {
+                            covered_branches.putIfAbsent(clazz, new HashMap<>());
+                            covered_branches.get(clazz).putIfAbsent(method, new HashSet<>());
+                            covered_branches.get(clazz).get(method).add(blockId);
+                        }
+                    } else {
+                        Log.printWarning("Found incomplete line \"" + line + "\" in traces file \"" + traceFile.toString() + "\"");
                     }
                 }
             }
