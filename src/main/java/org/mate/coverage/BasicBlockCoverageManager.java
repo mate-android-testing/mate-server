@@ -177,7 +177,8 @@ public final class BasicBlockCoverageManager {
             }
         } catch (IOException e) {
             Log.printError(e.getMessage());
-            throw new IllegalStateException("Branch coverage couldn't be evaluated!");
+            final String kind = lineCoverage ? "Line" :"Block";
+            throw new IllegalStateException(kind + " coverage couldn't be evaluated!");
         }
 
         return new Message.MessageBuilder("/coverage/combined")
@@ -226,11 +227,11 @@ public final class BasicBlockCoverageManager {
         final Map<String, Map<String, Map<Integer, Integer>>> instruction_count = new HashMap<>();
 
         for (final var path : tracesFiles) {
-            try (var branchesReader = new BufferedReader(new InputStreamReader(new FileInputStream(path)))) {
+            try (var traceReader = new BufferedReader(new InputStreamReader(new FileInputStream(path)))) {
 
                 // Class name -> method name -> id -> instructions count -> isBranch
                 String line;
-                while ((line = branchesReader.readLine()) != null) {
+                while ((line = traceReader.readLine()) != null) {
                     final String[] tuple = line.split("->");
                     if (tuple.length == 5) {
                         final String clazz = tuple[0].trim();
@@ -262,11 +263,11 @@ public final class BasicBlockCoverageManager {
             final Map<String, Integer> totalInstructionsPerClass = new HashMap<>();
 
             // Assumes there are not duplicate lines in the file
-            try (var branchesReader = new BufferedReader(new InputStreamReader(new FileInputStream(blocksFile)))) {
+            try (var blocksReader = new BufferedReader(new InputStreamReader(new FileInputStream(blocksFile)))) {
 
                 // Class name -> method name -> instructions count -> branches count
                 String line;
-                while ((line = branchesReader.readLine()) != null) {
+                while ((line = blocksReader.readLine()) != null) {
                     final String[] tuple = line.split("->");
                     final String clazz = tuple[0].trim();
                     final int instruction_count = Integer.parseInt(tuple[2].trim());
@@ -296,18 +297,18 @@ public final class BasicBlockCoverageManager {
         final Map<String, Integer> coveredBranchesPerClass = coveredBranchesPerClass(tracesFiles);
 
         for (final String key : totalBranchesPerClass.keySet()) {
-            final float coveredInstructions = coveredBranchesPerClass.getOrDefault(key, 0);
-            final float totalInstructions = totalBranchesPerClass.get(key);
-            if(coveredInstructions > 0) {
-                Log.println("We have for the class " + key + " a branch coverage of: " + coveredInstructions / totalInstructions * 100 + "%");
+            final float coveredBranches = coveredBranchesPerClass.getOrDefault(key, 0);
+            final float totalBranches = totalBranchesPerClass.get(key);
+            if(coveredBranches > 0) {
+                Log.println("We have for the class " + key + " a branch coverage of: " + coveredBranches / totalBranches * 100 + "%");
             }
         }
 
-        final int totalInstructions = totalBranchesPerClass.values().stream().mapToInt(Integer::intValue).sum();
-        final int coveredInstructions = coveredBranchesPerClass.values().stream().mapToInt(Integer::intValue).sum();
-        final double totalLineCoverage = (double) coveredInstructions / (double) totalInstructions * 100d;
-        Log.println("Total branch coverage: " + totalLineCoverage + "%");
-        return totalLineCoverage;
+        final int totalBranches = totalBranchesPerClass.values().stream().mapToInt(Integer::intValue).sum();
+        final int coveredBranches = coveredBranchesPerClass.values().stream().mapToInt(Integer::intValue).sum();
+        final double totalBranchCoverage = (double) coveredBranches / (double) totalBranches * 100d;
+        Log.println("Total branch coverage: " + totalBranchCoverage + "%");
+        return totalBranchCoverage;
     }
 
     private static  Map<String, Integer> totalBranchesPerClass(final File blocksFile) throws IOException {
@@ -315,11 +316,11 @@ public final class BasicBlockCoverageManager {
         final Map<String, Integer> totalBranchesPerClass = new HashMap<>();
 
         // Assumes there are not duplicate lines in the file
-        try (var branchesReader = new BufferedReader(new InputStreamReader(new FileInputStream(blocksFile)))) {
+        try (var blocksReader = new BufferedReader(new InputStreamReader(new FileInputStream(blocksFile)))) {
 
             // Class name -> method name -> instructions count -> branches count
             String line;
-            while ((line = branchesReader.readLine()) != null) {
+            while ((line = blocksReader.readLine()) != null) {
                 final String[] tuple = line.split("->");
                 final String clazz = tuple[0].trim();
                 final int noBranches = Integer.parseInt(tuple[3].trim());
