@@ -14,17 +14,20 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Handles requests regarding basic block coverage, i.e. basic block line and basic block branch coverage.
+ */
 public final class BasicBlockCoverageManager {
 
     /**
      * Copies the coverage data, i.e. traces of test cases, specified through the list of entities
      * from the source chromosome (test suite) to the target chromosome (test suite).
      *
-     * @param appsDir The apps directory containing all app directories.
-     * @param deviceID The emulator identifier.
+     * @param appsDir          The apps directory containing all app directories.
+     * @param deviceID         The emulator identifier.
      * @param sourceChromosome The source chromosome (test suite).
      * @param targetChromosome The target chromosome (test suite).
-     * @param entities A list of test cases.
+     * @param entities         A list of test cases.
      * @return Returns a message describing the success/failure of the operation.
      */
     public static Message copyCoverageData(Path appsDir, String deviceID, String sourceChromosome,
@@ -65,11 +68,9 @@ public final class BasicBlockCoverageManager {
 
     /**
      * Stores the branch coverage data for a chromosome, which can be either a test case or a test suite.
-     *
+     * <p>
      * First, a broadcast is sent to the AUT in order to write out a traces.txt file on the external storage.
      * Second, this traces.txt is pulled from the emulator and saved on a pre-defined location (app directory/traces).
-     * Finally, the branch coverage is evaluated by comparing the visited branches with the
-     * total number of branches.
      *
      * @param androidEnvironment Defines the location of the adb/aapt binary.
      * @param deviceID           The id of the emulator, e.g. emulator-5554.
@@ -137,12 +138,23 @@ public final class BasicBlockCoverageManager {
         return getCombinedCoverage(appsDir, packageName, chromosomes, true);
     }
 
+    /**
+     * Computes the combined coverage, i.e. either basic block line or basic block branch coverage depending
+     * on the parameter {@param lineCoverage}.
+     *
+     * @param appsDir      The apps directory containing all app directories.
+     * @param packageName  The package name of the AUT.
+     * @param chromosomes  A list of chromosomes separated by '+'.
+     * @param lineCoverage Whether to compute line coverage or branch coverage.
+     * @return Returns the combined basic block coverage for the given chromosomes.
+     */
     private static Message getCombinedCoverage(Path appsDir, String packageName, String chromosomes, boolean lineCoverage) {
+
         // get list of traces file
         File appDir = new File(appsDir.toFile(), packageName);
         File tracesDir = new File(appDir, "traces");
 
-        // the branches.txt should be located within the app directory
+        // the blocks.txt should be located within the app directory
         File blocksFile = new File(appDir, "blocks.txt");
 
         List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
@@ -156,9 +168,9 @@ public final class BasicBlockCoverageManager {
                 try {
                     tracesFiles.addAll(
                             Files.walk(tracesDir.toPath().resolve(chromosome))
-                                 .filter(Files::isRegularFile)
-                                 .map(Path::toFile)
-                                 .collect(Collectors.toList()));
+                                    .filter(Files::isRegularFile)
+                                    .map(Path::toFile)
+                                    .collect(Collectors.toList()));
                 } catch (IOException e) {
                     Log.printError("Couldn't retrieve traces files!");
                     throw new IllegalArgumentException(e);
@@ -170,14 +182,14 @@ public final class BasicBlockCoverageManager {
         double coverage = 0d;
 
         try {
-            if(lineCoverage) {
+            if (lineCoverage) {
                 coverage = evaluateLineCoverage(blocksFile, tracesFiles);
             } else {
                 coverage = evaluateBranchCoverage(blocksFile, tracesFiles);
             }
         } catch (IOException e) {
             Log.printError(e.getMessage());
-            final String kind = lineCoverage ? "Line" :"Block";
+            final String kind = lineCoverage ? "Line" : "Block";
             throw new IllegalStateException(kind + " coverage couldn't be evaluated!");
         }
 
@@ -191,11 +203,12 @@ public final class BasicBlockCoverageManager {
      * to evaluate the line coverage for a single test case as well as the combined coverage.
      *
      * @param basicBlocksFile The blocks.txt file listing for each class the number of branches.
-     * @param tracesFiles  The set of traces file.
+     * @param tracesFiles     The set of traces file.
      * @return Returns the branch coverage for a single test case or the combined coverage.
      * @throws IOException Should never happen.
      */
     private static double evaluateLineCoverage(File basicBlocksFile, List<File> tracesFiles) throws IOException {
+
         Log.println("BasicBlocksFile: " + basicBlocksFile + "[" + basicBlocksFile.exists() + "]");
 
         for (File tracesFile : tracesFiles) {
@@ -208,8 +221,9 @@ public final class BasicBlockCoverageManager {
         for (final String key : totalInstructionsPerClass.keySet()) {
             final float coveredInstructions = coveredInstructionsPerClass.getOrDefault(key, 0);
             final float totalInstructions = totalInstructionsPerClass.get(key);
-            if(coveredInstructions > 0) {
-                Log.println("We have for the class " + key + " a line coverage of: " + coveredInstructions / totalInstructions * 100 + "%");
+            if (coveredInstructions > 0) {
+                Log.println("We have for the class " + key + " a line coverage of: "
+                        + coveredInstructions / totalInstructions * 100 + "%");
             }
         }
 
@@ -220,28 +234,37 @@ public final class BasicBlockCoverageManager {
         return totalLineCoverage;
     }
 
+    /**
+     * Computes the covered instructions per class by traversing the given trace files.
+     *
+     * @param tracesFiles A list of trace files.
+     * @return Returns a mapping of class to covered instruction count.
+     * @throws IOException Should never happen.
+     */
     private static Map<String, Integer> coveredInstructionsPerClass(final List<File> tracesFiles) throws IOException {
-        // The same basic blocks can be executed multiple times during a run
-        // But for the coverage we only need to count each block once, even if it is executed multiple times
-        // Class name -> Method name -> Basic block id -> Instruction count
-        final Map<String, Map<String, Map<Integer, Integer>>> instruction_count = new HashMap<>();
+
+        // stores a mapping of class -> (method -> (basic block -> number of instructions of block))
+        final Map<String, Map<String, Map<Integer, Integer>>> coveredInstructions = new HashMap<>();
 
         for (final var path : tracesFiles) {
             try (var traceReader = new BufferedReader(new InputStreamReader(new FileInputStream(path)))) {
 
-                // Class name -> method name -> id -> instructions count -> isBranch
+                // a trace looks as follows: class name -> method name -> basic block id (instruction index)
+                // -> number of instructions of block -> isBranch
                 String line;
                 while ((line = traceReader.readLine()) != null) {
                     final String[] tuple = line.split("->");
                     if (tuple.length == 5) {
+
                         final String clazz = tuple[0].trim();
                         final String method = tuple[1].trim();
                         final Integer blockId = Integer.parseInt(tuple[2].trim());
                         final int count = Integer.parseInt(tuple[3].trim());
 
-                        instruction_count.putIfAbsent(clazz, new HashMap<>());
-                        instruction_count.get(clazz).putIfAbsent(method, new HashMap<>());
-                        instruction_count.get(clazz).get(method).putIfAbsent(blockId, count);
+                        // ignore duplicate traces
+                        coveredInstructions.putIfAbsent(clazz, new HashMap<>());
+                        coveredInstructions.get(clazz).putIfAbsent(method, new HashMap<>());
+                        coveredInstructions.get(clazz).get(method).putIfAbsent(blockId, count);
                     } else {
                         Log.printWarning("Found incomplete line \"" + line + "\" in traces file \"" + path.toString() + "\"");
                     }
@@ -249,40 +272,52 @@ public final class BasicBlockCoverageManager {
             }
         }
 
+        // group the covered instructions per class
         final Map<String, Integer> coveredInstructionsPerClass = new HashMap<>();
-        instruction_count.keySet().forEach(clazz -> {
-            final int coveredInstructions = instruction_count.get(clazz).entrySet().stream().flatMap(e -> e.getValue().entrySet().stream()).mapToInt(Map.Entry::getValue).sum();
-            coveredInstructionsPerClass.put(clazz, coveredInstructions);
+        coveredInstructions.keySet().forEach(clazz -> {
+            final int coveredInstructionsCount = coveredInstructions.get(clazz).entrySet().stream()
+                    .flatMap(e -> e.getValue().entrySet().stream()).mapToInt(Map.Entry::getValue).sum();
+            coveredInstructionsPerClass.put(clazz, coveredInstructionsCount);
         });
 
         return coveredInstructionsPerClass;
     }
 
-        private static  Map<String, Integer> totalInstructionsPerClass(final File blocksFile) throws IOException {
-            // Class name -> Instruction count
-            final Map<String, Integer> totalInstructionsPerClass = new HashMap<>();
+    /**
+     * Retrieves the total number of instructions per class.
+     *
+     * @param blocksFile The block.txt file containing per method the number of instructions and branches.
+     * @return Returns the total number of instructions per class.
+     * @throws IOException Should never happen.
+     */
+    private static Map<String, Integer> totalInstructionsPerClass(final File blocksFile) throws IOException {
 
-            // Assumes there are not duplicate lines in the file
-            try (var blocksReader = new BufferedReader(new InputStreamReader(new FileInputStream(blocksFile)))) {
+        final Map<String, Integer> totalInstructionsPerClass = new HashMap<>();
 
-                // Class name -> method name -> instructions count -> branches count
-                String line;
-                while ((line = blocksReader.readLine()) != null) {
-                    final String[] tuple = line.split("->");
-                    final String clazz = tuple[0].trim();
-                    final int instruction_count = Integer.parseInt(tuple[2].trim());
-                    final int recorded = totalInstructionsPerClass.getOrDefault(clazz, 0);
-                    totalInstructionsPerClass.put(clazz, recorded + instruction_count);
-                }
+        try (var blocksReader = new BufferedReader(new InputStreamReader(new FileInputStream(blocksFile)))) {
+
+            // an entry looks as follows: class name -> method name -> instructions count -> branches count
+            String line;
+            while ((line = blocksReader.readLine()) != null) {
+
+                final String[] tuple = line.split("->");
+                final String clazz = tuple[0].trim();
+                final int instructionCount = Integer.parseInt(tuple[2].trim());
+
+                // update aggregation count per class
+                final int recorded = totalInstructionsPerClass.getOrDefault(clazz, 0);
+                totalInstructionsPerClass.put(clazz, recorded + instructionCount);
             }
-            return totalInstructionsPerClass;
         }
+        return totalInstructionsPerClass;
+    }
+
     /**
      * Evaluates the branch coverage for a given set of traces files. Can be used
      * to evaluate the branch coverage for a single test case as well as the combined coverage.
      *
      * @param basicBlocksFile The blocks.txt file listing for each class the number of branches.
-     * @param tracesFiles  The set of traces file.
+     * @param tracesFiles     The set of traces file.
      * @return Returns the branch coverage for a single test case or the combined coverage.
      * @throws IOException Should never happen.
      */
@@ -299,8 +334,9 @@ public final class BasicBlockCoverageManager {
         for (final String key : totalBranchesPerClass.keySet()) {
             final float coveredBranches = coveredBranchesPerClass.getOrDefault(key, 0);
             final float totalBranches = totalBranchesPerClass.get(key);
-            if(coveredBranches > 0) {
-                Log.println("We have for the class " + key + " a branch coverage of: " + coveredBranches / totalBranches * 100 + "%");
+            if (coveredBranches > 0) {
+                Log.println("We have for the class " + key + " a branch coverage of: "
+                        + coveredBranches / totalBranches * 100 + "%");
             }
         }
 
@@ -311,51 +347,69 @@ public final class BasicBlockCoverageManager {
         return totalBranchCoverage;
     }
 
-    private static  Map<String, Integer> totalBranchesPerClass(final File blocksFile) throws IOException {
-        //Class name -> branch count
+    /**
+     * Retrieves the total number of branches per class.
+     *
+     * @param blocksFile The blocks.txt file listing for each class the number of branches.
+     * @return Returns the total number of branches per class.
+     * @throws IOException Should never happen.
+     */
+    private static Map<String, Integer> totalBranchesPerClass(final File blocksFile) throws IOException {
+
         final Map<String, Integer> totalBranchesPerClass = new HashMap<>();
 
-        // Assumes there are not duplicate lines in the file
         try (var blocksReader = new BufferedReader(new InputStreamReader(new FileInputStream(blocksFile)))) {
 
-            // Class name -> method name -> instructions count -> branches count
+            // an entry looks as follows: class name -> method name -> instructions count -> branches count
             String line;
             while ((line = blocksReader.readLine()) != null) {
                 final String[] tuple = line.split("->");
                 final String clazz = tuple[0].trim();
-                final int noBranches = Integer.parseInt(tuple[3].trim());
+                final int numberOfBranches = Integer.parseInt(tuple[3].trim());
+
+                // aggregate branches count per class
                 final int count = totalBranchesPerClass.getOrDefault(clazz, 0);
-                totalBranchesPerClass.put(clazz, count + noBranches);
+                totalBranchesPerClass.put(clazz, count + numberOfBranches);
             }
         }
         return totalBranchesPerClass;
     }
 
-    private static Map<String, Integer> coveredBranchesPerClass(final List<File>  tracesFiles) throws IOException {
-        // The same basic blocks can be executed multiple times during a run
-        // But for the coverage we only need to count each block once, even if it is executed multiple times
+    /**
+     * Computes the covered branches per class by traversing the given trace files.
+     *
+     * @param tracesFiles A list of trace files.
+     * @return Returns a mapping of class to covered branches count.
+     * @throws IOException Should never happen.
+     */
+    private static Map<String, Integer> coveredBranchesPerClass(final List<File> tracesFiles) throws IOException {
 
-        // Class name -> Method name -> Basic block id
+        // stores a mapping of class -> (method -> basic block id) where a basic block can only contain a single branch!
         final Map<String, Map<String, Set<Integer>>> covered_branches = new HashMap<>();
-        for(var traceFile : tracesFiles) {
+        for (var traceFile : tracesFiles) {
             try (var branchesReader = new BufferedReader(new InputStreamReader(new FileInputStream(traceFile)))) {
-                // Class name -> method name -> id -> instructions count -> isBranch
+
+                // a trace looks as follows: class name -> method name -> basic block id (instruction index)
+                // -> number of instructions of block -> isBranch
                 String line;
                 while ((line = branchesReader.readLine()) != null) {
                     final String[] tuple = line.split("->");
                     if (tuple.length == 5) {
+
                         final String clazz = tuple[0].trim();
                         final String method = tuple[1].trim();
                         final Integer blockId = Integer.parseInt(tuple[2].trim());
                         final boolean isBranch = tuple[4].trim().equals("isBranch");
 
                         if (isBranch) {
+                            // ignore duplicate traces
                             covered_branches.putIfAbsent(clazz, new HashMap<>());
                             covered_branches.get(clazz).putIfAbsent(method, new HashSet<>());
                             covered_branches.get(clazz).get(method).add(blockId);
                         }
                     } else {
-                        Log.printWarning("Found incomplete line \"" + line + "\" in traces file \"" + traceFile.toString() + "\"");
+                        Log.printWarning("Found incomplete line \"" + line + "\" in traces file \""
+                                + traceFile.toString() + "\"");
                     }
                 }
             }
