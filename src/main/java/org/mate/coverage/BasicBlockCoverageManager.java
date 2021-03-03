@@ -296,13 +296,13 @@ public final class BasicBlockCoverageManager {
 
         try (var blocksReader = new BufferedReader(new InputStreamReader(new FileInputStream(blocksFile)))) {
 
-            // an entry looks as follows: class name -> method name -> instructions count -> branches count
+            // an entry looks as follows: class name -> method name -> block id -> block size -> isBranch
             String line;
             while ((line = blocksReader.readLine()) != null) {
 
-                final String[] tuple = line.split("->");
-                final String clazz = tuple[0].trim();
-                final int instructionCount = Integer.parseInt(tuple[2].trim());
+                final String[] tokens = line.split("->");
+                final String clazz = tokens[0];
+                final int instructionCount = Integer.parseInt(tokens[3]);
 
                 // update aggregation count per class
                 final int recorded = totalInstructionsPerClass.getOrDefault(clazz, 0);
@@ -360,16 +360,19 @@ public final class BasicBlockCoverageManager {
 
         try (var blocksReader = new BufferedReader(new InputStreamReader(new FileInputStream(blocksFile)))) {
 
-            // an entry looks as follows: class name -> method name -> instructions count -> branches count
+            // an entry looks as follows: class name -> method name -> block id -> block size -> isBranch
             String line;
             while ((line = blocksReader.readLine()) != null) {
-                final String[] tuple = line.split("->");
-                final String clazz = tuple[0].trim();
-                final int numberOfBranches = Integer.parseInt(tuple[3].trim());
+
+                final String[] tokens = line.split("->");
+                final String clazz = tokens[0];
+                boolean isBranch = tokens[4].equals("isBranch");
 
                 // aggregate branches count per class
-                final int count = totalBranchesPerClass.getOrDefault(clazz, 0);
-                totalBranchesPerClass.put(clazz, count + numberOfBranches);
+                if (isBranch) {
+                    // add 1 to current count
+                    totalBranchesPerClass.merge(clazz, 1, Integer::sum);
+                }
             }
         }
         return totalBranchesPerClass;
