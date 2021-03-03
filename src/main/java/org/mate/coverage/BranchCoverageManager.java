@@ -186,11 +186,11 @@ public final class BranchCoverageManager {
             Log.println("TracesFile: " + tracesFile + "[" + tracesFile.exists() + "]");
         }
 
-        // tracks the number of total branches per class <class,#branches>
-        Map<String, Integer> branches = new HashMap<>();
+        // tracks the number of total branches per class and method
+        Map<String, Map<String, Integer>> branches = new HashMap<>();
 
-        // tracks the number of visited branches per class <class,#branches>
-        Map<String, Integer> visitedBranches = new HashMap<>();
+        // tracks the number of visited branches per class and method
+        Map<String, Map<String, Integer>> visitedBranches = new HashMap<>();
 
         // first argument refers to branches.txt
         InputStream branchesInputStream = new FileInputStream(branchesFile);
@@ -199,9 +199,13 @@ public final class BranchCoverageManager {
         // read number of branches per class
         String line;
         while ((line = branchesReader.readLine()) != null) {
-            // each line consists of className: #branches
-            String[] tuple = line.split(":");
-            branches.put(tuple[0], Integer.parseInt(tuple[1].trim()));
+            // each line consists of className->methodName->#branches
+            String[] triple = line.split("->");
+            String clazz = triple[0];
+            String method = triple[1];
+            int numberOfBranches = Integer.parseInt(triple[2]);
+            branches.putIfAbsent(clazz, new HashMap<>());
+            branches.get(clazz).putIfAbsent(method, numberOfBranches);
         }
 
         branchesReader.close();
@@ -225,42 +229,68 @@ public final class BranchCoverageManager {
                     continue;
                 }
 
-                if (visitedBranches.containsKey(triple[0])) {
-                    // only new not yet covered branches are interesting
-                    if (!coveredTraces.contains(trace)) {
-                        // new covered branch for class, increase by one
-                        int visitedBranchesOfClass = visitedBranches.get(triple[0]);
-                        visitedBranches.put(triple[0], ++visitedBranchesOfClass);
-                    }
-                } else {
-                    // it's a new entry for the given class
-                    visitedBranches.put(triple[0], 1);
+                String clazz = triple[0];
+                String method = triple[1];
+
+                if (!coveredTraces.contains(trace)) {
+                    // only new traces are interesting
+                    coveredTraces.add(trace);
+
+                    // sum up how many branches have been visited by method and class
+                    visitedBranches.putIfAbsent(clazz, new HashMap<>());
+                    visitedBranches.get(clazz).merge(method, 1, Integer::sum);
                 }
-                coveredTraces.add(trace);
             }
             tracesReader.close();
         }
 
-        // compute branch coverage per class
-        for (String key : branches.keySet()) {
+        double overallCoveredBranches = 0.0;
+        double overallBranches = 0.0;
 
-            float totalBranches = branches.get(key);
-            float coveredBranches = visitedBranches.getOrDefault(key, 0);
+        for (String clazz : branches.keySet()) {
 
-            // only log classes with coverage > 0
-            if (coveredBranches != 0) {
-                Log.println("We have for the class " + key
-                        + " a branch coverage of: " + coveredBranches / totalBranches * 100 + "%");
+            for (String method : branches.get(clazz).keySet()) {
+
+                // coverage per method
+
+                double coveredBranches = 0.0;
+
+                if (visitedBranches.containsKey(clazz) && visitedBranches.get(clazz).containsKey(method)) {
+                    coveredBranches = visitedBranches.get(clazz).get(method);
+                }
+
+                double totalBranches = branches.get(clazz).get(method);
+
+                if (coveredBranches > 0.0) {
+                    Log.println("We have for the method " + clazz + "->" + method + " a branch coverage of "
+                            + (coveredBranches / totalBranches * 100) + "%.");
+                }
             }
+
+            // coverage per class
+
+            double coveredBranches = 0.0;
+
+            if (visitedBranches.containsKey(clazz)) {
+                coveredBranches = visitedBranches.get(clazz).values().stream().reduce(0, Integer::sum);
+            }
+
+            double totalBranches = branches.get(clazz).values().stream().reduce(0, Integer::sum);
+
+            if (coveredBranches > 0.0) {
+                Log.println("We have for the class " + clazz + " a branch coverage of "
+                        + (coveredBranches / totalBranches * 100) + "%.");
+            }
+
+            // update total coverage
+            overallCoveredBranches += coveredBranches;
+            overallBranches += totalBranches;
         }
 
-        // compute total branch coverage
-        double branchCoverage = 0d;
-        double totalVisitedBranches = visitedBranches.values().stream().reduce(0, Integer::sum);
-        double totalBranches = branches.values().stream().reduce(0, Integer::sum);
-        branchCoverage = totalVisitedBranches / totalBranches * 100;
+        // total branch coverage
+        double branchCoverage = overallCoveredBranches / overallBranches * 100;
+        Log.println("We have a total branch coverage of " + branchCoverage + "%.");
 
-        Log.println("Total branch coverage: " + branchCoverage + "%");
         return branchCoverage;
     }
 
