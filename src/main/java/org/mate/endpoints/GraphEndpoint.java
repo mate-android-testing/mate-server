@@ -209,7 +209,7 @@ public class GraphEndpoint implements Endpoint {
             throw new IllegalStateException("Graph hasn't been initialised!");
         }
 
-        String branches = String.join("\\+", graph.getBranches());
+        String branches = String.join("+", graph.getBranches());
         return new Message.MessageBuilder("/graph/get_branches")
                 .withParameter("branches", branches)
                 .build();
