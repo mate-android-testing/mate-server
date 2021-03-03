@@ -9,10 +9,11 @@ import org.mate.util.AndroidEnvironment;
 import org.mate.util.FitnessFunction;
 import org.mate.util.Log;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Handles requests related to storing and copying of fitness data.
@@ -22,6 +23,8 @@ public class FitnessEndpoint implements Endpoint {
     private final AndroidEnvironment androidEnvironment;
     private final Path resultsPath;
     private final Path appsDir;
+
+    private static final String BLOCKS_FILE = "blocks.txt";
 
     public FitnessEndpoint(AndroidEnvironment androidEnvironment, Path resultsPath, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
@@ -36,9 +39,57 @@ public class FitnessEndpoint implements Endpoint {
             return storeFitnessData(request);
         } else if (request.getSubject().startsWith("/fitness/copy_fitness_data")) {
             return copyFitnessData(request);
+        } else if (request.getSubject().startsWith("/fitness/get_basic_blocks")) {
+            return getBasicBlocks(request);
+        } else if (request.getSubject().startsWith("/fitness/get_basic_block_fitness_vector")) {
+            return getBasicBlockFitnessVector(request);
         }
         throw new IllegalArgumentException("Message request with subject: "
                 + request.getSubject() + " can't be handled by FitnessEndpoint!");
+    }
+
+    /**
+     * Returns the basic blocks of the AUT in the order they were recorded in the blocks.txt file.
+     *
+     * @param request The message request.
+     * @return Returns the basic blocks of the AUT encapsulated in a message.
+     */
+    private Message getBasicBlocks(Message request) {
+
+        String packageName = request.getParameter("packageName");
+        Path appDir = appsDir.resolve(packageName);
+        File basicBlocksFile = appDir.resolve(BLOCKS_FILE).toFile();
+
+        List<String> basicBlocks = new ArrayList<>();
+
+        try (var blocksReader = new BufferedReader(new InputStreamReader(new FileInputStream(basicBlocksFile)))) {
+
+            // an entry looks as follows: class name -> method name -> block id -> block size -> isBranch
+            // where the entries are ordered per method based on the block id
+            String line;
+            while ((line = blocksReader.readLine()) != null) {
+
+                final String[] tokens = line.split("->");
+                final String clazz = tokens[0];
+                final String method = tokens[1];
+                final String basicBlockID = tokens[2];
+
+                final String basicBlock = clazz + "->" + method + "->" + basicBlockID;
+                basicBlocks.add(basicBlock);
+            }
+        } catch (IOException e) {
+            Log.printError("Can't read from basic blocks file!");
+            throw new IllegalArgumentException(e);
+        }
+
+        String blocks = String.join("+", basicBlocks);
+        return new Message.MessageBuilder("/fitness/get_basic_blocks")
+                .withParameter("blocks", blocks)
+                .build();
+    }
+
+    private Message getBasicBlockFitnessVector(Message request) {
+        throw new UnsupportedOperationException("Not yet implemented!");
     }
 
     /**
@@ -61,6 +112,7 @@ public class FitnessEndpoint implements Endpoint {
                 return copyLineFitnessData(request);
             case BASIC_BLOCK_LINE_COVERAGE:
             case BASIC_BLOCK_BRANCH_COVERAGE:
+            case BASIC_BLOCK_MULTI_OBJECTIVE:
                 return copyBasicBlockFitnessData(request);
             default:
                 final String errorMsg = "Fitness function " + fitnessFunction + " not yet supported!";
@@ -224,6 +276,7 @@ public class FitnessEndpoint implements Endpoint {
                 return storeLineFitnessData(request);
             case BASIC_BLOCK_BRANCH_COVERAGE:
             case BASIC_BLOCK_LINE_COVERAGE:
+            case BASIC_BLOCK_MULTI_OBJECTIVE:
                 return storeBasicBlockFitnessData(request);
             default:
                 final String errorMsg = "Fitness function " + fitnessFunction + " not yet supported!";
