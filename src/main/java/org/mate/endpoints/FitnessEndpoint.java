@@ -220,11 +220,60 @@ public class FitnessEndpoint implements Endpoint {
             case BASIC_BLOCK_BRANCH_COVERAGE:
             case BASIC_BLOCK_MULTI_OBJECTIVE:
                 return copyBasicBlockFitnessData(request);
+            case METHOD_COVERAGE:
+                return copyMethodFitnessData(request);
             default:
                 final String errorMsg = "Fitness function " + fitnessFunction + " not yet supported!";
                 Log.printError(errorMsg);
                 return Messages.errorMessage(errorMsg);
         }
+    }
+
+    /**
+     * Copies the fitness data, i.e. traces of test cases, specified through the list of entities
+     * from the source chromosome (test suite) to the target chromosome (test suite).
+     *
+     * @param request The request specifying the operation.
+     * @return Returns a message describing the success/failure of the operation.
+     */
+    private Message copyMethodFitnessData(Message request) {
+
+        String deviceID = request.getParameter("deviceId");
+        String sourceChromosome = request.getParameter("chromosome_src");
+        String targetChromosome = request.getParameter("chromosome_target");
+        String[] entities = request.getParameter("entities").split(",");
+
+        Device device = Device.devices.get(deviceID);
+        String packageName = device.getPackageName();
+
+        File appDir = new File(appsDir.toFile(), packageName);
+        File tracesDir = new File(appDir, "traces");
+
+        File srcDir = new File(tracesDir, sourceChromosome);
+        File targetDir = new File(tracesDir, targetChromosome);
+
+        if (!targetDir.mkdirs() && !targetDir.isDirectory()) {
+            final var errorMsg = "Chromosome copy failed: target directory could not be created.";
+            Log.printError(errorMsg);
+            return Messages.errorMessage(errorMsg);
+        }
+        for (String entity : entities) {
+
+            if (Path.of(targetDir.getPath(), entity).toFile().exists()) {
+                // traces of chromosome have been already copied previously
+                continue;
+            }
+
+            try {
+                Files.copy(Path.of(srcDir.getPath(), entity), Path.of(targetDir.getPath(), entity));
+            } catch (IOException e) {
+                final var errorMsg = "Chromosome copy failed: entity " + entity + " could not be copied from "
+                        + srcDir + " to " + targetDir;
+                Log.printError(errorMsg);
+                return Messages.errorMessage(errorMsg);
+            }
+        }
+        return new Message("/fitness/copy_fitness_data");
     }
 
     /**
@@ -384,6 +433,8 @@ public class FitnessEndpoint implements Endpoint {
             case BASIC_BLOCK_LINE_COVERAGE:
             case BASIC_BLOCK_MULTI_OBJECTIVE:
                 return storeBasicBlockFitnessData(request);
+            case METHOD_COVERAGE:
+                return storeMethodFitnessData(request);
             default:
                 final String errorMsg = "Fitness function " + fitnessFunction + " not yet supported!";
                 Log.printError(errorMsg);
@@ -412,6 +463,53 @@ public class FitnessEndpoint implements Endpoint {
      */
     private Path getCoverageChromosomeDir(String packageName, String chromosome) {
         return getCoverageBaseDir(packageName).resolve(chromosome);
+    }
+
+    /**
+     * Stores the fitness data of the given chromosome.
+     *
+     * @param request The request specifying the operation.
+     * @return Returns a message describing the success/failure of the operation.
+     */
+    private Message storeMethodFitnessData(Message request) {
+
+        String deviceID = request.getParameter("deviceId");
+        // TODO: use packageName of device
+        String packageName = request.getParameter("packageName");
+        String chromosome = request.getParameter("chromosome");
+        String entity = request.getParameter("entity");
+
+        // grant read/write permission on external storage
+        Device device = Device.getDevice(deviceID);
+        boolean granted = device.grantPermissions(packageName);
+
+        if (!granted) {
+            throw new IllegalStateException("Couldn't grant runtime permissions!");
+        }
+
+        // send broadcast in order to write out traces
+        var broadcastOperation = ProcessRunner.runProcess(
+                androidEnvironment.getAdbExecutable(),
+                "-s",
+                deviceID,
+                "shell",
+                "am",
+                "broadcast",
+                "-a",
+                "STORE_TRACES",
+                "-n",
+                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer",
+                "--es",
+                "packageName",
+                packageName);
+
+        if (broadcastOperation.isErr()) {
+            throw new IllegalStateException("Couldn't send broadcast!");
+        }
+
+        // fetch the traces from emulator
+        device.pullTraceFile(chromosome, entity);
+        return new Message("/fitness/store_fitness_data");
     }
 
     /**
