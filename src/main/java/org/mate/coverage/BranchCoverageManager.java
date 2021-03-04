@@ -74,7 +74,7 @@ public final class BranchCoverageManager {
      * @param chromosome         Identifies either a test case or a test suite.
      * @param entity             Identifies a test case if chromosome refers to
      *                           a test suite, otherwise {@code null}.
-     * @return Returns the branch coverage for the given test case.
+     * @return Returns a dummy message on success.
      */
     public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID,
                                             String chromosome, String entity) {

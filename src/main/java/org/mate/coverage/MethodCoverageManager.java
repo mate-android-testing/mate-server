@@ -64,19 +64,14 @@ public class MethodCoverageManager {
     }
 
     /**
-     * Stores the branch coverage data for a chromosome, which can be either a test case or a test suite.
-     *
-     * First, a broadcast is sent to the AUT in order to write out a traces.txt file on the external storage.
-     * Second, this traces.txt is pulled from the emulator and saved on a pre-defined location (app directory/traces).
-     * Finally, the branch coverage is evaluated by comparing the visited branches with the
-     * total number of branches.
+     * Stores the method coverage data for a chromosome, which can be either a test case or a test suite.
      *
      * @param androidEnvironment Defines the location of the adb/aapt binary.
      * @param deviceID           The id of the emulator, e.g. emulator-5554.
      * @param chromosome         Identifies either a test case or a test suite.
      * @param entity             Identifies a test case if chromosome refers to
      *                           a test suite, otherwise {@code null}.
-     * @return Returns the branch coverage for the given test case.
+     * @return Returns a dummy message on success.
      */
     public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID,
                                             String chromosome, String entity) {
@@ -116,11 +111,11 @@ public class MethodCoverageManager {
     }
 
     /**
-     * Computes the (combined) coverage for a set of test cases/test suites.
+     * Computes the (combined) method coverage for a set of test cases/test suites.
      *
      * @param packageName The package name of the AUT.
      * @param chromosomes A list of chromosomes separated by '+'.
-     * @return Returns the (combined) coverage for a set of chromosomes.
+     * @return Returns the (combined) method coverage for a set of chromosomes.
      */
     public static Message getCombinedCoverage(Path appsDir, String packageName, String chromosomes) {
 
@@ -130,8 +125,8 @@ public class MethodCoverageManager {
         File appDir = new File(appsDir.toFile(), packageName);
         File tracesDir = new File(appDir, "traces");
 
-        // the branches.txt should be located within the app directory
-        File branchesFile = new File(appDir, "branches.txt");
+        // the methods.txt should be located within the app directory
+        File methodsFile = new File(appDir, "methods.txt");
 
         List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
 
@@ -154,61 +149,58 @@ public class MethodCoverageManager {
             }
         }
 
-        // evaluate branch coverage over all traces files
-        double branchCoverage = 0d;
+        // evaluate method coverage over all traces files
+        double methodCoverage = 0d;
 
         try {
-            branchCoverage = evaluateBranchCoverage(branchesFile, tracesFiles);
+            methodCoverage = evaluateMethodCoverage(methodsFile, tracesFiles);
         } catch (IOException e) {
             Log.printError(e.getMessage());
-            throw new IllegalStateException("Branch coverage couldn't be evaluated!");
+            throw new IllegalStateException("Method coverage couldn't be evaluated!");
         }
 
         return new Message.MessageBuilder("/coverage/combined")
-                .withParameter("coverage", String.valueOf(branchCoverage))
+                .withParameter("coverage", String.valueOf(methodCoverage))
                 .build();
     }
 
     /**
-     * Evaluates the branch coverage for a given set of traces files. Can be used
-     * to evaluate the branch coverage for a single test case as well as the combined coverage.
+     * Evaluates the method coverage for a given set of traces files. Can be used
+     * to evaluate the method coverage for a single test case as well as the combined coverage.
      *
-     * @param branchesFile The branches.txt file listing for each class the number of branches.
+     * @param methodsFile The methods.txt file listing all the instrumented methods.
      * @param tracesFiles  The set of traces file.
-     * @return Returns the branch coverage for a single test case or the combined coverage.
+     * @return Returns the method coverage for a single test case or the combined coverage.
      * @throws IOException Should never happen.
      */
-    private static double evaluateBranchCoverage(File branchesFile, List<File> tracesFiles) throws IOException {
+    private static double evaluateMethodCoverage(File methodsFile, List<File> tracesFiles) throws IOException {
 
-        Log.println("BranchesFile: " + branchesFile + "[" + branchesFile.exists() + "]");
+        Log.println("BranchesFile: " + methodsFile + "[" + methodsFile.exists() + "]");
 
         for (File tracesFile : tracesFiles) {
             Log.println("TracesFile: " + tracesFile + "[" + tracesFile.exists() + "]");
         }
 
-        // tracks the number of total branches per class and method
-        Map<String, Map<String, Integer>> branches = new HashMap<>();
+        // tracks the number of methods per class
+        Map<String, Integer> methods = new HashMap<>();
 
-        // tracks the number of visited branches per class and method
-        Map<String, Map<String, Integer>> visitedBranches = new HashMap<>();
+        // tracks the number of visited methods per class
+        Map<String, Integer> visitedMethods = new HashMap<>();
 
-        // first argument refers to branches.txt
-        InputStream branchesInputStream = new FileInputStream(branchesFile);
-        BufferedReader branchesReader = new BufferedReader(new InputStreamReader(branchesInputStream));
+        // first argument refers to methods.txt
+        InputStream methodsInputStream = new FileInputStream(methodsFile);
+        BufferedReader methodsReader = new BufferedReader(new InputStreamReader(methodsInputStream));
 
-        // read number of branches per class
+        // read number of methods per class (the entries are unique)
         String line;
-        while ((line = branchesReader.readLine()) != null) {
-            // each line consists of className->methodName->#branches
-            String[] triple = line.split("->");
-            String clazz = triple[0];
-            String method = triple[1];
-            int numberOfBranches = Integer.parseInt(triple[2]);
-            branches.putIfAbsent(clazz, new HashMap<>());
-            branches.get(clazz).putIfAbsent(method, numberOfBranches);
+        while ((line = methodsReader.readLine()) != null) {
+            // each line consists of className->methodName
+            String[] tuple = line.split("->");
+            String clazz = tuple[0];
+            methods.merge(clazz, 1, Integer::sum);
         }
 
-        branchesReader.close();
+        methodsReader.close();
         Set<String> coveredTraces = new HashSet<>();
 
         // second argument refers to traces.txt file(s)
@@ -220,77 +212,48 @@ public class MethodCoverageManager {
             String trace;
             while ((trace = tracesReader.readLine()) != null) {
 
-                // each trace consists of className->methodName->branchID
-                String[] triple = trace.split("->");
+                // each trace consists of className->methodName
+                String[] tuple = trace.split("->");
 
-                if (triple.length != 3 || trace.contains(":")
-                        || trace.endsWith("->exit") || trace.endsWith("->entry")) {
-                    // ignore traces related to if statements or branch distance or virtual entry/exit vertices
-                    continue;
-                }
+                if (tuple.length == 2) {
 
-                String clazz = triple[0];
-                String method = triple[1];
+                    if (!coveredTraces.contains(trace)) {
+                        // only new traces are interesting
+                        coveredTraces.add(trace);
 
-                if (!coveredTraces.contains(trace)) {
-                    // only new traces are interesting
-                    coveredTraces.add(trace);
+                        String clazz = tuple[0];
 
-                    // sum up how many branches have been visited by method and class
-                    visitedBranches.putIfAbsent(clazz, new HashMap<>());
-                    visitedBranches.get(clazz).merge(method, 1, Integer::sum);
+                        // sum up how many methods have been visited per class
+                        visitedMethods.merge(clazz, 1, Integer::sum);
+                    }
                 }
             }
             tracesReader.close();
         }
 
-        double overallCoveredBranches = 0.0;
-        double overallBranches = 0.0;
+        double overallCoveredMethods = 0.0;
+        double overallMethods = 0.0;
 
-        for (String clazz : branches.keySet()) {
-
-            for (String method : branches.get(clazz).keySet()) {
-
-                // coverage per method
-
-                double coveredBranches = 0.0;
-
-                if (visitedBranches.containsKey(clazz) && visitedBranches.get(clazz).containsKey(method)) {
-                    coveredBranches = visitedBranches.get(clazz).get(method);
-                }
-
-                double totalBranches = branches.get(clazz).get(method);
-
-                if (coveredBranches > 0.0) {
-                    Log.println("We have for the method " + clazz + "->" + method + " a branch coverage of "
-                            + (coveredBranches / totalBranches * 100) + "%.");
-                }
-            }
+        for (String clazz : methods.keySet()) {
 
             // coverage per class
+            double coveredMethods = visitedMethods.getOrDefault(clazz, 0);
+            double totalMethods = methods.get(clazz);
 
-            double coveredBranches = 0.0;
-
-            if (visitedBranches.containsKey(clazz)) {
-                coveredBranches = visitedBranches.get(clazz).values().stream().reduce(0, Integer::sum);
-            }
-
-            double totalBranches = branches.get(clazz).values().stream().reduce(0, Integer::sum);
-
-            if (coveredBranches > 0.0) {
-                Log.println("We have for the class " + clazz + " a branch coverage of "
-                        + (coveredBranches / totalBranches * 100) + "%.");
+            if (coveredMethods > 0.0) {
+                Log.println("We have for the class " + clazz + " a method coverage of "
+                        + (coveredMethods / totalMethods * 100) + "%.");
             }
 
             // update total coverage
-            overallCoveredBranches += coveredBranches;
-            overallBranches += totalBranches;
+            overallCoveredMethods += coveredMethods;
+            overallMethods += totalMethods;
         }
 
-        // total branch coverage
-        double branchCoverage = overallCoveredBranches / overallBranches * 100;
-        Log.println("We have a total branch coverage of " + branchCoverage + "%.");
+        // total method coverage
+        double methodCoverage = overallCoveredMethods / overallMethods * 100;
+        Log.println("We have a total method coverage of " + methodCoverage + "%.");
 
-        return branchCoverage;
+        return methodCoverage;
     }
 }
