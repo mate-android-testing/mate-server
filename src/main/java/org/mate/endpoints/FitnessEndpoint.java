@@ -1,5 +1,6 @@
 package org.mate.endpoints;
 
+import org.apache.commons.io.FileUtils;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
 import org.mate.network.Endpoint;
@@ -10,10 +11,12 @@ import org.mate.util.FitnessFunction;
 import org.mate.util.Log;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Handles requests related to storing and copying of fitness data.
@@ -89,7 +92,110 @@ public class FitnessEndpoint implements Endpoint {
     }
 
     private Message getBasicBlockFitnessVector(Message request) {
-        throw new UnsupportedOperationException("Not yet implemented!");
+
+        String packageName = request.getParameter("packageName");
+        String chromosomes = request.getParameter("chromosomes");
+
+        Path appDir = appsDir.resolve(packageName);
+        File basicBlocksFile = appDir.resolve(BLOCKS_FILE).toFile();
+
+        // a linked hashset maintains insertion order and contains is in O(1)
+        Set<String> basicBlocks = new LinkedHashSet<>();
+
+        try (Stream<String> stream = Files.lines(basicBlocksFile.toPath(), StandardCharsets.UTF_8)) {
+            // hopefully this preserves the order
+            basicBlocks.addAll(stream.collect(Collectors.toList()));
+        } catch (IOException e) {
+            Log.printError("Reading blocks.txt failed!");
+            throw new IllegalStateException(e);
+        }
+
+        // collect the traces files described by the chromosomes
+        Path tracesDir = appDir.resolve("traces");
+        List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), chromosomes);
+
+        Set<String> traces = readTraces(tracesFiles);
+        List<String> basicBlockFitnessVector = new ArrayList<>(basicBlocks.size());
+
+        for (String basicBlock : basicBlocks) {
+            if (traces.contains(basicBlock)) {
+                // covered basic block
+                basicBlockFitnessVector.add(String.valueOf(1));
+            } else {
+                // uncovered basic block
+                basicBlockFitnessVector.add(String.valueOf(0));
+            }
+        }
+
+        Log.println("Basic Block Fitness Vector: " + basicBlockFitnessVector);
+
+        return new Message.MessageBuilder("/fitness/get_basic_block_fitness_vector")
+                .withParameter("basic_block_fitness_vector", String.join("+", basicBlockFitnessVector))
+                .build();
+    }
+
+    /**
+     * Reads the traces from the given list of traces files.
+     *
+     * @param tracesFiles A list of traces files.
+     * @return Returns the unique traces contained in the given traces files.
+     */
+    private Set<String> readTraces(List<File> tracesFiles) {
+
+        // read traces from trace file(s)
+        long start = System.currentTimeMillis();
+
+        Set<String> traces = new HashSet<>();
+
+        for (File traceFile : tracesFiles) {
+            try (Stream<String> stream = Files.lines(traceFile.toPath(), StandardCharsets.UTF_8)) {
+                traces.addAll(stream.collect(Collectors.toList()));
+            } catch (IOException e) {
+                Log.println("Reading traces.txt failed!");
+                throw new IllegalStateException(e);
+            }
+        }
+
+        long end = System.currentTimeMillis();
+        Log.println("Reading traces from file(s) took: " + (end - start) + " seconds");
+
+        Log.println("Number of collected traces: " + traces.size());
+        return traces;
+    }
+
+    /**
+     * Gets the list of traces files specified by the given chromosomes.
+     *
+     * @param tracesDir   The base directory containing the traces files.
+     * @param chromosomes Encodes a mapping to one or several traces files.
+     * @return Returns the list of traces files described by the given chromosomes.
+     */
+    private List<File> getTraceFiles(File tracesDir, String chromosomes) {
+
+        // collect the relevant traces files
+        List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
+
+        if (chromosomes != null) {
+
+            // only consider the traces files described by the chromosome ids
+            tracesFiles = new ArrayList<>();
+
+            for (String chromosome : chromosomes.split("\\+")) {
+                try {
+                    tracesFiles.addAll(
+                            Files.walk(tracesDir.toPath().resolve(chromosome))
+                                    .filter(Files::isRegularFile)
+                                    .map(Path::toFile)
+                                    .collect(Collectors.toList()));
+                } catch (IOException e) {
+                    Log.printError("Couldn't retrieve traces files!");
+                    throw new IllegalArgumentException(e);
+                }
+            }
+        }
+
+        Log.println("Number of considered traces files: " + tracesFiles.size());
+        return tracesFiles;
     }
 
     /**
