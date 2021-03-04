@@ -68,8 +68,6 @@ public final class BranchCoverageManager {
      *
      * First, a broadcast is sent to the AUT in order to write out a traces.txt file on the external storage.
      * Second, this traces.txt is pulled from the emulator and saved on a pre-defined location (app directory/traces).
-     * Finally, the branch coverage is evaluated by comparing the visited branches with the
-     * total number of branches.
      *
      * @param androidEnvironment Defines the location of the adb/aapt binary.
      * @param deviceID           The id of the emulator, e.g. emulator-5554.

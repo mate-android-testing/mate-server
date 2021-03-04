@@ -1,5 +1,6 @@
 package org.mate.endpoints;
 
+import org.mate.coverage.BasicBlockCoverageManager;
 import org.mate.coverage.BranchCoverageManager;
 import org.mate.coverage.Coverage;
 import org.mate.coverage.LineCoverageManager;
@@ -82,6 +83,9 @@ public class CoverageEndpoint implements Endpoint {
                 return copyBranchCoverageData(request);
             case METHOD_COVERAGE:
                 return copyMethodCoverageData(request);
+            case BASIC_BLOCK_LINE_COVERAGE:
+            case BASIC_BLOCK_BRANCH_COVERAGE:
+                return copyBasicBlockCoverageData(request);
             default:
                 throw new UnsupportedOperationException("Coverage type not yet supported!");
         }
@@ -103,6 +107,14 @@ public class CoverageEndpoint implements Endpoint {
         return BranchCoverageManager.copyCoverageData(appsDir, deviceId, chromosomeSrc, chromosomeTarget, entities);
     }
 
+    private Message copyBasicBlockCoverageData(Message request) {
+        var deviceId = request.getParameter("deviceId");
+        var chromosomeSrc = request.getParameter("chromosome_src");
+        var chromosomeTarget = request.getParameter("chromosome_target");
+        var entities = request.getParameter("entities").split(",");
+        return BasicBlockCoverageManager.copyCoverageData(appsDir, deviceId, chromosomeSrc, chromosomeTarget, entities);
+    }
+
     private Message storeCoverageData(Message request) {
 
         // get the coverage type, e.g. BRANCH_COVERAGE
@@ -120,6 +132,9 @@ public class CoverageEndpoint implements Endpoint {
                 return storeBranchCoverageData(request);
             case METHOD_COVERAGE:
                 return storeMethodCoverageData(request);
+            case BASIC_BLOCK_LINE_COVERAGE:
+            case BASIC_BLOCK_BRANCH_COVERAGE:
+                return storeBasicBlockCoverageData(request);
             default:
                 throw new UnsupportedOperationException("Coverage type not yet supported!");
         }
@@ -137,6 +152,10 @@ public class CoverageEndpoint implements Endpoint {
                 return getCombinedBranchCoverage(request);
             case METHOD_COVERAGE:
                 return getCombinedMethodCoverage(request);
+            case BASIC_BLOCK_LINE_COVERAGE:
+                return getCombinedBasicBlockLineCoverage(request);
+            case BASIC_BLOCK_BRANCH_COVERAGE:
+                return getCombinedBasicBlockBranchCoverage(request);
             default:
                 throw new UnsupportedOperationException("Coverage type not yet supported!");
         }
@@ -154,6 +173,18 @@ public class CoverageEndpoint implements Endpoint {
         return BranchCoverageManager.getCombinedCoverage(appsDir, packageName, testcaseIds);
     }
 
+    private Message getCombinedBasicBlockBranchCoverage(Message request) {
+        String packageName = request.getParameter("packageName");
+        String testcaseIds = request.getParameter("chromosomes");
+        return BasicBlockCoverageManager.getCombinedBranchCoverage(appsDir, packageName, testcaseIds);
+    }
+
+    private Message getCombinedBasicBlockLineCoverage(Message request) {
+        String packageName = request.getParameter("packageName");
+        String testcaseIds = request.getParameter("chromosomes");
+        return BasicBlockCoverageManager.getCombinedLineCoverage(appsDir, packageName, testcaseIds);
+    }
+
     private Message storeMethodCoverageData(Message request) {
         String deviceID = request.getParameter("deviceId");
         String chromosome = request.getParameter("chromosome");
@@ -166,6 +197,13 @@ public class CoverageEndpoint implements Endpoint {
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
         return BranchCoverageManager.storeCoverageData(androidEnvironment, deviceID, chromosome, entity);
+    }
+
+    private Message storeBasicBlockCoverageData(Message request) {
+        String deviceID = request.getParameter("deviceId");
+        String chromosome = request.getParameter("chromosome");
+        String entity = request.getParameter("entity");
+        return BasicBlockCoverageManager.storeCoverageData(androidEnvironment, deviceID, chromosome, entity);
     }
 
     private Message getLineCoveredPercentages(Message request) {
