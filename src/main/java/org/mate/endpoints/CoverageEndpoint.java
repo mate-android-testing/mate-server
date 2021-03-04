@@ -3,6 +3,7 @@ package org.mate.endpoints;
 import org.mate.coverage.BranchCoverageManager;
 import org.mate.coverage.Coverage;
 import org.mate.coverage.LineCoverageManager;
+import org.mate.coverage.MethodCoverageManager;
 import org.mate.network.message.Messages;
 import org.mate.util.AndroidEnvironment;
 import org.mate.io.Device;
@@ -79,10 +80,19 @@ public class CoverageEndpoint implements Endpoint {
                 }
             case BRANCH_COVERAGE:
                 return copyBranchCoverageData(request);
+            case METHOD_COVERAGE:
+                return copyMethodCoverageData(request);
             default:
                 throw new UnsupportedOperationException("Coverage type not yet supported!");
         }
+    }
 
+    private Message copyMethodCoverageData(Message request) {
+        var deviceId = request.getParameter("deviceId");
+        var chromosomeSrc = request.getParameter("chromosome_src");
+        var chromosomeTarget = request.getParameter("chromosome_target");
+        var entities = request.getParameter("entities").split(",");
+        return MethodCoverageManager.copyCoverageData(appsDir, deviceId, chromosomeSrc, chromosomeTarget, entities);
     }
 
     private Message copyBranchCoverageData(Message request) {
@@ -108,6 +118,8 @@ public class CoverageEndpoint implements Endpoint {
                 }
             case BRANCH_COVERAGE:
                 return storeBranchCoverageData(request);
+            case METHOD_COVERAGE:
+                return storeMethodCoverageData(request);
             default:
                 throw new UnsupportedOperationException("Coverage type not yet supported!");
         }
@@ -123,15 +135,30 @@ public class CoverageEndpoint implements Endpoint {
                 return getCombinedLineCoverage(request);
             case BRANCH_COVERAGE:
                 return getCombinedBranchCoverage(request);
+            case METHOD_COVERAGE:
+                return getCombinedMethodCoverage(request);
             default:
                 throw new UnsupportedOperationException("Coverage type not yet supported!");
         }
+    }
+
+    private Message getCombinedMethodCoverage(Message request) {
+        String packageName = request.getParameter("packageName");
+        String testcaseIds = request.getParameter("chromosomes");
+        return MethodCoverageManager.getCombinedCoverage(appsDir, packageName, testcaseIds);
     }
 
     private Message getCombinedBranchCoverage(Message request) {
         String packageName = request.getParameter("packageName");
         String testcaseIds = request.getParameter("chromosomes");
         return BranchCoverageManager.getCombinedCoverage(appsDir, packageName, testcaseIds);
+    }
+
+    private Message storeMethodCoverageData(Message request) {
+        String deviceID = request.getParameter("deviceId");
+        String chromosome = request.getParameter("chromosome");
+        String entity = request.getParameter("entity");
+        return MethodCoverageManager.storeCoverageData(androidEnvironment, deviceID, chromosome, entity);
     }
 
     private Message storeBranchCoverageData(Message request) {
