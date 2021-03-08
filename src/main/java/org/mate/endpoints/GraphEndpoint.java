@@ -183,14 +183,14 @@ public class GraphEndpoint implements Endpoint {
 
     private Message initIntraCFG(File apkPath, String methodName, boolean useBasicBlocks,
                                  String packageName, String target) {
-        graph = new IntraCFG(apkPath, methodName, useBasicBlocks, packageName);
+        graph = new IntraCFG(apkPath, methodName, useBasicBlocks, appsDir, packageName);
         targetVertex = selectTargetVertex(target);
         return new Message("/graph/init");
     }
 
     private Message initInterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
                                  String packageName, String target) {
-        graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, packageName);
+        graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, appsDir, packageName);
         targetVertex = selectTargetVertex(target);
         return new Message("/graph/init");
     }
@@ -350,24 +350,7 @@ public class GraphEndpoint implements Endpoint {
         // evaluate fitness value (approach level + branch distance) for each single branch
         List<String> branchDistanceVector = new LinkedList<>();
 
-        File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
-
-        List<String> branches = new ArrayList<>();
-
-        try (Stream<String> stream = Files.lines(branchesFile.toPath(), StandardCharsets.UTF_8)) {
-            // hopefully this preserves the order (remove blank line at end)
-            branches.addAll(stream.filter(line -> line.length() > 0).collect(Collectors.toList()));
-        } catch (IOException e) {
-            Log.printError("Reading branches.txt failed!");
-            throw new IllegalStateException(e);
-        }
-
-        /*
-        * We request the branches from the branches.txt file and map them to vertices, since
-        * only those branches could be instrumented, although the graph could provide them
-        * as well, but including ones that couldn't be instrumented.
-         */
-        for (Vertex branch : mapBranchesToVertices(branches)) {
+        for (Vertex branch : graph.getBranchVertices()) {
 
             Log.println("Target branch vertex: " + branch.getMethod() + "->["
                         + branch.getStatement() + "]");
@@ -558,42 +541,6 @@ public class GraphEndpoint implements Endpoint {
 
         Log.println("Number of collected traces: " + traces.size());
         return traces;
-    }
-
-    /**
-     * Maps the given list of branches to the corresponding vertices in the graph.
-     *
-     * @param branches The list of branches that should be mapped to vertices.
-     * @return Returns the branch vertices.
-     */
-    private List<Vertex> mapBranchesToVertices(List<String> branches) {
-
-        // read traces from trace file(s)
-        long start = System.currentTimeMillis();
-
-        List<Vertex> branchVertices = Collections.synchronizedList(new ArrayList<>());
-
-        branches.parallelStream().forEach(branch -> {
-
-            Vertex branchVertex = graph.lookupVertex(branch);
-
-            if (branchVertex == null) {
-                Log.printWarning("Couldn't derive vertex for branch: " + branch);
-            } else {
-                branchVertices.add(branchVertex);
-            }
-        });
-
-        long end = System.currentTimeMillis();
-        Log.println("Mapping branches to vertices took: " + (end - start) + " seconds");
-
-        Log.println("Number of branches: " + branchVertices.size());
-
-        if (branchVertices.size() != branches.size()) {
-            throw new IllegalStateException("Couldn't derive for branches the corresponding branch vertex!");
-        }
-
-        return branchVertices;
     }
 
     /**
