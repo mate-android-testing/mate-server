@@ -11,7 +11,6 @@ import org.mate.graphs.Graph;
 import org.mate.graphs.GraphType;
 import org.mate.graphs.InterCFG;
 import org.mate.graphs.IntraCFG;
-import org.mate.io.Device;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
@@ -41,6 +40,8 @@ public class GraphEndpoint implements Endpoint {
     private Graph graph;
     private final Path appsDir;
 
+    private static final String BRANCHES_FILE = "branches.txt";
+
     // a target vertex (a random branch)
     private Vertex targetVertex;
 
@@ -53,8 +54,6 @@ public class GraphEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/graph/init")) {
             return initGraph(request);
-        } else if (request.getSubject().startsWith("/graph/get_branches")) {
-            return getBranches(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector")) {
             return getBranchDistanceVector(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
@@ -159,7 +158,6 @@ public class GraphEndpoint implements Endpoint {
 
     private Message initGraph(Message request) {
 
-        String deviceID = request.getParameter("deviceId");
         String packageName = request.getParameter("packageName");
         GraphType graphType = GraphType.valueOf(request.getParameter("graph_type"));
         File apkPath = new File(request.getParameter("apk"));
@@ -197,38 +195,18 @@ public class GraphEndpoint implements Endpoint {
         return new Message("/graph/init");
     }
 
-    private Message getBranches(Message request) {
-
-        GraphType graphType = GraphType.valueOf(request.getParameter("graph_type"));
-
-        if (graphType == GraphType.SGD) {
-            throw new UnsupportedOperationException("Graph type not yet supported!");
-        }
-
-        if (graph == null) {
-            throw new IllegalStateException("Graph hasn't been initialised!");
-        }
-
-        String branches = String.join("+", graph.getBranches());
-        return new Message.MessageBuilder("/graph/get_branches")
-                .withParameter("branches", branches)
-                .build();
-    }
-
     private Message getBranchDistance(Message request) {
 
-        String deviceID = request.getParameter("deviceId");
+        String packageName = request.getParameter("packageName");
         String chromosomes = request.getParameter("chromosomes");
 
         if (graph == null) {
             throw new IllegalStateException("Graph hasn't been initialised!");
         }
 
-        Device device = Device.getDevice(deviceID);
-
         // get list of traces file
-        File appDir = new File(appsDir.toFile(), device.getPackageName());
-        File tracesDir = new File(appDir, "traces");
+        Path appDir = appsDir.resolve(packageName);
+        File tracesDir = appDir.resolve("traces").toFile();
 
         // collect the relevant traces files
         List<File> tracesFiles = getTraceFiles(tracesDir, chromosomes);
@@ -349,18 +327,16 @@ public class GraphEndpoint implements Endpoint {
 
     private Message getBranchDistanceVector(Message request) {
 
-        String deviceID = request.getParameter("deviceId");
+        String packageName = request.getParameter("packageName");
         String chromosomes = request.getParameter("chromosomes");
 
         if (graph == null) {
             throw new IllegalStateException("Graph hasn't been initialised!");
         }
 
-        Device device = Device.getDevice(deviceID);
-
         // get list of traces file
-        File appDir = new File(appsDir.toFile(), device.getPackageName());
-        File tracesDir = new File(appDir, "traces");
+        Path appDir = appsDir.resolve(packageName);
+        File tracesDir = appDir.resolve("traces").toFile();
 
         // collect the relevant traces files
         List<File> tracesFiles = getTraceFiles(tracesDir, chromosomes);
@@ -374,7 +350,24 @@ public class GraphEndpoint implements Endpoint {
         // evaluate fitness value (approach level + branch distance) for each single branch
         List<String> branchDistanceVector = new LinkedList<>();
 
-        for (Vertex branch : graph.getBranchVertices()) {
+        File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
+
+        List<String> branches = new ArrayList<>();
+
+        try (Stream<String> stream = Files.lines(branchesFile.toPath(), StandardCharsets.UTF_8)) {
+            // hopefully this preserves the order (remove blank line at end)
+            branches.addAll(stream.filter(line -> line.length() > 0).collect(Collectors.toList()));
+        } catch (IOException e) {
+            Log.printError("Reading branches.txt failed!");
+            throw new IllegalStateException(e);
+        }
+
+        /*
+        * We request the branches from the branches.txt file and map them to vertices, since
+        * only those branches could be instrumented, although the graph could provide them
+        * as well, but including ones that couldn't be instrumented.
+         */
+        for (Vertex branch : mapBranchesToVertices(branches)) {
 
             Log.println("Target branch vertex: " + branch.getMethod() + "->["
                         + branch.getStatement() + "]");
@@ -565,6 +558,42 @@ public class GraphEndpoint implements Endpoint {
 
         Log.println("Number of collected traces: " + traces.size());
         return traces;
+    }
+
+    /**
+     * Maps the given list of branches to the corresponding vertices in the graph.
+     *
+     * @param branches The list of branches that should be mapped to vertices.
+     * @return Returns the branch vertices.
+     */
+    private List<Vertex> mapBranchesToVertices(List<String> branches) {
+
+        // read traces from trace file(s)
+        long start = System.currentTimeMillis();
+
+        List<Vertex> branchVertices = Collections.synchronizedList(new ArrayList<>());
+
+        branches.parallelStream().forEach(branch -> {
+
+            Vertex branchVertex = graph.lookupVertex(branch);
+
+            if (branchVertex == null) {
+                Log.printWarning("Couldn't derive vertex for branch: " + branch);
+            } else {
+                branchVertices.add(branchVertex);
+            }
+        });
+
+        long end = System.currentTimeMillis();
+        Log.println("Mapping branches to vertices took: " + (end - start) + " seconds");
+
+        Log.println("Number of branches: " + branchVertices.size());
+
+        if (branchVertices.size() != branches.size()) {
+            throw new IllegalStateException("Couldn't derive for branches the corresponding branch vertex!");
+        }
+
+        return branchVertices;
     }
 
     /**

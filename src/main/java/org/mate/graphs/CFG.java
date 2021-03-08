@@ -169,6 +169,8 @@ public abstract class CFG implements Graph {
             }
         }
 
+        // TODO: only add entries for those branches that we could instrument, check the branches.txt file
+
         // handle branch + if stmt vertices
         for (Vertex branchVertex : branchVertices) {
 
@@ -264,26 +266,5 @@ public abstract class CFG implements Graph {
     @Override
     public String getAppName() {
         return appName;
-    }
-
-    @Override
-    public List<String> getBranches() {
-
-        List<String> branches = new LinkedList<>();
-
-        for (Vertex branchVertex : branchVertices) {
-            Integer branchID = null;
-            if (branchVertex.getStatement() instanceof BasicStatement) {
-                branchID = ((BasicStatement) branchVertex.getStatement()).getInstructionIndex();
-            } else if (branchVertex.getStatement() instanceof BlockStatement) {
-                branchID = ((BasicStatement) ((BlockStatement) branchVertex.getStatement()).getFirstStatement()).getInstructionIndex();
-            }
-
-            if (branchID != null) {
-                // convert a branch (vertex) to its trace
-                branches.add(branchVertex.getMethod() + "->" + branchID);
-            }
-        }
-        return branches;
     }
 }

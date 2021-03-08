@@ -28,6 +28,7 @@ public class FitnessEndpoint implements Endpoint {
     private final Path appsDir;
 
     private static final String BLOCKS_FILE = "blocks.txt";
+    private static final String BRANCHES_FILE = "branches.txt";
 
     public FitnessEndpoint(AndroidEnvironment androidEnvironment, Path resultsPath, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
@@ -42,6 +43,8 @@ public class FitnessEndpoint implements Endpoint {
             return storeFitnessData(request);
         } else if (request.getSubject().startsWith("/fitness/copy_fitness_data")) {
             return copyFitnessData(request);
+        } else if (request.getSubject().startsWith("/fitness/get_branches")) {
+            return getBranches(request);
         } else if (request.getSubject().startsWith("/fitness/get_basic_blocks")) {
             return getBasicBlocks(request);
         } else if (request.getSubject().startsWith("/fitness/get_basic_block_fitness_vector")) {
@@ -49,6 +52,33 @@ public class FitnessEndpoint implements Endpoint {
         }
         throw new IllegalArgumentException("Message request with subject: "
                 + request.getSubject() + " can't be handled by FitnessEndpoint!");
+    }
+
+    /**
+     * Returns the branches of the AUT in the order they were recorded in the branches.txt file.
+     *
+     * @param request The message request.
+     * @return Returns the branches of the AUT encapsulated in a message.
+     */
+    private Message getBranches(Message request) {
+
+        String packageName = request.getParameter("packageName");
+        Path appDir = appsDir.resolve(packageName);
+        File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
+
+        List<String> branches = new ArrayList<>();
+
+        try (Stream<String> stream = Files.lines(branchesFile.toPath(), StandardCharsets.UTF_8)) {
+            // hopefully this preserves the order (remove blank line at end)
+            branches.addAll(stream.filter(line -> line.length() > 0).collect(Collectors.toList()));
+        } catch (IOException e) {
+            Log.printError("Reading branches.txt failed!");
+            throw new IllegalStateException(e);
+        }
+
+        return new Message.MessageBuilder("/fitness/get_branches")
+                .withParameter("branches", String.join("+", branches))
+                .build();
     }
 
     /**

@@ -14,9 +14,6 @@ public interface Graph {
     // package name of app
     String getAppName();
 
-    // a string encoding of the branches
-    List<String> getBranches();
-
     // the actual branch vertices
     List<Vertex> getBranchVertices();
 
