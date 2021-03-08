@@ -17,6 +17,7 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class Device {
 
@@ -332,17 +333,28 @@ public class Device {
             Log.println("Pull Operation: " + pullOperation.getOk());
         }
 
-        // verify that the traces.txt contains the number of traces according to info.txt
+        // check whether there is a mismatch between info.txt and traces.txt
         try {
             long numberOfLines = Files.lines(tracesFile.toPath()).count();
             Log.println("Number of traces according to traces.txt: " + numberOfLines);
 
+            Log.println("Chromosome: " + chromosome);
+            Log.println("Traces: " + Files.lines(tracesFile.toPath()).collect(Collectors.toList()));
+
             int numberOfTraces = Integer.parseInt(content.getOk().get(0));
             Log.println("Number of traces according to info.txt: " + numberOfTraces);
 
+            /*
+            * The problem here is that the AUT can still produce traces, e.g. a background thread
+            * running an endless-loop and checking an if condition, while we try to retrieve the traces.txt
+            * file. In particular, it can happen that the write method of the tracer class is invoked while
+            * the current thread is waiting (sleeping) for the completion of writing the info.txt file. This
+            * would at least explain why there are sometimes more traces retrieved than specified by the
+            * info.txt file.
+             */
+
             // compare traces.txt with info.txt
             if (numberOfTraces > numberOfLines) {
-                // FIXME: volatile variable on Android seems to fail, see Tracer.java
                 throw new IllegalStateException("Corrupted traces.txt file!");
             }
         } catch (IOException e) {
