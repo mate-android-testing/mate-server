@@ -49,6 +49,8 @@ public class FitnessEndpoint implements Endpoint {
             return getBasicBlocks(request);
         } else if (request.getSubject().startsWith("/fitness/get_basic_block_fitness_vector")) {
             return getBasicBlockFitnessVector(request);
+        } else if (request.getSubject().startsWith("/fitness/get_branch_fitness_vector")) {
+            return getBranchFitnessVector(request);
         }
         throw new IllegalArgumentException("Message request with subject: "
                 + request.getSubject() + " can't be handled by FitnessEndpoint!");
@@ -118,6 +120,49 @@ public class FitnessEndpoint implements Endpoint {
         String blocks = String.join("+", basicBlocks);
         return new Message.MessageBuilder("/fitness/get_basic_blocks")
                 .withParameter("blocks", blocks)
+                .build();
+    }
+
+    private Message getBranchFitnessVector(Message request) {
+
+        String packageName = request.getParameter("packageName");
+        String chromosomes = request.getParameter("chromosomes");
+
+        Path appDir = appsDir.resolve(packageName);
+        File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
+
+        // a linked hashset maintains insertion order and contains is in O(1)
+        Set<String> branches = new LinkedHashSet<>();
+
+        try (Stream<String> stream = Files.lines(branchesFile.toPath(), StandardCharsets.UTF_8)) {
+            // hopefully this preserves the order
+            branches.addAll(stream.filter(line -> line.length() > 0).collect(Collectors.toList()));
+        } catch (IOException e) {
+            Log.printError("Reading branches.txt failed!");
+            throw new IllegalStateException(e);
+        }
+
+        // collect the traces files described by the chromosomes
+        Path tracesDir = appDir.resolve("traces");
+        List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), chromosomes);
+
+        Set<String> traces = readTraces(tracesFiles);
+        List<String> branchesFitnessVector = new ArrayList<>(branches.size());
+
+        for (String branch : branches) {
+            if (traces.contains(branch)) {
+                // covered branch
+                branchesFitnessVector.add(String.valueOf(1));
+            } else {
+                // uncovered branch
+                branchesFitnessVector.add(String.valueOf(0));
+            }
+        }
+
+        Log.println("Branch Fitness Vector: " + branchesFitnessVector);
+
+        return new Message.MessageBuilder("/fitness/get_branch_fitness_vector")
+                .withParameter("branch_fitness_vector", String.join("+", branchesFitnessVector))
                 .build();
     }
 
@@ -240,6 +285,7 @@ public class FitnessEndpoint implements Endpoint {
 
         switch (FitnessFunction.valueOf(fitnessFunction)) {
             case BRANCH_COVERAGE:
+            case BRANCH_MULTI_OBJECTIVE:
             case BRANCH_DISTANCE:
             case BRANCH_DISTANCE_MULTI_OBJECTIVE:
                 return copyBranchFitnessData(request);
@@ -453,6 +499,7 @@ public class FitnessEndpoint implements Endpoint {
 
         switch (FitnessFunction.valueOf(fitnessFunction)) {
             case BRANCH_COVERAGE:
+            case BRANCH_MULTI_OBJECTIVE:
             case BRANCH_DISTANCE:
             case BRANCH_DISTANCE_MULTI_OBJECTIVE:
                 return storeBranchFitnessData(request);
