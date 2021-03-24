@@ -169,6 +169,7 @@ public class Server {
                         out.flush();
                     }
                 } catch (Exception e) {
+                    Device.listDevices(androidEnvironment);
                     e.printStackTrace();
                 }
                 client.close();
@@ -176,6 +177,7 @@ public class Server {
             }
 
         } catch (IOException ioe) {
+            Device.listDevices(androidEnvironment);
             ioe.printStackTrace();
         }
     }

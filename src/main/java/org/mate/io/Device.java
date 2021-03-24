@@ -507,6 +507,21 @@ public class Device {
     }
 
     /**
+     * Lists the devices according to the output of 'adb devices'.
+     *
+     * @param androidEnvironment A reference to the android environment, e.g. access to adb.
+     */
+    public static void listDevices(AndroidEnvironment androidEnvironment) {
+        List<String> resultDevices = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "devices").getOk();
+        Log.println("Devices: ");
+        for (String deviceStr : resultDevices) {
+            if (deviceStr.contains("device") && !deviceStr.contains("attached")) {
+                Log.println(deviceStr);
+            }
+        }
+    }
+
+    /**
      * Allocates emulator instances that are attached according to 'adb devices'.
      *
      * @param androidEnvironment A reference to the android environment, e.g. access to adb.
