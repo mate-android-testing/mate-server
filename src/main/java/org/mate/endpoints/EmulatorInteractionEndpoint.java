@@ -150,7 +150,7 @@ public class EmulatorInteractionEndpoint implements Endpoint {
         var packageName = request.getParameter("packageName");
 
         return new Message.MessageBuilder("/emulator/interaction")
-                .withParameter("emulator", Device.allocateDevice(packageName, imageHandler, androidEnvironment))
+                .withParameter("emulator", Device.allocateDevice(packageName, androidEnvironment))
                 .build();
     }
 }

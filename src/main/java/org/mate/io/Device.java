@@ -1,7 +1,5 @@
 package org.mate.io;
 
-import org.mate.Server;
-import org.mate.accessibility.ImageHandler;
 import org.mate.pdf.Report;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
@@ -27,7 +25,7 @@ public class Device {
     private String deviceID;
     private String packageName;
     private boolean busy;
-    private int APIVersion;
+    private final int apiVersion;
     private String currentScreenShotLocation;
 
     // defines where the apps, in particular the APKs are located
@@ -38,7 +36,7 @@ public class Device {
         this.androidEnvironment = androidEnvironment;
         this.packageName = "";
         this.busy = false;
-        APIVersion = this.getAPIVersionFromADB();
+        this.apiVersion = getAPIVersionFromADB();
     }
 
     public String getCurrentScreenShotLocation() {
@@ -73,17 +71,19 @@ public class Device {
         return this.busy;
     }
 
-    public int getAPIVersion() {
-        return APIVersion;
+    public int getApiVersion() {
+        return apiVersion;
     }
 
     private int getAPIVersionFromADB() {
-        List<String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "getprop", "ro.build.version.sdk").getOk();
+        List<String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID,
+                "shell", "getprop", "ro.build.version.sdk").getOk();
         if (result != null && result.size() > 0) {
-            System.out.println("API consulta: " + result.get(0));
-            return Integer.valueOf(result.get(0));
+            Log.println("API version: " + result.get(0));
+            return Integer.parseInt(result.get(0));
+        } else {
+            throw new IllegalStateException("Couldn't derive emulator API version via ADB!");
         }
-        return 23;
     }
 
     /**
@@ -278,7 +278,6 @@ public class Device {
         }
 
         // get number of traces from info.txt
-        // TODO: check leading slash on Windows!
         Result<List<String>, String> content = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
                 "-s", deviceID, "shell", "cat", "/data/data/" + packageName + "/info.txt");
 
@@ -391,7 +390,7 @@ public class Device {
 
         String response = "unknown";
         String cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
-        if (getAPIVersion() == 23 || getAPIVersion() == 25) {
+        if (getApiVersion() == 23 || getApiVersion() == 25) {
             if (ProcessRunner.isWin) {
                 cmd = "$focused = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[5]";
@@ -400,7 +399,7 @@ public class Device {
             }
         }
 
-        if (getAPIVersion() == 26 || getAPIVersion() == 27) {
+        if (getApiVersion() == 26 || getApiVersion() == 27) {
             if (ProcessRunner.isWin) {
                 cmd = "$focused = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[7]";
@@ -417,7 +416,7 @@ public class Device {
          * Instead, we need to search for the 'realActivity' record, pick the second one (seems to be the current active Activity)
          * and split on '='.
          */
-        if (getAPIVersion() == 28) {
+        if (getApiVersion() == 28) {
             if (ProcessRunner.isWin) {
                 cmd = "$activity = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string \"realActivity\" ; $focused = $activity[1] ; $final = $focused -split '=' ; echo $final[1]";
@@ -428,14 +427,19 @@ public class Device {
         }
 
         List<String> result;
+
         if (ProcessRunner.isWin) {
             result = ProcessRunner.runProcess("powershell", "-command", cmd).getOk();
         } else {
             result = ProcessRunner.runProcess("bash", "-c", cmd).getOk();
         }
-        if (result != null && result.size() > 0)
+
+        if (result != null && result.size() > 0) {
             response = result.get(0);
-        Log.println("activity: " + response);
+            Log.println("Activity: " + response);
+        } else {
+            Log.printError("Failed to retrieve current activity: " + result);
+        }
 
         return response;
     }
@@ -495,7 +499,7 @@ public class Device {
             }
         }
 
-        Log.println("activities:");
+        Log.println("Activities:");
         for (String activity : activities) {
             Log.println("\t" + activity);
         }
@@ -541,11 +545,10 @@ public class Device {
      * Requests the name of the emulator that is running the AUT specified through the
      * given package name.
      *
-     * @param imageHandler A reference to the image handler.
      * @param androidEnvironment A reference to the android environment, e.g. access to adb.
      * @return Returns the name of the emulator.
      */
-    public static String allocateDevice(String packageName, ImageHandler imageHandler, AndroidEnvironment androidEnvironment) {
+    public static String allocateDevice(String packageName, AndroidEnvironment androidEnvironment) {
 
         // check which emulator is running the AUT
         String deviceID = getDeviceRunningPackage(packageName, androidEnvironment);
