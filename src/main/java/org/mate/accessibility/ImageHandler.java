@@ -1,71 +1,116 @@
 package org.mate.accessibility;
 
+import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
 import org.mate.util.AndroidEnvironment;
-import org.mate.io.Device;
+import org.mate.util.Log;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.Writer;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.ArrayList;
 
 public class ImageHandler {
 
-    public static String screenShotDir;
-
     public static int contImg = 0;
     private final AndroidEnvironment androidEnvironment;
+    private Path screenshotDir;
 
     public ImageHandler(AndroidEnvironment androidEnvironment) {
         this.androidEnvironment = androidEnvironment;
     }
 
-    public String takeScreenshot(String cmdStr) {
-
-        String targetFolder = screenShotDir + cmdStr.split("_")[1];
-        System.out.println("target folder: " + targetFolder);
-
-        String[] parts = cmdStr.split(":");
-        String emulator = parts[1];
-        String imgPath = parts[2];
-        int index = imgPath.lastIndexOf("_");
-
-        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", emulator, "shell", "screencap", "-p", "/sdcard/" + imgPath);
-        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", emulator, "pull", "/sdcard/"+parts[2], targetFolder);
-
-        Device device = Device.getDevice(emulator);
-        device.setCurrentScreenShotLocation(targetFolder+"/"+imgPath);
-
-        return imgPath;
+    /**
+     * Sets the screenshot directory.
+     *
+     * @param screenshotDir The new screenshot directory.
+     */
+    public void setScreenshotDir(Path screenshotDir) {
+        this.screenshotDir = screenshotDir;
     }
 
-    public String takeFlickerScreenshot(String cmdStr) {
+    /**
+     * Takes a screenshot of the given screen state.
+     *
+     * @param device The emulator instance.
+     * @param packageName The package name corresponding to the screen state.
+     * @param nodeId Identifies the screen state.
+     */
+    public void takeScreenshot(Device device, String packageName, String nodeId) {
 
-        String targetFolder = screenShotDir + cmdStr.split("_")[1];
-        System.out.println("target folder: " + targetFolder);
+        Path targetDir = screenshotDir.resolve(packageName);
 
-        String[] parts = cmdStr.split(":");
-        String emulator = parts[1];
-        String imgPath = parts[2];
-        String originalImgPath = imgPath;
-        int index = imgPath.lastIndexOf("_");
-        //String packageName = parts[1].substring(0,index-1);
-
-        for (int i=0; i<20; i++) {
-            imgPath = originalImgPath.replace(".png","_flicker_"+i+".png");
-            ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", emulator, "shell", "screencap", "-p", "/sdcard/" + imgPath);
-        }
-        for (int i=0; i<20; i++) {
-            imgPath = originalImgPath.replace(".png","_flicker_"+i+".png");
-            ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", emulator, "pull", "/sdcard/" + imgPath, targetFolder);
+        if (!targetDir.toFile().exists()) {
+            if (!targetDir.toFile().mkdirs()) {
+                Log.printError("Unable to create screenshot directory!");
+                return;
+            }
         }
 
-        boolean flickering = AccessibilityUtils.checkFlickering(targetFolder,originalImgPath);
+        String screenshotName = nodeId + ".png";
 
-        return imgPath;
+        // take screenshot and pull it from emulator
+        var takeSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", device.getDeviceID(),
+                "shell", "screencap", "-p", "/sdcard/" + screenshotName);
+
+        if (takeSS.isErr()) {
+            Log.printWarning("Taking screenshot failed: " + takeSS.getErr());
+        } else {
+            // only pull if taking screenshot succeeded
+            var pullSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", device.getDeviceID(),
+                    "pull", "/sdcard/" + screenshotName, String.valueOf(targetDir.resolve(screenshotName)));
+            if (pullSS.isErr()) {
+                Log.printWarning("Pulling screenshot failed: " + pullSS.getErr());
+            }
+        }
+        //device.setCurrentScreenShotLocation(targetFolder+"/"+imgPath);
     }
 
+    /**
+     * Checks whether there is a flickering observable between the given screenshot
+     * and multiple samples of it.
+     *
+     * @param device The emulator instance.
+     * @param packageName The package name identifies the location of the screenshot.
+     * @param stateId Represents the name of the screenshot.
+     * @return Returns {@code true} if flickering could be observed, otherwise
+     *              {@code false} is returned.
+     */
+    public boolean checkForFlickering(Device device, String packageName, String stateId) {
+
+        Path targetDir = screenshotDir.resolve(packageName);
+        String screenshotName = stateId + ".png";
+
+        // check whether original screenshot is present (the one we check for flickering)
+        if (!targetDir.resolve(screenshotName).toFile().exists()) {
+            throw new IllegalStateException("Screenshot to check for flickering is not present!");
+        }
+
+        List<String> samples = new ArrayList<>();
+
+        // take 20 screenshot samples and pull them
+        for (int i = 0; i < 20; i++) {
+
+            String screenshotSampleName = screenshotName.replace(".png","_flicker_"+i+".png");
+            samples.add(screenshotSampleName);
+
+            ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", device.getDeviceID(),
+                    "shell", "screencap", "-p", "/sdcard/" + screenshotSampleName);
+
+            ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", device.getDeviceID(),
+                    "pull", "/sdcard/" + screenshotSampleName, String.valueOf(targetDir.resolve(screenshotSampleName)));
+        }
+
+        return AccessibilityUtils.checkFlickering(targetDir, screenshotName, samples);
+    }
+
+    @Deprecated
     public String markImage(String originalImgPath,int x1, int y1, int x2, int y2,String flawType) {
 
         System.out.println("MARK IMAGE");
@@ -132,114 +177,76 @@ public class ImageHandler {
         return "";
     }
 
-    public String calculateLuminance(String cmdStr){
-        String response = "0";
-        try {
+    /**
+     * Calculates the luminance of a widget based on a screenshot.
+     *
+     * @param packageName Identifies the directory containing the screenshot.
+     * @param stateId Identifies the name of the screenshot.
+     * @param x1 The x1 coordinate of the widget.
+     * @param x2 The x2 coordinate of the widget.
+     * @param y1 The y1 coordinate of the widget.
+     * @param y2 The y2 coordinate of the widget.
+     * @return Returns the luminance of the given widget.
+     */
+    public String calculateLuminance(String packageName, String stateId, int x1, int x2, int y1, int y2) {
 
-            System.out.println(cmdStr);
-            String[] parts = cmdStr.split(":");
-            String packageName = parts[1];
+        Path targetDir = screenshotDir.resolve(packageName);
+        File screenshot = new File(targetDir.toFile(), stateId + ".png");
 
-            String targetFolder = screenShotDir+packageName.split("_")[1];
-
-            String stateId = parts[2];
-            String coord = parts[3];
-
-            String[] positions = coord.split(",");
-            int x1 = Integer.valueOf(positions[0]);
-            int y1 = Integer.valueOf(positions[1]);
-            int x2 = Integer.valueOf(positions[2]);
-            int y2 = Integer.valueOf(positions[3]);
-
-            String fileName = targetFolder+ "/"+packageName + "_" + stateId + ".png";
-            System.out.println(fileName);
-            System.out.println(coord);
-            String luminances = AccessibilityUtils.getLuminance(fileName, x1, y1, x2, y2);
-            System.out.println("luminance: " + luminances);
-            response = luminances;
-        } catch (Exception e) {
-            System.out.println("PROBLEMS CALCULATING LUMINANCE");
-            response = "0,0";
+        if (!screenshot.exists()) {
+            throw new IllegalStateException("Screenshot not present for calculating luminance!");
         }
-        return response;
+
+        return AccessibilityUtils.getLuminance(screenshot.getPath(), x1, y1, x2, y2);
     }
 
-    public String matchesSurroundingColor(String cmdStr){
+    /**
+     * Checks the surrounding color of a widget based on a screenshot.
+     *
+     * @param packageName Identifies the directory containing the screenshot.
+     * @param stateId Identifies the name of the screenshot.
+     * @param x1 The x1 coordinate of the widget.
+     * @param x2 The x2 coordinate of the widget.
+     * @param y1 The y1 coordinate of the widget.
+     * @param y2 The y2 coordinate of the widget.
+     * @return Returns a value indicating too which degree the surrounding color of
+     *          the widget matches.
+     */
+    public double matchSurroundingColor(String packageName, String stateId, int x1, int x2, int y1, int y2) {
 
-        System.out.println(cmdStr);
-        String response = "false";
+        Path targetDir = screenshotDir.resolve(packageName);
+        File screenshot = new File(targetDir.toFile(), stateId + ".png");
 
-        try {
-
-            String[] parts = cmdStr.split(":");
-            String packageName = parts[1];
-
-            String targetFolder = screenShotDir + packageName.split("_")[1];
-
-            String stateId = parts[2];
-            String coord = parts[3];
-
-            String[] positions = coord.split(",");
-            int x1 = Integer.valueOf(positions[0]);
-            int y1 = Integer.valueOf(positions[1]);
-            int x2 = Integer.valueOf(positions[2]);
-            int y2 = Integer.valueOf(positions[3]);
-
-            String fileName = targetFolder + "/" + packageName + "_" + stateId + ".png";
-            //System.out.println(fileName);
-            //System.out.println(coord);
-            double matchesBackground = AccessibilityUtils.matchesSurroundingColor(fileName, x1, y1, x2, y2);
-
-            return String.valueOf(matchesBackground);
-        }
-        catch(Exception e){
-            System.out.println("Problems matching color background");
-            response = "false";
+        if (!screenshot.exists()) {
+            throw new IllegalStateException("Screenshot not present for surrounding color check!");
         }
 
-        return response;
+        return AccessibilityUtils.matchesSurroundingColor(screenshot.getPath(), x1, y1, x2, y2);
     }
 
-    public String calculateConstratRatio(String cmdStr) {
+    /**
+     * Calculates the contrast ratio.
+     *
+     * @param packageName Identifies the directory containing the screenshot.
+     * @param stateId Identifies the name of the screenshot.
+     * @param x1 The x1 coordinate of the widget.
+     * @param x2 The x2 coordinate of the widget.
+     * @param y1 The y1 coordinate of the widget.
+     * @param y2 The y2 coordinate of the widget.
+     * @return Returns the contrast ratio.
+     */
+    public double calculateContrastRatio(String packageName, String stateId, int x1, int x2, int y1, int y2) {
 
-        String response = "21";
-        try {
+        Path targetDir = screenshotDir.resolve(packageName);
+        File screenshot = new File(targetDir.toFile(), stateId + ".png");
 
-
-            System.out.println(cmdStr);
-            String[] parts = cmdStr.split(":");
-            String packageName = parts[1];
-
-            String targetFolder = screenShotDir+packageName.split("_")[1];
-
-            String stateId = parts[2];
-            String coord = parts[3];
-
-
-
-            String[] positions = coord.split(",");
-            int x1 = Integer.valueOf(positions[0]);
-            int y1 = Integer.valueOf(positions[1]);
-            int x2 = Integer.valueOf(positions[2]);
-            int y2 = Integer.valueOf(positions[3]);
-
-            String fileName = targetFolder+ "/"+packageName + "_" + stateId + ".png";
-
-            double contrastRatio = AccessibilityUtils.getContrastRatio(fileName, x1, y1, x2, y2);
-            System.out.println("contrast ratio: " + contrastRatio);
-            response = String.valueOf(contrastRatio);
-        } catch (Exception e) {
-            System.out.println("PROBLEMS CALCULATING CONTRAST RATIO");
-            response = "21";
-        }
-        return response;
-    }
-
-    public void createPicturesFolder(String deviceID, String packageName) {
-        try {
-            new File(screenShotDir+packageName).mkdir();
-        } catch(Exception e){
+        if (!screenshot.exists()) {
+            throw new IllegalStateException("Screenshot not present for contrast ratio computation!");
         }
 
+        double contrastRatio = AccessibilityUtils.getContrastRatio(screenshot.getPath(), x1, y1, x2, y2);
+        Log.println("Contrast Ratio: " + contrastRatio);
+
+        return contrastRatio;
     }
 }

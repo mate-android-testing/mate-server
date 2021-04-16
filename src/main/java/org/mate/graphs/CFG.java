@@ -6,15 +6,21 @@ import de.uni_passau.fim.auermich.graphs.cfg.BaseCFG;
 import de.uni_passau.fim.auermich.statement.BasicStatement;
 import de.uni_passau.fim.auermich.statement.BlockStatement;
 import de.uni_passau.fim.auermich.statement.Statement;
+import de.uni_passau.fim.auermich.utility.Utility;
 import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.mate.graphs.util.VertexPair;
 import org.mate.util.Log;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public abstract class CFG implements Graph {
 
@@ -25,17 +31,22 @@ public abstract class CFG implements Graph {
     private final String appName;
 
     // cache the list of branches (the order must be consistent when requesting the branch distance vector)
-    protected final List<Vertex> branchVertices;
+    protected List<Vertex> branchVertices;
 
     // the search algorithm (bi-directional dijkstra seems to be the fastest one)
     private final ShortestPathAlgorithm<Vertex, Edge> dijkstra;
+
+    // the path to the apps dir
+    protected final Path appsDir;
+
+    private static final String BRANCHES_FILE = "branches.txt";
 
     /**
      * Contains a mapping between a trace and its vertex within the graph. The mapping
      * is only defined for traces describing branches, if statements and entry/exit statements.
      * A look up of single vertices is quite expensive and this map should speed up the mapping process.
      */
-    private final Map<String, Vertex> vertexMap;
+    private Map<String, Vertex> vertexMap;
 
     // cache already computed distances to the target vertex
     private final Map<VertexPair, Integer> cachedDistances = new ConcurrentHashMap<>();
@@ -45,14 +56,75 @@ public abstract class CFG implements Graph {
      * Constructs a wrapper for a given control-flow graph.
      *
      * @param baseCFG The actual control flow graph.
+     * @param appsDir The path to the apps directory.
      * @param appName The name of the app (the package name).
      */
-    public CFG(BaseCFG baseCFG, String appName) {
+    public CFG(BaseCFG baseCFG, Path appsDir, String appName) {
         this.baseCFG = baseCFG;
         this.appName = appName;
-        branchVertices = baseCFG.getBranches();
+        this.appsDir = appsDir;
+        this.vertexMap = new HashMap<>();
+        branchVertices = initBranchVertices();
         dijkstra = baseCFG.initBidirectionalDijkstraAlgorithm();
         vertexMap = initVertexMap();
+    }
+
+    /**
+     * Retrieves the list of branch vertices, those that could actually instrumented.
+     *
+     * @return Returns the branch vertices.
+     */
+    private List<Vertex> initBranchVertices() {
+
+        Path appDir = appsDir.resolve(appName);
+        File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
+
+        List<String> branches = new ArrayList<>();
+
+        try (Stream<String> stream = Files.lines(branchesFile.toPath(), StandardCharsets.UTF_8)) {
+            // hopefully this preserves the order (remove blank line at end)
+            branches.addAll(stream.filter(line -> line.length() > 0).collect(Collectors.toList()));
+        } catch (IOException e) {
+            Log.printError("Reading branches.txt failed!");
+            throw new IllegalStateException(e);
+        }
+
+        return mapBranchesToVertices(branches);
+    }
+
+    /**
+     * Maps the given list of branches to the corresponding vertices in the graph.
+     *
+     * @param branches The list of branches that should be mapped to vertices.
+     * @return Returns the branch vertices.
+     */
+    private List<Vertex> mapBranchesToVertices(List<String> branches) {
+
+        long start = System.currentTimeMillis();
+
+        List<Vertex> branchVertices = Collections.synchronizedList(new ArrayList<>());
+
+        branches.parallelStream().forEach(branch -> {
+
+            Vertex branchVertex = lookupVertex(branch);
+
+            if (branchVertex == null) {
+                Log.printWarning("Couldn't derive vertex for branch: " + branch);
+            } else {
+                branchVertices.add(branchVertex);
+            }
+        });
+
+        long end = System.currentTimeMillis();
+        Log.println("Mapping branches to vertices took: " + (end - start) + " seconds");
+
+        Log.println("Number of branches: " + branchVertices.size());
+
+        if (branchVertices.size() != branches.size()) {
+            throw new IllegalStateException("Couldn't derive for certain branches the corresponding branch vertices!");
+        }
+
+        return branchVertices;
     }
 
     /**
@@ -184,7 +256,10 @@ public abstract class CFG implements Graph {
                 if (statement instanceof BlockStatement) {
                     // each statement within a block statement is a basic statement
                     BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
-                    vertexMap.put(ifVertex.getMethod() + "->if->" + basicStatement.getInstructionIndex(), ifVertex);
+                    if (Utility.isBranchingInstruction(basicStatement.getInstruction())) {
+                        // only consider if statements (there might other predecessors due to exceptional flow)
+                        vertexMap.put(ifVertex.getMethod() + "->if->" + basicStatement.getInstructionIndex(), ifVertex);
+                    }
                 }
             }
 
@@ -205,6 +280,11 @@ public abstract class CFG implements Graph {
         return vertexMap;
     }
 
+    /**
+     * Returns the branch vertices that could be instrumented.
+     *
+     * @return Returns the branch vertices.
+     */
     @Override
     public List<Vertex> getBranchVertices() {
         return Collections.unmodifiableList(branchVertices);
@@ -264,26 +344,5 @@ public abstract class CFG implements Graph {
     @Override
     public String getAppName() {
         return appName;
-    }
-
-    @Override
-    public List<String> getBranches() {
-
-        List<String> branches = new LinkedList<>();
-
-        for (Vertex branchVertex : branchVertices) {
-            Integer branchID = null;
-            if (branchVertex.getStatement() instanceof BasicStatement) {
-                branchID = ((BasicStatement) branchVertex.getStatement()).getInstructionIndex();
-            } else if (branchVertex.getStatement() instanceof BlockStatement) {
-                branchID = ((BasicStatement) ((BlockStatement) branchVertex.getStatement()).getFirstStatement()).getInstructionIndex();
-            }
-
-            if (branchID != null) {
-                // convert a branch (vertex) to its trace
-                branches.add(branchVertex.getMethod() + "->" + branchID);
-            }
-        }
-        return branches;
     }
 }

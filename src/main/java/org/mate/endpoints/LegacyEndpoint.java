@@ -1,7 +1,6 @@
 package org.mate.endpoints;
 
 import org.mate.accessibility.ImageHandler;
-import org.mate.io.Device;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.network.message.Messages;
@@ -11,13 +10,9 @@ import org.mate.util.AndroidEnvironment;
 public class LegacyEndpoint implements Endpoint {
     private final AndroidEnvironment androidEnvironment;
     private final ImageHandler imageHandler;
-    private final long timeout;
-    private final long length;
     private final boolean generatePDFReport = false;
 
-    public LegacyEndpoint(long timeout, long length, AndroidEnvironment androidEnvironment, ImageHandler imageHandler) {
-        this.timeout = timeout;
-        this.length = length;
+    public LegacyEndpoint(AndroidEnvironment androidEnvironment, ImageHandler imageHandler) {
         this.androidEnvironment = androidEnvironment;
         this.imageHandler = imageHandler;
     }
@@ -41,43 +36,11 @@ public class LegacyEndpoint implements Endpoint {
             return Report.addFlaw(cmdStr, imageHandler);
         }
 
-        if (cmdStr.startsWith("getActivity"))
-            return getActivity(cmdStr);
-
-        if (cmdStr.startsWith("getActivities"))
-            return getActivities(cmdStr);
-
-        if (cmdStr.startsWith("getEmulator"))
-            return Device.allocateDevice(cmdStr, imageHandler, androidEnvironment);
-
-        if (cmdStr.startsWith("releaseEmulator"))
-            return Device.releaseDevice(cmdStr);
-
-        //format commands
-        if (cmdStr.startsWith("screenshot"))
-            return imageHandler.takeScreenshot(cmdStr);
-
-        if (cmdStr.startsWith("flickerScreenshot"))
-            return imageHandler.takeFlickerScreenshot(cmdStr);
-
+        // TODO: there is no corresponding method present in MATE
         if (cmdStr.startsWith("mark-image") && generatePDFReport)
             return imageHandler.markImage(cmdStr);
 
-        if (cmdStr.startsWith("contrastratio"))
-            return imageHandler.calculateConstratRatio(cmdStr);
-
-        if (cmdStr.startsWith("luminance"))
-            return imageHandler.calculateLuminance(cmdStr);
-
-        if (cmdStr.startsWith("rm emulator"))
-            return "";
-
-        if (cmdStr.startsWith("timeout"))
-            return String.valueOf(timeout);
-
-        if (cmdStr.startsWith("randomlength"))
-            return String.valueOf(length);
-
+        // TODO: there is no corresponding method present in MATE
         if (cmdStr.startsWith("FINISH") && generatePDFReport) {
             try {
                 Report.generateReport(cmdStr);
@@ -86,25 +49,6 @@ public class LegacyEndpoint implements Endpoint {
             }
             return "Finished PDF report";
         }
-
-        if (cmdStr.startsWith("reportAccFlaw")){
-
-            return "ok";
-        }
         return null;
-    }
-
-    private String getActivity(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        Device device = Device.devices.get(deviceID);
-        return device.getCurrentActivity();
-    }
-
-    private String getActivities(String cmdStr) {
-        String parts[] = cmdStr.split(":");
-        String deviceID = parts[1];
-        Device device = Device.devices.get(deviceID);
-        return String.join("\n", device.getActivities());
     }
 }

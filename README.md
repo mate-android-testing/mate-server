@@ -6,7 +6,7 @@ from within the instrumentation tests.
 ## How to run the MATE-Server
 
 ### Java
-JDK-1.8 or newer is needed to build MATE-Server. The PATH variable needs to be set
+JDK-1.11 or newer is needed to build MATE-Server. The PATH variable needs to be set
 correctly so that java and javac can be executed by the gradle-wrapper.
 
 ### ADB
@@ -23,12 +23,19 @@ PATH=~/Android/Sdk/platform-tools:$PATH
 
 You will need to log out and log back in again in order for the changes to take place.
 
-### Scripts and Jacoco
-Currently MATE-Server some functionality (mostly coverage related) depends on the python scripts
-that are located in the `scripts` subdirectory. Therefore a working Python 3 installation is
-needed. Furthermore the python scripts need to be placed in the working directory of MATE-Server. For the
-coverage calculation the jacococli is also needed in the working directory of MATE-Server with
-the following path: `bin/jacococli.jar`.
+### Additional configurations
+
+You can provide further configurations via a so-called `mate-server.properties` file.
+For instance, you can specify the location of the `apps` directory or the port that is used
+for the communication between `MATE` and `MATE-Server`:
+
+```
+apps_dir=apps
+# port 0 assigns a random port
+port=0
+```
+
+The file need to be placed in the current working directory.
 
 ### Installing and running MATE
 
@@ -37,7 +44,7 @@ the following path: `bin/jacococli.jar`.
 Open IntelliJ. Select "Check out project from Version Control" and click through the wizard
 (use git with url https://github.com/mate-android-testing/mate-server.git). When asked
 if you would like to open settings.gradle say yes. Traverse the project directory to
-`src->main->java->org.mate` right click Server2 and click on `Run 'Server2.main()'`.
+`src->main->java->org.mate` right click Server and click on `Run 'Server.main()'`.
 
 #### b) Gradle
 
@@ -62,30 +69,5 @@ Build jar file with all dependencies using the gradle-wrapper
 Run MATE-Server
 
 ```
-java -jar build/libs/mate.jar
-```
-
-## Branch Coverage Information
-
-In order to retrieve branch coverage information about an app, the APK must be instrumented.
-Get the instrumentation library from https://gitlab.infosun.fim.uni-passau.de/auermich/branchcoverage
-and build the <b>branchCoverage</b> module. Then, simply run 
-
-```
-java -jar branchCoverage.jar <PATH-TO-APK>
-```
-
-This will produce an instrumented APK in the same folder as the original APK.
-Rename it (<package-name>.apk) and sign it. Finally, run
-
-```
-apktool d <PATH-TO-INSTRUMENTED-APK> -f
-```
-
-This will produce an app directory, where you can find the traces later.
-Now, you can run MATE with branch coverage information. Therefor set the following key
-in the **mate.properties** file:
-
-```
-coverage=BRANCH_COVERAGE
+java -jar build/libs/mate-server.jar
 ```

@@ -25,8 +25,6 @@ public class Server {
     private static final String MATE_SERVER_PROPERTIES_PATH = "mate-server.properties";
 
     private final Router router;
-    private long timeout;
-    private long length;
     private int port;
     private boolean cleanup;
     private Path resultsPath;
@@ -36,28 +34,12 @@ public class Server {
     // path to the apps directory
     private Path appsDir;
 
-    public static String emuName = null;
     private AndroidEnvironment androidEnvironment;
     private ImageHandler imageHandler;
 
     public static void main(String[] args) {
         Server server = new Server();
-
         server.loadConfig();
-        if (args.length > 0) {
-            // Read configuration from commandline arguments for backwards compatibility
-            server.timeout = Long.parseLong(args[0]);
-
-            if (args.length > 1) {
-                server.length = Long.parseLong(args[1]);
-            }
-            if (args.length > 2) {
-                server.port = Integer.parseInt(args[2]);
-            }
-            if (args.length > 3) {
-                emuName = args[3];
-            }
-        }
         server.init();
         server.run();
     }
@@ -67,10 +49,9 @@ public class Server {
      */
     public Server() {
         router = new Router();
-        timeout = 5;
-        length = 1000;
         port = 12345;
         cleanup = true;
+        // TODO: store results within app directory, e.g. apps/com.zola.bmi/results/
         resultsPath = Path.of("results");
         appsDir = Path.of("apps");
         logger = new Log();
@@ -89,8 +70,6 @@ public class Server {
             Log.printWarning("failed to load " + MATE_SERVER_PROPERTIES_PATH + " file: " + e.getLocalizedMessage());
         }
 
-        timeout = Optional.ofNullable(properties.getProperty("timeout")).map(Long::valueOf).orElse(timeout);
-        length = Optional.ofNullable(properties.getProperty("length")).map(Long::valueOf).orElse(length);
         port = Optional.ofNullable(properties.getProperty("port")).map(Integer::valueOf).orElse(port);
         cleanup = Optional.ofNullable(properties.getProperty("cleanup")).map(Boolean::valueOf).orElse(cleanup);
         resultsPath = Optional.ofNullable(properties.getProperty("results_path")).map(Paths::get).orElse(resultsPath);
@@ -103,17 +82,18 @@ public class Server {
     public void init() {
         androidEnvironment = new AndroidEnvironment();
         imageHandler = new ImageHandler(androidEnvironment);
-        router.add("/legacy", new LegacyEndpoint(timeout, length, androidEnvironment, imageHandler));
+        router.add("/legacy", new LegacyEndpoint(androidEnvironment, imageHandler));
         closeEndpoint = new CloseEndpoint();
         router.add("/close", closeEndpoint);
         router.add("/crash", new CrashEndpoint(androidEnvironment));
         router.add("/properties", new PropertiesEndpoint());
-        router.add("/emulator/interaction", new EmulatorInteractionEndpoint(androidEnvironment));
+        router.add("/emulator/interaction", new EmulatorInteractionEndpoint(androidEnvironment, imageHandler));
         router.add("/android", new AndroidEndpoint(androidEnvironment));
         router.add("/accessibility",new AccessibilityEndpoint(imageHandler));
         router.add("/coverage", new CoverageEndpoint(androidEnvironment, resultsPath, appsDir));
         router.add("/fuzzer", new FuzzerEndpoint(androidEnvironment));
         router.add("/utility", new UtilityEndpoint(androidEnvironment, resultsPath, appsDir));
+        router.add("/fitness", new FitnessEndpoint(androidEnvironment, resultsPath, appsDir));
         router.add("/graph", new GraphEndpoint(androidEnvironment, appsDir));
 
         cleanup();
@@ -121,7 +101,7 @@ public class Server {
     }
 
     /**
-     * Delete old results folder if cleanup is {@code true}
+     * Delete old results folder if cleanup is {@code true}.
      */
     private void cleanup() {
         if (!cleanup || !Files.exists(resultsPath)) {
@@ -145,10 +125,10 @@ public class Server {
      * Start listening on configured {@code port} and pass incoming messages to router
      */
     public void run() {
-        //ProcessRunner.runProcess(isWin, "rm *.png");
         try {
             ServerSocket server = new ServerSocket(port);
             if (port == 0) {
+                // Don't remove this log, it is read by mate-commander.
                 System.out.println(server.getLocalPort());
             }
             logger.doLog();
@@ -189,6 +169,7 @@ public class Server {
                         out.flush();
                     }
                 } catch (Exception e) {
+                    Device.listDevices(androidEnvironment);
                     e.printStackTrace();
                 }
                 client.close();
@@ -196,6 +177,7 @@ public class Server {
             }
 
         } catch (IOException ioe) {
+            Device.listDevices(androidEnvironment);
             ioe.printStackTrace();
         }
     }
@@ -217,7 +199,7 @@ public class Server {
             Log.printError("unable to create pictures dir (" + picturesDir.getPath() + ")");
         }
 
-        Report.reportDir = csvsDir.getPath() + "/";
-        ImageHandler.screenShotDir = picturesDir.getPath() + "/";
+        Report.reportDir = csvsDir.getPath() + File.pathSeparator;
+        imageHandler.setScreenshotDir(picturesDir.toPath());
     }
 }

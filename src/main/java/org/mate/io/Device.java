@@ -1,7 +1,5 @@
 package org.mate.io;
 
-import org.mate.Server;
-import org.mate.accessibility.ImageHandler;
 import org.mate.pdf.Report;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
@@ -17,6 +15,7 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class Device {
 
@@ -26,7 +25,7 @@ public class Device {
     private String deviceID;
     private String packageName;
     private boolean busy;
-    private int APIVersion;
+    private final int apiVersion;
     private String currentScreenShotLocation;
 
     // defines where the apps, in particular the APKs are located
@@ -37,7 +36,7 @@ public class Device {
         this.androidEnvironment = androidEnvironment;
         this.packageName = "";
         this.busy = false;
-        APIVersion = this.getAPIVersionFromADB();
+        this.apiVersion = getAPIVersionFromADB();
     }
 
     public String getCurrentScreenShotLocation() {
@@ -72,17 +71,19 @@ public class Device {
         return this.busy;
     }
 
-    public int getAPIVersion() {
-        return APIVersion;
+    public int getApiVersion() {
+        return apiVersion;
     }
 
     private int getAPIVersionFromADB() {
-        List<String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "getprop", "ro.build.version.sdk").getOk();
+        List<String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID,
+                "shell", "getprop", "ro.build.version.sdk").getOk();
         if (result != null && result.size() > 0) {
-            System.out.println("API consulta: " + result.get(0));
-            return Integer.valueOf(result.get(0));
+            Log.println("API version: " + result.get(0));
+            return Integer.parseInt(result.get(0));
+        } else {
+            throw new IllegalStateException("Couldn't derive emulator API version via ADB!");
         }
-        return 23;
     }
 
     /**
@@ -277,7 +278,6 @@ public class Device {
         }
 
         // get number of traces from info.txt
-        // TODO: check leading slash on Windows!
         Result<List<String>, String> content = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
                 "-s", deviceID, "shell", "cat", "/data/data/" + packageName + "/info.txt");
 
@@ -332,17 +332,28 @@ public class Device {
             Log.println("Pull Operation: " + pullOperation.getOk());
         }
 
-        // verify that the traces.txt contains the number of traces according to info.txt
+        // check whether there is a mismatch between info.txt and traces.txt
         try {
             long numberOfLines = Files.lines(tracesFile.toPath()).count();
             Log.println("Number of traces according to traces.txt: " + numberOfLines);
 
+            Log.println("Chromosome: " + chromosome);
+            Log.println("Traces: " + Files.lines(tracesFile.toPath()).collect(Collectors.toList()));
+
             int numberOfTraces = Integer.parseInt(content.getOk().get(0));
             Log.println("Number of traces according to info.txt: " + numberOfTraces);
 
+            /*
+            * The problem here is that the AUT can still produce traces, e.g. a background thread
+            * running an endless-loop and checking an if condition, while we try to retrieve the traces.txt
+            * file. In particular, it can happen that the write method of the tracer class is invoked while
+            * the current thread is waiting (sleeping) for the completion of writing the info.txt file. This
+            * would at least explain why there are sometimes more traces retrieved than specified by the
+            * info.txt file.
+             */
+
             // compare traces.txt with info.txt
             if (numberOfTraces > numberOfLines) {
-                // FIXME: volatile variable on Android seems to fail, see Tracer.java
                 throw new IllegalStateException("Corrupted traces.txt file!");
             }
         } catch (IOException e) {
@@ -379,21 +390,19 @@ public class Device {
 
         String response = "unknown";
         String cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
-        if (getAPIVersion() == 23 || getAPIVersion() == 25) {
+        if (getApiVersion() == 23 || getApiVersion() == 25) {
             if (ProcessRunner.isWin) {
                 cmd = "$focused = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[5]";
-                Log.println(cmd);
             } else {
                 cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities | grep mFocusedActivity | cut -d \" \" -f 6";
             }
         }
 
-        if (getAPIVersion() == 26 || getAPIVersion() == 27) {
+        if (getApiVersion() == 26 || getApiVersion() == 27) {
             if (ProcessRunner.isWin) {
                 cmd = "$focused = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string mFocusedActivity ; \"$focused\".Line.split(\" \")[7]";
-                Log.println(cmd);
             } else {
                 cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
             }
@@ -407,26 +416,30 @@ public class Device {
          * Instead, we need to search for the 'realActivity' record, pick the second one (seems to be the current active Activity)
          * and split on '='.
          */
-        if (getAPIVersion() == 28) {
+        if (getApiVersion() == 28) {
             if (ProcessRunner.isWin) {
                 cmd = "$activity = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities "
                         + "| select-string \"realActivity\" ; $focused = $activity[1] ; $final = $focused -split '=' ; echo $final[1]";
                 // Alternatively use: "$focused.Line.split(=)[1] \"";
-                Log.println(cmd);
             } else {
                 cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
             }
         }
 
         List<String> result;
+
         if (ProcessRunner.isWin) {
             result = ProcessRunner.runProcess("powershell", "-command", cmd).getOk();
         } else {
             result = ProcessRunner.runProcess("bash", "-c", cmd).getOk();
         }
-        if (result != null && result.size() > 0)
+
+        if (result != null && result.size() > 0) {
             response = result.get(0);
-        Log.println("activity: " + response);
+            Log.println("Activity: " + response);
+        } else {
+            Log.printError("Failed to retrieve current activity: " + result);
+        }
 
         return response;
     }
@@ -486,11 +499,26 @@ public class Device {
             }
         }
 
-        Log.println("activities:");
+        Log.println("Activities:");
         for (String activity : activities) {
             Log.println("\t" + activity);
         }
         return activities;
+    }
+
+    /**
+     * Lists the devices according to the output of 'adb devices'.
+     *
+     * @param androidEnvironment A reference to the android environment, e.g. access to adb.
+     */
+    public static void listDevices(AndroidEnvironment androidEnvironment) {
+        List<String> resultDevices = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "devices").getOk();
+        Log.println("Devices: ");
+        for (String deviceStr : resultDevices) {
+            if (deviceStr.contains("device") && !deviceStr.contains("attached")) {
+                Log.println(deviceStr);
+            }
+        }
     }
 
     /**
@@ -529,24 +557,15 @@ public class Device {
     }
 
     /**
-     * Returns the name of the emulator running the given AUT.
+     * Requests the name of the emulator that is running the AUT specified through the
+     * given package name.
      *
-     * @param cmdStr Identifies the AUT by its package name.
-     * @param imageHandler A reference to the image handler.
      * @param androidEnvironment A reference to the android environment, e.g. access to adb.
      * @return Returns the name of the emulator.
      */
-    public static String allocateDevice(String cmdStr, ImageHandler imageHandler, AndroidEnvironment androidEnvironment) {
-        String parts[] = cmdStr.split(":");
-        String packageName = parts[1];
+    public static String allocateDevice(String packageName, AndroidEnvironment androidEnvironment) {
 
-        if (Server.emuName != null) {
-            Device device = devices.get(Server.emuName);
-            device.setPackageName(packageName);
-            device.setBusy(true);
-            return Server.emuName;
-        }
-
+        // check which emulator is running the AUT
         String deviceID = getDeviceRunningPackage(packageName, androidEnvironment);
         Device device = devices.get(deviceID);
         if (device != null) {
@@ -555,7 +574,6 @@ public class Device {
         }
 
         Report.createHeader(deviceID, packageName);
-        imageHandler.createPicturesFolder(deviceID, packageName);
 
         return deviceID;
     }
@@ -569,11 +587,15 @@ public class Device {
      *          found, the emtpy string is returned.
      */
     public static String getDeviceRunningPackage(String packageName, AndroidEnvironment androidEnvironment) {
+        // FIXME: if multiple emulators are running the same app, we always return the first emulator match
         for (String key : devices.keySet()) {
-            List<String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", key, "shell", "ps", packageName).getOk();
+            // prints the pid of the app process or an empty string if no process is executing the app
+            // see for recent change: https://stackoverflow.com/questions/16691487/how-to-detect-running-app-using-adb-command
+            List<String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", key, "shell", "pidof", packageName).getOk();
             for (String res : result) {
-                System.out.println(res);
-                if (res.contains(packageName))
+                Log.println("PID: " + res);
+                // non empty response indicates that emulator is running app
+                if (!res.isEmpty())
                     return key;
             }
         }
@@ -583,23 +605,13 @@ public class Device {
     /**
      * Marks the emulator as released.
      *
-     * @param cmdStr Defines the emulator name, e.g. emulator-5554.
      * @return Returns the string 'released' if the operation succeeded,
      *          otherwise an empty string is returned.
      */
-    public static String releaseDevice(String cmdStr) {
-        String response = "";
-        String[] parts = cmdStr.split(":");
-        if (parts.length > 0) {
-            String deviceID = parts[1];
-            Device device = devices.get(deviceID);
-            if (device != null) {
-                device.setPackageName("");
-                device.setBusy(false);
-                response = "released";
-            }
-        }
-        return response;
+    public String releaseDevice() {
+        setPackageName("");
+        setBusy(false);
+        return "released";
     }
 
     /**

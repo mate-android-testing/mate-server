@@ -11,7 +11,6 @@ import org.mate.graphs.Graph;
 import org.mate.graphs.GraphType;
 import org.mate.graphs.InterCFG;
 import org.mate.graphs.IntraCFG;
-import org.mate.io.Device;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
@@ -41,6 +40,8 @@ public class GraphEndpoint implements Endpoint {
     private Graph graph;
     private final Path appsDir;
 
+    private static final String BRANCHES_FILE = "branches.txt";
+
     // a target vertex (a random branch)
     private Vertex targetVertex;
 
@@ -53,8 +54,6 @@ public class GraphEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/graph/init")) {
             return initGraph(request);
-        } else if (request.getSubject().startsWith("/graph/get_branches")) {
-            return getBranches(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector")) {
             return getBranchDistanceVector(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
@@ -63,7 +62,7 @@ public class GraphEndpoint implements Endpoint {
             return drawGraph(request);
         } else {
             throw new IllegalArgumentException("Message request with subject: "
-                    + request.getSubject() + " can't be handled by GraphEndPoint!");
+                    + request.getSubject() + " can't be handled by GraphEndpoint!");
         }
     }
 
@@ -159,7 +158,6 @@ public class GraphEndpoint implements Endpoint {
 
     private Message initGraph(Message request) {
 
-        String deviceID = request.getParameter("deviceId");
         String packageName = request.getParameter("packageName");
         GraphType graphType = GraphType.valueOf(request.getParameter("graph_type"));
         File apkPath = new File(request.getParameter("apk"));
@@ -185,50 +183,30 @@ public class GraphEndpoint implements Endpoint {
 
     private Message initIntraCFG(File apkPath, String methodName, boolean useBasicBlocks,
                                  String packageName, String target) {
-        graph = new IntraCFG(apkPath, methodName, useBasicBlocks, packageName);
+        graph = new IntraCFG(apkPath, methodName, useBasicBlocks, appsDir, packageName);
         targetVertex = selectTargetVertex(target);
         return new Message("/graph/init");
     }
 
     private Message initInterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
                                  String packageName, String target) {
-        graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, packageName);
+        graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, appsDir, packageName);
         targetVertex = selectTargetVertex(target);
         return new Message("/graph/init");
     }
 
-    private Message getBranches(Message request) {
-
-        GraphType graphType = GraphType.valueOf(request.getParameter("graph_type"));
-
-        if (graphType == GraphType.SGD) {
-            throw new UnsupportedOperationException("Graph type not yet supported!");
-        }
-
-        if (graph == null) {
-            throw new IllegalStateException("Graph hasn't been initialised!");
-        }
-
-        String branches = String.join("\\+", graph.getBranches());
-        return new Message.MessageBuilder("/graph/get_branches")
-                .withParameter("branches", branches)
-                .build();
-    }
-
     private Message getBranchDistance(Message request) {
 
-        String deviceID = request.getParameter("deviceId");
+        String packageName = request.getParameter("packageName");
         String chromosomes = request.getParameter("chromosomes");
 
         if (graph == null) {
             throw new IllegalStateException("Graph hasn't been initialised!");
         }
 
-        Device device = Device.getDevice(deviceID);
-
         // get list of traces file
-        File appDir = new File(appsDir.toFile(), device.getPackageName());
-        File tracesDir = new File(appDir, "traces");
+        Path appDir = appsDir.resolve(packageName);
+        File tracesDir = appDir.resolve("traces").toFile();
 
         // collect the relevant traces files
         List<File> tracesFiles = getTraceFiles(tracesDir, chromosomes);
@@ -349,18 +327,16 @@ public class GraphEndpoint implements Endpoint {
 
     private Message getBranchDistanceVector(Message request) {
 
-        String deviceID = request.getParameter("deviceId");
+        String packageName = request.getParameter("packageName");
         String chromosomes = request.getParameter("chromosomes");
 
         if (graph == null) {
             throw new IllegalStateException("Graph hasn't been initialised!");
         }
 
-        Device device = Device.getDevice(deviceID);
-
         // get list of traces file
-        File appDir = new File(appsDir.toFile(), device.getPackageName());
-        File tracesDir = new File(appDir, "traces");
+        Path appDir = appsDir.resolve(packageName);
+        File tracesDir = appDir.resolve("traces").toFile();
 
         // collect the relevant traces files
         List<File> tracesFiles = getTraceFiles(tracesDir, chromosomes);

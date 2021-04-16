@@ -5,15 +5,21 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Created by marceloeler on 04/07/17.
  */
+@Deprecated
 public class AccessibilityUtils {
 
     public static BufferedImage image=null;
     public static String lastImagePath="";
 
+    @Deprecated
     public static double  getContrastRatio(String imagePath,int x1, int y1, int x2, int y2){
         System.out.println("get contrast ratio");
         String path = imagePath;
@@ -54,7 +60,7 @@ public class AccessibilityUtils {
         return contrastRatio;
     }
 
-
+    @Deprecated
     public static double  matchesSurroundingColor(String imagePath,int x1, int y1, int x2, int y2){
         String path = imagePath;
         if (!imagePath.equals(lastImagePath)){
@@ -78,6 +84,7 @@ public class AccessibilityUtils {
         return matches;
     }
 
+    @Deprecated
     public static String getLuminance(String imagePath,int x1, int y1, int x2, int y2){
         String path = imagePath;
         if (!imagePath.equals(lastImagePath)){
@@ -106,6 +113,34 @@ public class AccessibilityUtils {
         return luminance;
     }
 
+    /**
+     * Checks the given samples for flickering.
+     *
+     * @param targetDir Refers to directory containing the screenshot samples.
+     * @param screenshotName The name of the original screenshot.
+     * @param samples The screenshot names of taken samples.
+     * @return Returns {@code true} if flickering was detected,
+     *          otherwise {@code false} is returned.
+     */
+    public static boolean checkFlickering(Path targetDir, String screenshotName, List<String> samples){
+
+        for (String sample : samples) {
+            File screenshotSample = targetDir.resolve(sample).toFile();
+            BufferedImage screenshot = null;
+            try {
+                screenshot = ImageIO.read(screenshotSample);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+
+            // TODO: the actual check how flickering is detected is missing
+            int[] histogram = CalculateHist(screenshot);
+            int sum = Arrays.stream(histogram).sum();
+        }
+        return false;
+    }
+
+    @Deprecated
     public static boolean checkFlickering(String targetFolder, String imgPath){
 
         for (int i=0; i<50; i++){
@@ -132,6 +167,7 @@ public class AccessibilityUtils {
         return false;
     }
 
+    @Deprecated
     public static int[] CalculateHist(BufferedImage img) {
         int k;
         int pixel[];
@@ -148,9 +184,7 @@ public class AccessibilityUtils {
         return levels;
     }
 
-
-
-
+    @SuppressWarnings("unused")
     public void histEqualize(BufferedImage img) {
         //call CalculateHist method to get the histogram
         int[] h = CalculateHist(img);
