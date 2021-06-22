@@ -24,9 +24,6 @@ import java.util.stream.Stream;
 
 public abstract class CFG implements Graph {
 
-    // defines the maximal number of vertices the graph can have for drawing
-    private static final int MAX_DRAWING_SIZE = 1000;
-
     protected final BaseCFG baseCFG;
     private final String appName;
 
@@ -153,9 +150,7 @@ public abstract class CFG implements Graph {
      */
     @Override
     public void draw(File outputPath) {
-      if (size() < MAX_DRAWING_SIZE) {
           baseCFG.drawGraph(outputPath);
-      }
     }
 
     /**
@@ -167,9 +162,7 @@ public abstract class CFG implements Graph {
      */
     @Override
     public void draw(File outputPath, Set<Vertex> targets, Set<Vertex> visitedVertices) {
-        if (size() < MAX_DRAWING_SIZE) {
             baseCFG.drawGraph(outputPath, visitedVertices, targets);
-        }
     }
 
     /**

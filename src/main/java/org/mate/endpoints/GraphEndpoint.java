@@ -32,7 +32,7 @@ import java.util.stream.Stream;
  * This endpoint offers an interface to operate with graphs in the background.
  * This can be a simple control flow graph to evaluate branch distance, but also
  * a system dependence graph. The usage of this endpoint requires the
- * android-graphs-all.jar as a dependency.
+ * android-graphs-lib.jar as a dependency.
  */
 public class GraphEndpoint implements Endpoint {
 
@@ -80,12 +80,9 @@ public class GraphEndpoint implements Endpoint {
 
         if (raw) {
             Log.println("Drawing raw graph...");
-            File outputPath = new File(drawDir, "graph-raw.png");
-            graph.draw(outputPath);
+            graph.draw(drawDir);
         } else {
             Log.println("Drawing graph...");
-
-            File outputPath = new File(drawDir, "graph.png");
 
             // determine the target vertices (e.g. single branch or all branches)
             Set<Vertex> targetVertices = new HashSet<>();
@@ -100,7 +97,7 @@ public class GraphEndpoint implements Endpoint {
             Set<Vertex> visitedVertices = getVisitedVertices(appDir);
 
             // draw the graph where target and visited vertices are marked in different colours
-            graph.draw(outputPath, visitedVertices, targetVertices);
+            graph.draw(drawDir, visitedVertices, targetVertices);
         }
 
         return new Message("/graph/draw");
