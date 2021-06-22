@@ -1,11 +1,11 @@
 package org.mate.endpoints;
 
-import de.uni_passau.fim.auermich.graphs.Vertex;
-import de.uni_passau.fim.auermich.statement.BasicStatement;
-import de.uni_passau.fim.auermich.statement.BlockStatement;
-import de.uni_passau.fim.auermich.statement.ReturnStatement;
-import de.uni_passau.fim.auermich.statement.Statement;
-import de.uni_passau.fim.auermich.utility.Utility;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.ReturnStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.InstructionUtils;
 import org.apache.commons.io.FileUtils;
 import org.mate.graphs.Graph;
 import org.mate.graphs.GraphType;
@@ -100,7 +100,7 @@ public class GraphEndpoint implements Endpoint {
             Set<Vertex> visitedVertices = getVisitedVertices(appDir);
 
             // draw the graph where target and visited vertices are marked in different colours
-            graph.draw(targetVertices, visitedVertices, outputPath);
+            graph.draw(outputPath, visitedVertices, targetVertices);
         }
 
         return new Message("/graph/draw");
@@ -175,7 +175,10 @@ public class GraphEndpoint implements Endpoint {
                 return initIntraCFG(apkPath, methodName, useBasicBlocks, packageName, target);
             case INTER_CFG:
                 boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
-                return initInterCFG(apkPath, useBasicBlocks, excludeARTClasses, packageName, target);
+                boolean resolveOnlyAUTClasses
+                        = Boolean.parseBoolean(request.getParameter("resolve_only_aut_classes"));
+                return initInterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses,
+                        packageName, target);
             default:
                 throw new UnsupportedOperationException("Graph type not yet supported!");
         }
@@ -189,8 +192,8 @@ public class GraphEndpoint implements Endpoint {
     }
 
     private Message initInterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
-                                 String packageName, String target) {
-        graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, appsDir, packageName);
+                                 boolean resolveOnlyAUTClasses, String packageName, String target) {
+        graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
         targetVertex = selectTargetVertex(target);
         return new Message("/graph/init");
     }
@@ -470,11 +473,11 @@ public class GraphEndpoint implements Endpoint {
         if (statement instanceof ReturnStatement) {
             return false;
         } else if (statement instanceof BasicStatement) {
-            return Utility.isBranchingInstruction(((BasicStatement) statement).getInstruction());
+            return InstructionUtils.isBranchingInstruction(((BasicStatement) statement).getInstruction());
         } else if (statement instanceof BlockStatement) {
             // the if instruction can only be the last instruction of a block
             BasicStatement stmt = (BasicStatement) ((BlockStatement) statement).getLastStatement();
-            return Utility.isBranchingInstruction(stmt.getInstruction());
+            return InstructionUtils.isBranchingInstruction(stmt.getInstruction());
         }
         throw new UnsupportedOperationException("Statement type not recognized" + vertex.getStatement());
     }

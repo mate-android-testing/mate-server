@@ -1,6 +1,6 @@
 package org.mate.graphs.util;
 
-import de.uni_passau.fim.auermich.graphs.Vertex;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 
 public class VertexPair {
 

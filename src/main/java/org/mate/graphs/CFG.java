@@ -1,12 +1,12 @@
 package org.mate.graphs;
 
-import de.uni_passau.fim.auermich.graphs.Edge;
-import de.uni_passau.fim.auermich.graphs.Vertex;
-import de.uni_passau.fim.auermich.graphs.cfg.BaseCFG;
-import de.uni_passau.fim.auermich.statement.BasicStatement;
-import de.uni_passau.fim.auermich.statement.BlockStatement;
-import de.uni_passau.fim.auermich.statement.Statement;
-import de.uni_passau.fim.auermich.utility.Utility;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.Edge;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.BaseCFG;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.InstructionUtils;
 import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.mate.graphs.util.VertexPair;
@@ -161,13 +161,14 @@ public abstract class CFG implements Graph {
     /**
      * Draws the graph where target and visited vertices are marked.
      *
+     * @param outputPath The output directory.
      * @param targets The list of target vertices.
      * @param visitedVertices The list of visited vertices.
      */
     @Override
-    public void draw(Set<Vertex> targets, Set<Vertex> visitedVertices, File outputPath) {
+    public void draw(File outputPath, Set<Vertex> targets, Set<Vertex> visitedVertices) {
         if (size() < MAX_DRAWING_SIZE) {
-            baseCFG.drawGraph(targets, visitedVertices, outputPath);
+            baseCFG.drawGraph(outputPath, visitedVertices, targets);
         }
     }
 
@@ -256,7 +257,7 @@ public abstract class CFG implements Graph {
                 if (statement instanceof BlockStatement) {
                     // each statement within a block statement is a basic statement
                     BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
-                    if (Utility.isBranchingInstruction(basicStatement.getInstruction())) {
+                    if (InstructionUtils.isBranchingInstruction(basicStatement.getInstruction())) {
                         // only consider if statements (there might other predecessors due to exceptional flow)
                         vertexMap.put(ifVertex.getMethod() + "->if->" + basicStatement.getInstructionIndex(), ifVertex);
                     }
