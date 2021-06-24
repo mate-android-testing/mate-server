@@ -154,14 +154,17 @@ public abstract class CFG implements Graph {
     }
 
     /**
-     * Draws the graph where target and visited vertices are marked.
+     * Draws the graph where target and visited vertices are marked in different colors:
+     * The visited vertices get marked in green.
+     * The uncovered target vertices get marked in red.
+     * The covered target vertices get marked in orange.
      *
      * @param outputPath The output directory.
-     * @param targets The list of target vertices.
      * @param visitedVertices The list of visited vertices.
+     * @param targets The list of target vertices.
      */
     @Override
-    public void draw(File outputPath, Set<Vertex> targets, Set<Vertex> visitedVertices) {
+    public void draw(File outputPath, Set<Vertex> visitedVertices, Set<Vertex> targets) {
             baseCFG.drawGraph(outputPath, visitedVertices, targets);
     }
 

@@ -33,5 +33,5 @@ public interface Graph {
     void draw(File outputPath);
 
     // draws the graph where target and visited vertices are marked
-    void draw(File outputPath, Set<Vertex> targets, Set<Vertex> visitedVertices);
+    void draw(File outputPath, Set<Vertex> visitedVertices, Set<Vertex> targets);
 }
