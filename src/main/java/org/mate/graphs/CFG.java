@@ -48,7 +48,6 @@ public abstract class CFG implements Graph {
     // cache already computed distances to the target vertex
     private final Map<VertexPair, Integer> cachedDistances = new ConcurrentHashMap<>();
 
-
     /**
      * Constructs a wrapper for a given control-flow graph.
      *
@@ -115,7 +114,8 @@ public abstract class CFG implements Graph {
         long end = System.currentTimeMillis();
         Log.println("Mapping branches to vertices took: " + (end - start) + " seconds");
 
-        Log.println("Number of branches: " + branchVertices.size());
+        Log.println("Number of actual branches: " + branches.size());
+        Log.println("Number of branch vertices: " + branchVertices.size());
 
         if (branchVertices.size() != branches.size()) {
             throw new IllegalStateException("Couldn't derive for certain branches the corresponding branch vertices!");

@@ -40,8 +40,6 @@ public class GraphEndpoint implements Endpoint {
     private Graph graph;
     private final Path appsDir;
 
-    private static final String BRANCHES_FILE = "branches.txt";
-
     // a target vertex (a random branch)
     private Vertex targetVertex;
 
