@@ -219,6 +219,8 @@ public class GraphEndpoint implements Endpoint {
 
         // the minimal distance between a execution path and a chosen target vertex
         AtomicInteger minDistance = new AtomicInteger(Integer.MAX_VALUE);
+
+        // save the closest vertex -> required for approach level
         AtomicReference<Vertex> minDistanceVertex = new AtomicReference<>();
 
         // track global minimum distance + vertex (solely for debugging)
@@ -231,15 +233,19 @@ public class GraphEndpoint implements Endpoint {
 
             synchronized (this) {
                 if (distance < minDistance.get() && distance != -1) {
-                    // found shorter path
-                    if (distance == 0 || visitedVertex.isIfVertex()) {
+                    /*
+                    * We are only interested in a direct hit (covered branch) or the distance to an if statement.
+                    * This equals distances of either if statements or branches and excludes
+                    * distances to visited entry or exit vertices.
+                     */
+                    if ((distance == 0 && visitedVertex.isBranchVertex()) || visitedVertex.isIfVertex()) {
                         minDistanceVertex.set(visitedVertex);
                         minDistance.set(distance);
                     }
                 }
 
                 if (distance < minDistanceGlobal.get() && distance != -1) {
-                    // found global shorter path
+                    // found global shorter path, e.g. distance to a visited entry or exit vertex
                     minDistanceGlobal.set(distance);
                     minDistanceVertexGlobal.set(visitedVertex);
                 }
@@ -355,6 +361,8 @@ public class GraphEndpoint implements Endpoint {
 
             // find the shortest distance (approach level) to the given branch
             AtomicInteger minDistance = new AtomicInteger(Integer.MAX_VALUE);
+
+            // save the closest vertex -> required for approach level
             AtomicReference<Vertex> minDistanceVertex = new AtomicReference<>();
 
             // track global minimum distance + vertex (solely for debugging)
@@ -367,15 +375,19 @@ public class GraphEndpoint implements Endpoint {
 
                 synchronized (this) {
                     if (distance < minDistance.get() && distance != -1) {
-                        // found shorter path
-                        if (distance == 0 || visitedVertex.isIfVertex()) {
+                        /*
+                         * We are only interested in a direct hit (covered branch) or the distance to an if statement.
+                         * This equals distances of either if statements or branches and excludes
+                         * distances to visited entry or exit vertices.
+                         */
+                        if ((distance == 0 && visitedVertex.isBranchVertex()) || visitedVertex.isIfVertex()) {
                             minDistanceVertex.set(visitedVertex);
                             minDistance.set(distance);
                         }
                     }
 
                     if (distance < minDistanceGlobal.get() && distance != -1) {
-                        // found global shorter path
+                        // found global shorter path, e.g. distance to a visited entry or exit vertex
                         minDistanceGlobal.set(distance);
                         minDistanceVertexGlobal.set(visitedVertex);
                     }
