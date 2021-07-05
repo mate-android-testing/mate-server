@@ -232,7 +232,7 @@ public class GraphEndpoint implements Endpoint {
             synchronized (this) {
                 if (distance < minDistance.get() && distance != -1) {
                     // found shorter path
-                    if (distance == 0 || isIfVertex(visitedVertex)) {
+                    if (distance == 0 || visitedVertex.isIfVertex()) {
                         minDistanceVertex.set(visitedVertex);
                         minDistance.set(distance);
                     }
@@ -252,7 +252,7 @@ public class GraphEndpoint implements Endpoint {
                 + "->[ " + minDistanceVertexGlobal.get().getStatement() + "]");
 
         long end = System.currentTimeMillis();
-        Log.println("Computing approach level took: " + (end - start) + " seconds");
+        Log.println("Computing approach level took: " + (end - start) + " ms.");
 
         /*
          * We compute the fitness value according to the paper 'Reformulating Branch Coverage as
@@ -368,7 +368,7 @@ public class GraphEndpoint implements Endpoint {
                 synchronized (this) {
                     if (distance < minDistance.get() && distance != -1) {
                         // found shorter path
-                        if (distance == 0 || isIfVertex(visitedVertex)) {
+                        if (distance == 0 || visitedVertex.isIfVertex()) {
                             minDistanceVertex.set(visitedVertex);
                             minDistance.set(distance);
                         }
@@ -451,33 +451,6 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Checks whether the vertex wraps an if statement.
-     *
-     * @param vertex The vertex to be inspected.
-     * @return Returns {@code true} if the vertex contains an if statement,
-     * otherwise {@code false} is returned.
-     */
-    private boolean isIfVertex(Vertex vertex) {
-
-        if (vertex.isEntryVertex() || vertex.isExitVertex()) {
-            return false;
-        }
-
-        Statement statement = vertex.getStatement();
-
-        if (statement instanceof ReturnStatement) {
-            return false;
-        } else if (statement instanceof BasicStatement) {
-            return InstructionUtils.isBranchingInstruction(((BasicStatement) statement).getInstruction());
-        } else if (statement instanceof BlockStatement) {
-            // the if instruction can only be the last instruction of a block
-            BasicStatement stmt = (BasicStatement) ((BlockStatement) statement).getLastStatement();
-            return InstructionUtils.isBranchingInstruction(stmt.getInstruction());
-        }
-        throw new UnsupportedOperationException("Statement type not recognized" + vertex.getStatement());
-    }
-
-    /**
      * Gets the list of traces files specified by the given chromosomes.
      *
      * @param tracesDir   The base directory containing the traces files.
@@ -535,7 +508,7 @@ public class GraphEndpoint implements Endpoint {
         }
 
         long end = System.currentTimeMillis();
-        Log.println("Reading traces from file(s) took: " + (end - start) + " seconds");
+        Log.println("Reading traces from file(s) took: " + (end - start) + " ms.");
 
         Log.println("Number of collected traces: " + traces.size());
         return traces;
@@ -597,7 +570,7 @@ public class GraphEndpoint implements Endpoint {
         });
 
         long end = System.currentTimeMillis();
-        Log.println("Mapping traces to vertices took: " + (end - start) + " seconds");
+        Log.println("Mapping traces to vertices took: " + (end - start) + " ms.");
 
         Log.println("Number of visited vertices: " + visitedVertices.size());
         return visitedVertices;
