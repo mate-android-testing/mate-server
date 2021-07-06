@@ -254,8 +254,11 @@ public class GraphEndpoint implements Endpoint {
 
         Log.println("Shortest path length: " + minDistance.get());
         Log.println("Shortest path length (global): " + minDistanceGlobal.get());
-        Log.println("Closest global vertex: " + minDistanceVertexGlobal.get().getMethod()
-                + "->[ " + minDistanceVertexGlobal.get().getStatement() + "]");
+
+        if (minDistanceVertexGlobal.get() != null) {
+            Log.println("Closest global vertex: " + minDistanceVertexGlobal.get().getMethod()
+                    + "->[ " + minDistanceVertexGlobal.get().getStatement() + "]");
+        }
 
         long end = System.currentTimeMillis();
         Log.println("Computing approach level took: " + (end - start) + " ms.");
@@ -396,8 +399,11 @@ public class GraphEndpoint implements Endpoint {
 
             Log.println("Shortest path length: " + minDistance.get());
             Log.println("Shortest path length (global): " + minDistanceGlobal.get());
-            Log.println("Closest global vertex: " + minDistanceVertexGlobal.get().getMethod()
-                    + "->[ " + minDistanceVertexGlobal.get().getStatement() + "]");
+
+            if (minDistanceVertexGlobal.get() != null) {
+                Log.println("Closest global vertex: " + minDistanceVertexGlobal.get().getMethod()
+                        + "->[ " + minDistanceVertexGlobal.get().getStatement() + "]");
+            }
 
             if (minDistance.get() == Integer.MAX_VALUE) {
                 // branch not reachable by execution path
