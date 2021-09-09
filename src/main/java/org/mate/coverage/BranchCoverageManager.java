@@ -1,5 +1,6 @@
 package org.mate.coverage;
 
+import com.google.common.collect.Lists;
 import org.apache.commons.io.FileUtils;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
@@ -114,8 +115,46 @@ public final class BranchCoverageManager {
     }
 
     /**
+     * Computes the coverage of a single test case within a test suite.
+     *
+     * @param appsDir The apps directory.
+     * @param packageName The package name of the AUT.
+     * @param testSuiteId The id of the test suite.
+     * @param testCaseId The id of the test case.
+     * @return Returns the (combined) coverage for a set of chromosomes.
+     */
+    public static Message getCoverage(Path appsDir, String packageName, String testSuiteId, String testCaseId) {
+
+        // get list of traces file
+        File appDir = new File(appsDir.toFile(), packageName);
+        File tracesDir = new File(appDir, "traces");
+
+        // the branches.txt should be located within the app directory
+        File branchesFile = new File(appDir, "branches.txt");
+
+        // the trace file corresponding to the test case within the given test suite
+        File traceFile = tracesDir.toPath().resolve(testSuiteId).resolve(testCaseId).toFile();
+        Log.println("Path of trace file: " + traceFile);
+
+        // evaluate branch coverage
+        double branchCoverage = 0d;
+
+        try {
+            branchCoverage = evaluateBranchCoverage(branchesFile, Lists.newArrayList(traceFile));
+        } catch (IOException e) {
+            Log.printError(e.getMessage());
+            throw new IllegalStateException("Branch coverage couldn't be evaluated!");
+        }
+
+        return new Message.MessageBuilder("/coverage/get")
+                .withParameter("coverage", String.valueOf(branchCoverage))
+                .build();
+    }
+
+    /**
      * Computes the (combined) coverage for a set of test cases/test suites.
      *
+     * @param appsDir The apps directory.
      * @param packageName The package name of the AUT.
      * @param chromosomes A list of chromosomes separated by '+'.
      * @return Returns the (combined) coverage for a set of chromosomes.

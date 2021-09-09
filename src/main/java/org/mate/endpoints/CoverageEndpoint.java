@@ -61,9 +61,51 @@ public class CoverageEndpoint implements Endpoint {
             } else {
                 return Messages.errorMessage(result.getErr());
             }
+        } else if (request.getSubject().startsWith("/coverage/get")) {
+            return getCoverage(request);
         }
         throw new IllegalArgumentException("Message request with subject: "
                 + request.getSubject() + " can't be handled by CoverageEndPoint!");
+    }
+
+    /**
+     * Gets the coverage of a single test case within a test suite.
+     *
+     * @param request The request message.
+     * @return Returns a response message containing the coverage information.
+     */
+    private Message getCoverage(Message request) {
+
+        // get the coverage type, e.g. BRANCH_COVERAGE
+        Coverage coverage = Coverage.valueOf(request.getParameter("coverage_type"));
+
+        switch (coverage) {
+            case LINE_COVERAGE:
+                return getCombinedLineCoverage(request);
+            case BRANCH_COVERAGE:
+                return getBranchCoverage(request);
+            case METHOD_COVERAGE:
+                return getCombinedMethodCoverage(request);
+            case BASIC_BLOCK_LINE_COVERAGE:
+                return getCombinedBasicBlockLineCoverage(request);
+            case BASIC_BLOCK_BRANCH_COVERAGE:
+                return getCombinedBasicBlockBranchCoverage(request);
+            default:
+                throw new UnsupportedOperationException("Coverage type not yet supported!");
+        }
+    }
+
+    /**
+     * Gets the branch coverage of a single test case within a test suite.
+     *
+     * @param request The request message.
+     * @return Returns a response message containing the coverage information.
+     */
+    private Message getBranchCoverage(Message request) {
+        String packageName = request.getParameter("packageName");
+        String testSuiteId= request.getParameter("testSuiteId");
+        String testCaseId = request.getParameter("testCaseId");
+        return BranchCoverageManager.getCoverage(appsDir, packageName, testSuiteId, testCaseId);
     }
 
     private Message copyCoverageData(Message request) {
