@@ -25,17 +25,14 @@ public final class BasicBlockCoverageManager {
      * from the source chromosome (test suite) to the target chromosome (test suite).
      *
      * @param appsDir          The apps directory containing all app directories.
-     * @param deviceID         The emulator identifier.
+     * @param packageName      The package name of the AUT.
      * @param sourceChromosome The source chromosome (test suite).
      * @param targetChromosome The target chromosome (test suite).
      * @param entities         A list of test cases.
      * @return Returns a message describing the success/failure of the operation.
      */
-    public static Message copyCoverageData(Path appsDir, String deviceID, String sourceChromosome,
+    public static Message copyCoverageData(Path appsDir, String packageName, String sourceChromosome,
                                            String targetChromosome, String[] entities) {
-
-        Device device = Device.devices.get(deviceID);
-        String packageName = device.getPackageName();
 
         File appDir = new File(appsDir.toFile(), packageName);
         File tracesDir = new File(appDir, "traces");
@@ -75,16 +72,16 @@ public final class BasicBlockCoverageManager {
      *
      * @param androidEnvironment Defines the location of the adb/aapt binary.
      * @param deviceID           The id of the emulator, e.g. emulator-5554.
+     * @param packageName        The package name of the AUT.
      * @param chromosome         Identifies either a test case or a test suite.
      * @param entity             Identifies a test case if chromosome refers to
      *                           a test suite, otherwise {@code null}.
      * @return Returns the branch coverage for the given test case.
      */
-    public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID,
+    public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID, String packageName,
                                             String chromosome, String entity) {
         // grant runtime permissions
         Device device = Device.devices.get(deviceID);
-        String packageName = device.getPackageName();
         boolean granted = device.grantPermissions(packageName);
 
         if (!granted) {
@@ -432,7 +429,7 @@ public final class BasicBlockCoverageManager {
      *
      * @param packageName The package name of the AUT.
      * @param testSuiteId The id of the test suite.
-     * @param testCaseId The id of the test case.
+     * @param testCaseId  The id of the test case.
      * @return Returns the line coverage for the given test case.
      */
     public static Message getLineCoverage(Path appsDir, String packageName, String testSuiteId, String testCaseId) {
@@ -444,7 +441,7 @@ public final class BasicBlockCoverageManager {
      *
      * @param packageName The package name of the AUT.
      * @param testSuiteId The id of the test suite.
-     * @param testCaseId The id of the test case.
+     * @param testCaseId  The id of the test case.
      * @return Returns the branch coverage for the given test case.
      */
     public static Message getBranchCoverage(Path appsDir, String packageName, String testSuiteId, String testCaseId) {
@@ -454,15 +451,15 @@ public final class BasicBlockCoverageManager {
     /**
      * Computes the branch or line coverage of a single test case within a test suite.
      *
-     * @param appsDir The apps directory.
-     * @param packageName The package name of the AUT.
-     * @param testSuiteId The id of the test suite.
-     * @param testCaseId The id of the test case.
+     * @param appsDir      The apps directory.
+     * @param packageName  The package name of the AUT.
+     * @param testSuiteId  The id of the test suite.
+     * @param testCaseId   The id of the test case.
      * @param lineCoverage Whether line or branch coverage should be computed.
      * @return Returns the branch or line coverage for the given test case.
      */
     private static Message getCoverage(Path appsDir, String packageName, String testSuiteId,
-                                      String testCaseId, boolean lineCoverage) {
+                                       String testCaseId, boolean lineCoverage) {
 
         // get list of traces file
         File appDir = new File(appsDir.toFile(), packageName);

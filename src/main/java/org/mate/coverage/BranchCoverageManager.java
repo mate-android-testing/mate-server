@@ -21,18 +21,15 @@ public final class BranchCoverageManager {
      * Copies the coverage data, i.e. traces of test cases, specified through the list of entities
      * from the source chromosome (test suite) to the target chromosome (test suite).
      *
-     * @param appsDir The apps directory containing all app directories.
-     * @param deviceID The emulator identifier.
+     * @param appsDir          The apps directory containing all app directories.
+     * @param packageName      The package name of the AUT.
      * @param sourceChromosome The source chromosome (test suite).
      * @param targetChromosome The target chromosome (test suite).
-     * @param entities A list of test cases.
+     * @param entities         A list of test cases.
      * @return Returns a message describing the success/failure of the operation.
      */
-    public static Message copyCoverageData(Path appsDir, String deviceID, String sourceChromosome,
+    public static Message copyCoverageData(Path appsDir, String packageName, String sourceChromosome,
                                            String targetChromosome, String[] entities) {
-
-        Device device = Device.devices.get(deviceID);
-        String packageName = device.getPackageName();
 
         File appDir = new File(appsDir.toFile(), packageName);
         File tracesDir = new File(appDir, "traces");
@@ -66,22 +63,22 @@ public final class BranchCoverageManager {
 
     /**
      * Stores the branch coverage data for a chromosome, which can be either a test case or a test suite.
-     *
+     * <p>
      * First, a broadcast is sent to the AUT in order to write out a traces.txt file on the external storage.
      * Second, this traces.txt is pulled from the emulator and saved on a pre-defined location (app directory/traces).
      *
      * @param androidEnvironment Defines the location of the adb/aapt binary.
      * @param deviceID           The id of the emulator, e.g. emulator-5554.
+     * @param packageName        The package name of the AUT.
      * @param chromosome         Identifies either a test case or a test suite.
      * @param entity             Identifies a test case if chromosome refers to
      *                           a test suite, otherwise {@code null}.
      * @return Returns a dummy message on success.
      */
-    public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID,
+    public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID, String packageName,
                                             String chromosome, String entity) {
         // grant runtime permissions
         Device device = Device.devices.get(deviceID);
-        String packageName = device.getPackageName();
         boolean granted = device.grantPermissions(packageName);
 
         if (!granted) {
@@ -117,11 +114,11 @@ public final class BranchCoverageManager {
     /**
      * Computes the branch coverage of a single test case within a test suite.
      *
-     * @param appsDir The apps directory.
+     * @param appsDir     The apps directory.
      * @param packageName The package name of the AUT.
      * @param testSuiteId The id of the test suite.
-     * @param testCaseId The id of the test case.
-     * @return Returns branch coverage for the given test case.
+     * @param testCaseId  The id of the test case.
+     * @return Returns the branch coverage for the given test case.
      */
     public static Message getCoverage(Path appsDir, String packageName, String testSuiteId, String testCaseId) {
 
@@ -152,7 +149,7 @@ public final class BranchCoverageManager {
     /**
      * Computes the (combined) coverage for a set of test cases/test suites.
      *
-     * @param appsDir The apps directory.
+     * @param appsDir     The apps directory.
      * @param packageName The package name of the AUT.
      * @param chromosomes A list of chromosomes separated by '+'.
      * @return Returns the (combined) coverage for a set of chromosomes.

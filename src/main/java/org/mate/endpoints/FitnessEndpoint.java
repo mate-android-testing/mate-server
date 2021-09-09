@@ -314,13 +314,10 @@ public class FitnessEndpoint implements Endpoint {
      */
     private Message copyMethodFitnessData(Message request) {
 
-        String deviceID = request.getParameter("deviceId");
         String sourceChromosome = request.getParameter("chromosome_src");
         String targetChromosome = request.getParameter("chromosome_target");
         String[] entities = request.getParameter("entities").split(",");
-
-        Device device = Device.devices.get(deviceID);
-        String packageName = device.getPackageName();
+        String packageName = request.getParameter("packageName");
 
         File appDir = new File(appsDir.toFile(), packageName);
         File tracesDir = new File(appDir, "traces");
@@ -361,13 +358,10 @@ public class FitnessEndpoint implements Endpoint {
      */
     private Message copyBasicBlockFitnessData(Message request) {
 
-        String deviceID = request.getParameter("deviceId");
         String sourceChromosome = request.getParameter("chromosome_src");
         String targetChromosome = request.getParameter("chromosome_target");
         String[] entities = request.getParameter("entities").split(",");
-
-        Device device = Device.devices.get(deviceID);
-        String packageName = device.getPackageName();
+        String packageName = request.getParameter("packageName");
 
         File appDir = new File(appsDir.toFile(), packageName);
         File tracesDir = new File(appDir, "traces");
@@ -408,13 +402,10 @@ public class FitnessEndpoint implements Endpoint {
      */
     private Message copyBranchFitnessData(Message request) {
 
-        String deviceID = request.getParameter("deviceId");
         String sourceChromosome = request.getParameter("chromosome_src");
         String targetChromosome = request.getParameter("chromosome_target");
         String[] entities = request.getParameter("entities").split(",");
-
-        Device device = Device.devices.get(deviceID);
-        String packageName = device.getPackageName();
+        String packageName = request.getParameter("packageName");
 
         File appDir = new File(appsDir.toFile(), packageName);
         File tracesDir = new File(appDir, "traces");
@@ -455,8 +446,7 @@ public class FitnessEndpoint implements Endpoint {
      */
     private Message copyLineFitnessData(Message request) {
 
-        var deviceId = request.getParameter("deviceId");
-        var packageName = Device.getDevice(deviceId).getPackageName();
+        var packageName = request.getParameter("packageName");
         var chromosomeSrc = request.getParameter("chromosome_src");
         var chromosomeTarget = request.getParameter("chromosome_target");
         var entities = request.getParameter("entities").split(",");
@@ -551,7 +541,6 @@ public class FitnessEndpoint implements Endpoint {
     private Message storeMethodFitnessData(Message request) {
 
         String deviceID = request.getParameter("deviceId");
-        // TODO: use packageName of device
         String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
@@ -598,7 +587,6 @@ public class FitnessEndpoint implements Endpoint {
     private Message storeBasicBlockFitnessData(Message request) {
 
         String deviceID = request.getParameter("deviceId");
-        // TODO: use packageName of device
         String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
@@ -709,7 +697,6 @@ public class FitnessEndpoint implements Endpoint {
     private Message storeBranchFitnessData(Message request) {
 
         String deviceID = request.getParameter("deviceId");
-        // TODO: use packageName of device
         String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
