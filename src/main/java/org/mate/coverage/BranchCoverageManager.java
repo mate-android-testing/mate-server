@@ -115,13 +115,13 @@ public final class BranchCoverageManager {
     }
 
     /**
-     * Computes the coverage of a single test case within a test suite.
+     * Computes the branch coverage of a single test case within a test suite.
      *
      * @param appsDir The apps directory.
      * @param packageName The package name of the AUT.
      * @param testSuiteId The id of the test suite.
      * @param testCaseId The id of the test case.
-     * @return Returns the (combined) coverage for a set of chromosomes.
+     * @return Returns branch coverage for the given test case.
      */
     public static Message getCoverage(Path appsDir, String packageName, String testSuiteId, String testCaseId) {
 
@@ -135,7 +135,6 @@ public final class BranchCoverageManager {
         // the trace file corresponding to the test case within the given test suite
         File traceFile = tracesDir.toPath().resolve(testSuiteId).resolve(testCaseId).toFile();
 
-        // evaluate branch coverage
         double branchCoverage = 0d;
 
         try {

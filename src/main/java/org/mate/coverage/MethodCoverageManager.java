@@ -1,5 +1,6 @@
 package org.mate.coverage;
 
+import com.google.common.collect.Lists;
 import org.apache.commons.io.FileUtils;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
@@ -111,6 +112,41 @@ public class MethodCoverageManager {
     }
 
     /**
+     * Computes the method coverage of a single test case within a test suite.
+     *
+     * @param appsDir The apps directory.
+     * @param packageName The package name of the AUT.
+     * @param testSuiteId The id of the test suite.
+     * @param testCaseId The id of the test case.
+     * @return Returns the method coverage for a set of chromosomes.
+     */
+    public static Message getCoverage(Path appsDir, String packageName, String testSuiteId, String testCaseId) {
+
+        // get list of traces file
+        File appDir = new File(appsDir.toFile(), packageName);
+        File tracesDir = new File(appDir, "traces");
+
+        // the methods.txt should be located within the app directory
+        File methodsFile = new File(appDir, "methods.txt");
+
+        // the trace file corresponding to the test case within the given test suite
+        File traceFile = tracesDir.toPath().resolve(testSuiteId).resolve(testCaseId).toFile();
+
+        double methodCoverage = 0d;
+
+        try {
+            methodCoverage = evaluateMethodCoverage(methodsFile, Lists.newArrayList(traceFile));
+        } catch (IOException e) {
+            Log.printError(e.getMessage());
+            throw new IllegalStateException("Method coverage couldn't be evaluated!");
+        }
+
+        return new Message.MessageBuilder("/coverage/get")
+                .withParameter("coverage", String.valueOf(methodCoverage))
+                .build();
+    }
+
+    /**
      * Computes the (combined) method coverage for a set of test cases/test suites.
      *
      * @param packageName The package name of the AUT.
@@ -175,7 +211,7 @@ public class MethodCoverageManager {
      */
     private static double evaluateMethodCoverage(File methodsFile, List<File> tracesFiles) throws IOException {
 
-        Log.println("BranchesFile: " + methodsFile + "[" + methodsFile.exists() + "]");
+        Log.println("MethodsFile: " + methodsFile + "[" + methodsFile.exists() + "]");
 
         for (File tracesFile : tracesFiles) {
             Log.println("TracesFile: " + tracesFile + "[" + tracesFile.exists() + "]");

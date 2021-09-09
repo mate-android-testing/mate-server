@@ -83,7 +83,7 @@ public class CoverageEndpoint implements Endpoint {
             case BRANCH_COVERAGE:
                 return getBranchCoverage(request);
             case METHOD_COVERAGE:
-                return getCombinedMethodCoverage(request);
+                return getMethodCoverage(request);
             case BASIC_BLOCK_LINE_COVERAGE:
                 return getBasicBlockLineCoverage(request);
             case BASIC_BLOCK_BRANCH_COVERAGE:
@@ -91,6 +91,19 @@ public class CoverageEndpoint implements Endpoint {
             default:
                 throw new UnsupportedOperationException("Coverage type not yet supported!");
         }
+    }
+
+    /**
+     * Gets the method coverage of a single test case within a test suite.
+     *
+     * @param request The request message.
+     * @return Returns a response message containing the coverage information.
+     */
+    private Message getMethodCoverage(Message request) {
+        String packageName = request.getParameter("packageName");
+        String testSuiteId = request.getParameter("testSuiteId");
+        String testCaseId = request.getParameter("testCaseId");
+        return MethodCoverageManager.getCoverage(appsDir, packageName, testSuiteId, testCaseId);
     }
 
     /**
