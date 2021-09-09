@@ -134,7 +134,6 @@ public final class BranchCoverageManager {
 
         // the trace file corresponding to the test case within the given test suite
         File traceFile = tracesDir.toPath().resolve(testSuiteId).resolve(testCaseId).toFile();
-        Log.println("Path of trace file: " + traceFile);
 
         // evaluate branch coverage
         double branchCoverage = 0d;

@@ -1,5 +1,6 @@
 package org.mate.coverage;
 
+import com.google.common.collect.Lists;
 import org.apache.commons.io.FileUtils;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
@@ -424,5 +425,71 @@ public final class BasicBlockCoverageManager {
             coveredBranchesPerClass.put(clazz, count);
         });
         return coveredBranchesPerClass;
+    }
+
+    /**
+     * Computes the line coverage for a single test case within a test suite.
+     *
+     * @param packageName The package name of the AUT.
+     * @param testSuiteId The id of the test suite.
+     * @param testCaseId The id of the test case.
+     * @return Returns the line coverage for the given test case.
+     */
+    public static Message getLineCoverage(Path appsDir, String packageName, String testSuiteId, String testCaseId) {
+        return getCoverage(appsDir, packageName, testSuiteId, testCaseId, true);
+    }
+
+    /**
+     * Computes the branch coverage for a single test case within a test suite.
+     *
+     * @param packageName The package name of the AUT.
+     * @param testSuiteId The id of the test suite.
+     * @param testCaseId The id of the test case.
+     * @return Returns the branch coverage for the given test case.
+     */
+    public static Message getBranchCoverage(Path appsDir, String packageName, String testSuiteId, String testCaseId) {
+        return getCoverage(appsDir, packageName, testSuiteId, testCaseId, false);
+    }
+
+    /**
+     * Computes the branch or line coverage of a single test case within a test suite.
+     *
+     * @param appsDir The apps directory.
+     * @param packageName The package name of the AUT.
+     * @param testSuiteId The id of the test suite.
+     * @param testCaseId The id of the test case.
+     * @param lineCoverage Whether line or branch coverage should be computed.
+     * @return Returns the branch or line coverage for the given test case.
+     */
+    private static Message getCoverage(Path appsDir, String packageName, String testSuiteId,
+                                      String testCaseId, boolean lineCoverage) {
+
+        // get list of traces file
+        File appDir = new File(appsDir.toFile(), packageName);
+        File tracesDir = new File(appDir, "traces");
+
+        // the blocks.txt should be located within the app directory
+        File blocksFile = new File(appDir, "blocks.txt");
+
+        // the trace file corresponding to the test case within the given test suite
+        File traceFile = tracesDir.toPath().resolve(testSuiteId).resolve(testCaseId).toFile();
+
+        double coverage = 0d;
+
+        try {
+            if (lineCoverage) {
+                coverage = evaluateLineCoverage(blocksFile, Lists.newArrayList(traceFile));
+            } else {
+                coverage = evaluateBranchCoverage(blocksFile, Lists.newArrayList(traceFile));
+            }
+        } catch (IOException e) {
+            Log.printError(e.getMessage());
+            final String kind = lineCoverage ? "Line" : "Block";
+            throw new IllegalStateException(kind + " coverage couldn't be evaluated!");
+        }
+
+        return new Message.MessageBuilder("/coverage/get")
+                .withParameter("coverage", String.valueOf(coverage))
+                .build();
     }
 }

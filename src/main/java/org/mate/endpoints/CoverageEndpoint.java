@@ -1,16 +1,12 @@
 package org.mate.endpoints;
 
-import org.mate.coverage.BasicBlockCoverageManager;
-import org.mate.coverage.BranchCoverageManager;
-import org.mate.coverage.Coverage;
-import org.mate.coverage.LineCoverageManager;
-import org.mate.coverage.MethodCoverageManager;
-import org.mate.network.message.Messages;
-import org.mate.util.AndroidEnvironment;
+import org.mate.coverage.*;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
-import org.mate.network.message.Message;
 import org.mate.network.Endpoint;
+import org.mate.network.message.Message;
+import org.mate.network.message.Messages;
+import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
 import org.mate.util.Result;
 import org.w3c.dom.Document;
@@ -27,7 +23,9 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public class CoverageEndpoint implements Endpoint {
@@ -87,12 +85,38 @@ public class CoverageEndpoint implements Endpoint {
             case METHOD_COVERAGE:
                 return getCombinedMethodCoverage(request);
             case BASIC_BLOCK_LINE_COVERAGE:
-                return getCombinedBasicBlockLineCoverage(request);
+                return getBasicBlockLineCoverage(request);
             case BASIC_BLOCK_BRANCH_COVERAGE:
-                return getCombinedBasicBlockBranchCoverage(request);
+                return getBasicBlockBranchCoverage(request);
             default:
                 throw new UnsupportedOperationException("Coverage type not yet supported!");
         }
+    }
+
+    /**
+     * Gets the basic block branch coverage of a single test case within a test suite.
+     *
+     * @param request The request message.
+     * @return Returns a response message containing the coverage information.
+     */
+    private Message getBasicBlockBranchCoverage(Message request) {
+        String packageName = request.getParameter("packageName");
+        String testSuiteId = request.getParameter("testSuiteId");
+        String testCaseId = request.getParameter("testCaseId");
+        return BasicBlockCoverageManager.getBranchCoverage(appsDir, packageName, testSuiteId, testCaseId);
+    }
+
+    /**
+     * Gets the basic block line coverage of a single test case within a test suite.
+     *
+     * @param request The request message.
+     * @return Returns a response message containing the coverage information.
+     */
+    private Message getBasicBlockLineCoverage(Message request) {
+        String packageName = request.getParameter("packageName");
+        String testSuiteId = request.getParameter("testSuiteId");
+        String testCaseId = request.getParameter("testCaseId");
+        return BasicBlockCoverageManager.getLineCoverage(appsDir, packageName, testSuiteId, testCaseId);
     }
 
     /**
@@ -103,7 +127,7 @@ public class CoverageEndpoint implements Endpoint {
      */
     private Message getBranchCoverage(Message request) {
         String packageName = request.getParameter("packageName");
-        String testSuiteId= request.getParameter("testSuiteId");
+        String testSuiteId = request.getParameter("testSuiteId");
         String testCaseId = request.getParameter("testCaseId");
         return BranchCoverageManager.getCoverage(appsDir, packageName, testSuiteId, testCaseId);
     }
