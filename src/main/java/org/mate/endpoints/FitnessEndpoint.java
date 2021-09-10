@@ -126,7 +126,7 @@ public class FitnessEndpoint implements Endpoint {
     private Message getBranchFitnessVector(Message request) {
 
         String packageName = request.getParameter("packageName");
-        String chromosomes = request.getParameter("chromosomes");
+        String chromosome = request.getParameter("chromosome");
 
         Path appDir = appsDir.resolve(packageName);
         File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
@@ -142,9 +142,9 @@ public class FitnessEndpoint implements Endpoint {
             throw new IllegalStateException(e);
         }
 
-        // collect the traces files described by the chromosomes
+        // collect the traces files described by the chromosome
         Path tracesDir = appDir.resolve("traces");
-        List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), chromosomes);
+        List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), chromosome);
 
         Set<String> traces = readTraces(tracesFiles);
         List<String> branchesFitnessVector = new ArrayList<>(branches.size());
@@ -169,7 +169,7 @@ public class FitnessEndpoint implements Endpoint {
     private Message getBasicBlockFitnessVector(Message request) {
 
         String packageName = request.getParameter("packageName");
-        String chromosomes = request.getParameter("chromosomes");
+        String chromosome = request.getParameter("chromosome");
 
         Path appDir = appsDir.resolve(packageName);
         File basicBlocksFile = appDir.resolve(BLOCKS_FILE).toFile();
@@ -185,9 +185,9 @@ public class FitnessEndpoint implements Endpoint {
             throw new IllegalStateException(e);
         }
 
-        // collect the traces files described by the chromosomes
+        // collect the traces files described by the chromosome
         Path tracesDir = appDir.resolve("traces");
-        List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), chromosomes);
+        List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), chromosome);
 
         Set<String> traces = readTraces(tracesFiles);
         List<String> basicBlockFitnessVector = new ArrayList<>(basicBlocks.size());

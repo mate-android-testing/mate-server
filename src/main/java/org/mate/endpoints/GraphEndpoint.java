@@ -198,7 +198,7 @@ public class GraphEndpoint implements Endpoint {
     private Message getBranchDistance(Message request) {
 
         String packageName = request.getParameter("packageName");
-        String chromosomes = request.getParameter("chromosomes");
+        String chromosome = request.getParameter("chromosome");
 
         if (graph == null) {
             throw new IllegalStateException("Graph hasn't been initialised!");
@@ -209,7 +209,7 @@ public class GraphEndpoint implements Endpoint {
         File tracesDir = appDir.resolve("traces").toFile();
 
         // collect the relevant traces files
-        List<File> tracesFiles = getTraceFiles(tracesDir, chromosomes);
+        List<File> tracesFiles = getTraceFiles(tracesDir, chromosome);
 
         // read traces from trace file(s)
         Set<String> traces = readTraces(tracesFiles);
@@ -328,7 +328,7 @@ public class GraphEndpoint implements Endpoint {
     private Message getBranchDistanceVector(Message request) {
 
         String packageName = request.getParameter("packageName");
-        String chromosomes = request.getParameter("chromosomes");
+        String chromosome = request.getParameter("chromosome");
 
         if (graph == null) {
             throw new IllegalStateException("Graph hasn't been initialised!");
@@ -339,7 +339,7 @@ public class GraphEndpoint implements Endpoint {
         File tracesDir = appDir.resolve("traces").toFile();
 
         // collect the relevant traces files
-        List<File> tracesFiles = getTraceFiles(tracesDir, chromosomes);
+        List<File> tracesFiles = getTraceFiles(tracesDir, chromosome);
 
         // read the traces from the traces files
         Set<String> traces = readTraces(tracesFiles);
