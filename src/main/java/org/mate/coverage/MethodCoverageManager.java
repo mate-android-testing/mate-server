@@ -1,5 +1,6 @@
 package org.mate.coverage;
 
+import com.google.common.collect.Lists;
 import org.apache.commons.io.FileUtils;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
@@ -20,18 +21,15 @@ public class MethodCoverageManager {
      * Copies the coverage data, i.e. traces of test cases, specified through the list of entities
      * from the source chromosome (test suite) to the target chromosome (test suite).
      *
-     * @param appsDir The apps directory containing all app directories.
-     * @param deviceID The emulator identifier.
+     * @param appsDir          The apps directory containing all app directories.
+     * @param packageName      The package name of the AUT.
      * @param sourceChromosome The source chromosome (test suite).
      * @param targetChromosome The target chromosome (test suite).
-     * @param entities A list of test cases.
+     * @param entities         A list of test cases.
      * @return Returns a message describing the success/failure of the operation.
      */
-    public static Message copyCoverageData(Path appsDir, String deviceID, String sourceChromosome,
+    public static Message copyCoverageData(Path appsDir, String packageName, String sourceChromosome,
                                            String targetChromosome, String[] entities) {
-
-        Device device = Device.devices.get(deviceID);
-        String packageName = device.getPackageName();
 
         File appDir = new File(appsDir.toFile(), packageName);
         File tracesDir = new File(appDir, "traces");
@@ -68,16 +66,16 @@ public class MethodCoverageManager {
      *
      * @param androidEnvironment Defines the location of the adb/aapt binary.
      * @param deviceID           The id of the emulator, e.g. emulator-5554.
+     * @param packageName        The package name of the AUT.
      * @param chromosome         Identifies either a test case or a test suite.
      * @param entity             Identifies a test case if chromosome refers to
      *                           a test suite, otherwise {@code null}.
      * @return Returns a dummy message on success.
      */
-    public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID,
+    public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID, String packageName,
                                             String chromosome, String entity) {
         // grant runtime permissions
         Device device = Device.devices.get(deviceID);
-        String packageName = device.getPackageName();
         boolean granted = device.grantPermissions(packageName);
 
         if (!granted) {
@@ -111,6 +109,41 @@ public class MethodCoverageManager {
     }
 
     /**
+     * Computes the method coverage of a single test case within a test suite.
+     *
+     * @param appsDir     The apps directory.
+     * @param packageName The package name of the AUT.
+     * @param testSuiteId The id of the test suite.
+     * @param testCaseId  The id of the test case.
+     * @return Returns the method coverage for a set of chromosomes.
+     */
+    public static Message getCoverage(Path appsDir, String packageName, String testSuiteId, String testCaseId) {
+
+        // get list of traces file
+        File appDir = new File(appsDir.toFile(), packageName);
+        File tracesDir = new File(appDir, "traces");
+
+        // the methods.txt should be located within the app directory
+        File methodsFile = new File(appDir, "methods.txt");
+
+        // the trace file corresponding to the test case within the given test suite
+        File traceFile = tracesDir.toPath().resolve(testSuiteId).resolve(testCaseId).toFile();
+
+        double methodCoverage = 0d;
+
+        try {
+            methodCoverage = evaluateMethodCoverage(methodsFile, Lists.newArrayList(traceFile));
+        } catch (IOException e) {
+            Log.printError(e.getMessage());
+            throw new IllegalStateException("Method coverage couldn't be evaluated!");
+        }
+
+        return new Message.MessageBuilder("/coverage/get")
+                .withParameter("coverage", String.valueOf(methodCoverage))
+                .build();
+    }
+
+    /**
      * Computes the (combined) method coverage for a set of test cases/test suites.
      *
      * @param packageName The package name of the AUT.
@@ -128,26 +161,8 @@ public class MethodCoverageManager {
         // the methods.txt should be located within the app directory
         File methodsFile = new File(appDir, "methods.txt");
 
-        List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
-
-        if (chromosomes != null) {
-
-            // only consider the traces files described by the chromosome ids
-            tracesFiles = new ArrayList<>();
-
-            for (String chromosome : chromosomes.split("\\+")) {
-                try {
-                    tracesFiles.addAll(
-                            Files.walk(tracesDir.toPath().resolve(chromosome))
-                                    .filter(Files::isRegularFile)
-                                    .map(Path::toFile)
-                                    .collect(Collectors.toList()));
-                } catch (IOException e) {
-                    Log.printError("Couldn't retrieve traces files!");
-                    throw new IllegalArgumentException(e);
-                }
-            }
-        }
+        // only consider the traces files described by the chromosome ids
+        List<File> tracesFiles = getTraceFiles(tracesDir, chromosomes);
 
         // evaluate method coverage over all traces files
         double methodCoverage = 0d;
@@ -169,13 +184,13 @@ public class MethodCoverageManager {
      * to evaluate the method coverage for a single test case as well as the combined coverage.
      *
      * @param methodsFile The methods.txt file listing all the instrumented methods.
-     * @param tracesFiles  The set of traces file.
+     * @param tracesFiles The set of traces file.
      * @return Returns the method coverage for a single test case or the combined coverage.
      * @throws IOException Should never happen.
      */
     private static double evaluateMethodCoverage(File methodsFile, List<File> tracesFiles) throws IOException {
 
-        Log.println("BranchesFile: " + methodsFile + "[" + methodsFile.exists() + "]");
+        Log.println("MethodsFile: " + methodsFile + "[" + methodsFile.exists() + "]");
 
         for (File tracesFile : tracesFiles) {
             Log.println("TracesFile: " + tracesFile + "[" + tracesFile.exists() + "]");
@@ -255,5 +270,40 @@ public class MethodCoverageManager {
         Log.println("We have a total method coverage of " + methodCoverage + "%.");
 
         return methodCoverage;
+    }
+
+    /**
+     * Gets the list of traces files specified by the given chromosomes.
+     *
+     * @param tracesDir   The base directory containing the traces files.
+     * @param chromosomes Encodes a mapping to one or several traces files.
+     * @return Returns the list of traces files described by the given chromosomes.
+     */
+    private static List<File> getTraceFiles(File tracesDir, String chromosomes) {
+
+        // collect the relevant traces files
+        List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
+
+        if (chromosomes != null) {
+
+            // only consider the traces files described by the chromosome ids
+            tracesFiles = new ArrayList<>();
+
+            for (String chromosome : chromosomes.split("\\+")) {
+                try {
+                    tracesFiles.addAll(
+                            Files.walk(tracesDir.toPath().resolve(chromosome))
+                                    .filter(Files::isRegularFile)
+                                    .map(Path::toFile)
+                                    .collect(Collectors.toList()));
+                } catch (IOException e) {
+                    Log.printError("Couldn't retrieve traces files!");
+                    throw new IllegalArgumentException(e);
+                }
+            }
+        }
+
+        Log.println("Number of considered traces files: " + tracesFiles.size());
+        return tracesFiles;
     }
 }

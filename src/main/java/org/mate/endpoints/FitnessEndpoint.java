@@ -126,7 +126,7 @@ public class FitnessEndpoint implements Endpoint {
     private Message getBranchFitnessVector(Message request) {
 
         String packageName = request.getParameter("packageName");
-        String chromosomes = request.getParameter("chromosomes");
+        String chromosome = request.getParameter("chromosome");
 
         Path appDir = appsDir.resolve(packageName);
         File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
@@ -142,9 +142,9 @@ public class FitnessEndpoint implements Endpoint {
             throw new IllegalStateException(e);
         }
 
-        // collect the traces files described by the chromosomes
+        // collect the traces files described by the chromosome
         Path tracesDir = appDir.resolve("traces");
-        List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), chromosomes);
+        List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), chromosome);
 
         Set<String> traces = readTraces(tracesFiles);
         List<String> branchesFitnessVector = new ArrayList<>(branches.size());
@@ -169,7 +169,7 @@ public class FitnessEndpoint implements Endpoint {
     private Message getBasicBlockFitnessVector(Message request) {
 
         String packageName = request.getParameter("packageName");
-        String chromosomes = request.getParameter("chromosomes");
+        String chromosome = request.getParameter("chromosome");
 
         Path appDir = appsDir.resolve(packageName);
         File basicBlocksFile = appDir.resolve(BLOCKS_FILE).toFile();
@@ -185,9 +185,9 @@ public class FitnessEndpoint implements Endpoint {
             throw new IllegalStateException(e);
         }
 
-        // collect the traces files described by the chromosomes
+        // collect the traces files described by the chromosome
         Path tracesDir = appDir.resolve("traces");
-        List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), chromosomes);
+        List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), chromosome);
 
         Set<String> traces = readTraces(tracesFiles);
         List<String> basicBlockFitnessVector = new ArrayList<>(basicBlocks.size());
@@ -314,13 +314,10 @@ public class FitnessEndpoint implements Endpoint {
      */
     private Message copyMethodFitnessData(Message request) {
 
-        String deviceID = request.getParameter("deviceId");
         String sourceChromosome = request.getParameter("chromosome_src");
         String targetChromosome = request.getParameter("chromosome_target");
         String[] entities = request.getParameter("entities").split(",");
-
-        Device device = Device.devices.get(deviceID);
-        String packageName = device.getPackageName();
+        String packageName = request.getParameter("packageName");
 
         File appDir = new File(appsDir.toFile(), packageName);
         File tracesDir = new File(appDir, "traces");
@@ -361,13 +358,10 @@ public class FitnessEndpoint implements Endpoint {
      */
     private Message copyBasicBlockFitnessData(Message request) {
 
-        String deviceID = request.getParameter("deviceId");
         String sourceChromosome = request.getParameter("chromosome_src");
         String targetChromosome = request.getParameter("chromosome_target");
         String[] entities = request.getParameter("entities").split(",");
-
-        Device device = Device.devices.get(deviceID);
-        String packageName = device.getPackageName();
+        String packageName = request.getParameter("packageName");
 
         File appDir = new File(appsDir.toFile(), packageName);
         File tracesDir = new File(appDir, "traces");
@@ -408,13 +402,10 @@ public class FitnessEndpoint implements Endpoint {
      */
     private Message copyBranchFitnessData(Message request) {
 
-        String deviceID = request.getParameter("deviceId");
         String sourceChromosome = request.getParameter("chromosome_src");
         String targetChromosome = request.getParameter("chromosome_target");
         String[] entities = request.getParameter("entities").split(",");
-
-        Device device = Device.devices.get(deviceID);
-        String packageName = device.getPackageName();
+        String packageName = request.getParameter("packageName");
 
         File appDir = new File(appsDir.toFile(), packageName);
         File tracesDir = new File(appDir, "traces");
@@ -455,8 +446,7 @@ public class FitnessEndpoint implements Endpoint {
      */
     private Message copyLineFitnessData(Message request) {
 
-        var deviceId = request.getParameter("deviceId");
-        var packageName = Device.getDevice(deviceId).getPackageName();
+        var packageName = request.getParameter("packageName");
         var chromosomeSrc = request.getParameter("chromosome_src");
         var chromosomeTarget = request.getParameter("chromosome_target");
         var entities = request.getParameter("entities").split(",");
@@ -551,7 +541,6 @@ public class FitnessEndpoint implements Endpoint {
     private Message storeMethodFitnessData(Message request) {
 
         String deviceID = request.getParameter("deviceId");
-        // TODO: use packageName of device
         String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
@@ -598,7 +587,6 @@ public class FitnessEndpoint implements Endpoint {
     private Message storeBasicBlockFitnessData(Message request) {
 
         String deviceID = request.getParameter("deviceId");
-        // TODO: use packageName of device
         String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
@@ -656,7 +644,7 @@ public class FitnessEndpoint implements Endpoint {
             try {
                 coverageFile = Files.createTempFile(coverageDir, null, null);
             } catch (IOException e) {
-                final var errorMsg = "Failed to create coverage file: " + e.toString() + "\n" + e.fillInStackTrace();
+                final var errorMsg = "Failed to create coverage file: " + e + "\n" + e.fillInStackTrace();
                 Log.printError(errorMsg);
                 return Messages.errorMessage(errorMsg);
             }
@@ -709,7 +697,6 @@ public class FitnessEndpoint implements Endpoint {
     private Message storeBranchFitnessData(Message request) {
 
         String deviceID = request.getParameter("deviceId");
-        // TODO: use packageName of device
         String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");

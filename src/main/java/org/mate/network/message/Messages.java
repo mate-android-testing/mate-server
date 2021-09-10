@@ -8,7 +8,7 @@ import java.util.Map;
 
 public class Messages {
     private static final String METADATA_PREFIX = "__meta__";
-    private static final String MESSAGE_PROTOCOL_VERSION = "2.0";
+    private static final String MESSAGE_PROTOCOL_VERSION = "2.1";
     private static final String MESSAGE_PROTOCOL_VERSION_KEY = "version";
 
     //util class
