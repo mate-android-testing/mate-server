@@ -644,7 +644,7 @@ public class FitnessEndpoint implements Endpoint {
             try {
                 coverageFile = Files.createTempFile(coverageDir, null, null);
             } catch (IOException e) {
-                final var errorMsg = "Failed to create coverage file: " + e.toString() + "\n" + e.fillInStackTrace();
+                final var errorMsg = "Failed to create coverage file: " + e + "\n" + e.fillInStackTrace();
                 Log.printError(errorMsg);
                 return Messages.errorMessage(errorMsg);
             }

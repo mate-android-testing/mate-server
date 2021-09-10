@@ -239,7 +239,7 @@ public class LineCoverageManager {
                                     .filter(Files::isRegularFile)
                                     .collect(Collectors.toList()));
                 } catch (IOException e) {
-                    final var errorMsg = "Failed to get combined coverage: " + e.toString() + "\n" + e.fillInStackTrace();
+                    final var errorMsg = "Failed to get combined coverage: " + e + "\n" + e.fillInStackTrace();
                     Log.printError(errorMsg);
                     return Result.errOf(errorMsg);
                 }
@@ -259,17 +259,20 @@ public class LineCoverageManager {
      */
     public static Message getCoverage(Path appsDir, String packageName, String testSuiteId, String testCaseId) {
 
-        Path baseCoverageDir = getCoverageBaseDir(appsDir, packageName);
+        Path coverageChromosomeDir = getCoverageChromosomeDir(appsDir, packageName, testSuiteId);
+        Path coverageFile = coverageChromosomeDir.resolve(testCaseId);
 
-        // TODO: fix coverage computation, only consider coverage files described by test suite and test case id
-        final var execFiles = getExecFiles(null, baseCoverageDir);
-
-        if (execFiles.isErr()) {
-            return Messages.errorMessage(execFiles.getErr());
+        if (!coverageFile.toFile().exists()) {
+            return Messages.errorMessage("Failed to get coverage: " + coverageFile + " not existent!");
         }
 
         Path classesDirPath = appsDir.resolve(packageName).resolve("src").resolve("classes");
-        IBundleCoverage bundle = generateBundleCoverage(execFiles.getOk(), classesDirPath);
+        /*
+        * We can't use here Lists.newArrayList(coverageFile) to hand over the coverage file in a list.
+        * This is due to the fact that a 'Path' object is iterable and Lists.newArrayList() would construct
+        * a list where each element is a sub path in this context due to overloading!
+         */
+        IBundleCoverage bundle = generateBundleCoverage(Collections.singletonList(coverageFile), classesDirPath);
         ICounter counter = bundle.getLineCounter();
 
         return new Message.MessageBuilder("/coverage/get")
@@ -304,6 +307,7 @@ public class LineCoverageManager {
     }
 
     private static IBundleCoverage generateBundleCoverage(List<Path> execFilePaths, Path classesDirPath) {
+
         CoverageBuilder coverageBuilder = new CoverageBuilder();
         ExecutionDataStore executionDataStore = new ExecutionDataStore();
         for (Path execFilePath : execFilePaths) {
@@ -311,6 +315,7 @@ public class LineCoverageManager {
             try {
                 execFileLoader.load(execFilePath.toFile());
             } catch (IOException e) {
+                Log.println("Failed to load coverage file: " + execFilePath);
                 e.printStackTrace();
             }
             for (ExecutionData data : execFileLoader.getExecutionDataStore().getContents()) {
