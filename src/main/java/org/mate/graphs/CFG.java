@@ -1,12 +1,12 @@
 package org.mate.graphs;
 
-import de.uni_passau.fim.auermich.graphs.Edge;
-import de.uni_passau.fim.auermich.graphs.Vertex;
-import de.uni_passau.fim.auermich.graphs.cfg.BaseCFG;
-import de.uni_passau.fim.auermich.statement.BasicStatement;
-import de.uni_passau.fim.auermich.statement.BlockStatement;
-import de.uni_passau.fim.auermich.statement.Statement;
-import de.uni_passau.fim.auermich.utility.Utility;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.Edge;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.BaseCFG;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.InstructionUtils;
 import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.mate.graphs.util.VertexPair;
@@ -23,9 +23,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public abstract class CFG implements Graph {
-
-    // defines the maximal number of vertices the graph can have for drawing
-    private static final int MAX_DRAWING_SIZE = 1000;
 
     protected final BaseCFG baseCFG;
     private final String appName;
@@ -51,7 +48,6 @@ public abstract class CFG implements Graph {
     // cache already computed distances to the target vertex
     private final Map<VertexPair, Integer> cachedDistances = new ConcurrentHashMap<>();
 
-
     /**
      * Constructs a wrapper for a given control-flow graph.
      *
@@ -70,7 +66,7 @@ public abstract class CFG implements Graph {
     }
 
     /**
-     * Retrieves the list of branch vertices, those that could actually instrumented.
+     * Retrieves the list of branch vertices, those that could be actually instrumented.
      *
      * @return Returns the branch vertices.
      */
@@ -116,9 +112,10 @@ public abstract class CFG implements Graph {
         });
 
         long end = System.currentTimeMillis();
-        Log.println("Mapping branches to vertices took: " + (end - start) + " seconds");
+        Log.println("Mapping branches to vertices took: " + (end - start) + " ms.");
 
-        Log.println("Number of branches: " + branchVertices.size());
+        Log.println("Number of actual branches: " + branches.size());
+        Log.println("Number of branch vertices: " + branchVertices.size());
 
         if (branchVertices.size() != branches.size()) {
             throw new IllegalStateException("Couldn't derive for certain branches the corresponding branch vertices!");
@@ -153,22 +150,22 @@ public abstract class CFG implements Graph {
      */
     @Override
     public void draw(File outputPath) {
-      if (size() < MAX_DRAWING_SIZE) {
-          baseCFG.drawGraph(outputPath);
-      }
+        baseCFG.drawGraph(outputPath);
     }
 
     /**
-     * Draws the graph where target and visited vertices are marked.
+     * Draws the graph where target and visited vertices are marked in different colors:
+     * The visited vertices get marked in green.
+     * The uncovered target vertices get marked in red.
+     * The covered target vertices get marked in orange.
      *
-     * @param targets The list of target vertices.
+     * @param outputPath      The output directory.
      * @param visitedVertices The list of visited vertices.
+     * @param targets         The list of target vertices.
      */
     @Override
-    public void draw(Set<Vertex> targets, Set<Vertex> visitedVertices, File outputPath) {
-        if (size() < MAX_DRAWING_SIZE) {
-            baseCFG.drawGraph(targets, visitedVertices, outputPath);
-        }
+    public void draw(File outputPath, Set<Vertex> visitedVertices, Set<Vertex> targets) {
+        baseCFG.drawGraph(outputPath, visitedVertices, targets);
     }
 
     /**
@@ -246,7 +243,7 @@ public abstract class CFG implements Graph {
 
             // a branch can potentially have multiple predecessors (shared branch)
             Set<Vertex> ifVertices = baseCFG.getIncomingEdges(branchVertex).stream()
-                    .map(Edge::getSource).collect(Collectors.toSet());
+                    .map(Edge::getSource).filter(Vertex::isIfVertex).collect(Collectors.toSet());
 
             for (Vertex ifVertex : ifVertices) {
 
@@ -254,11 +251,13 @@ public abstract class CFG implements Graph {
 
                 // TODO: handle basic statements
                 if (statement instanceof BlockStatement) {
-                    // each statement within a block statement is a basic statement
+                    // the last statement is always a basic statement of an if vertex
                     BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
-                    if (Utility.isBranchingInstruction(basicStatement.getInstruction())) {
-                        // only consider if statements (there might other predecessors due to exceptional flow)
+                    if (InstructionUtils.isBranchingInstruction(basicStatement.getInstruction())) {
                         vertexMap.put(ifVertex.getMethod() + "->if->" + basicStatement.getInstructionIndex(), ifVertex);
+                    }
+                    else {
+                        Log.printWarning("Unexpected block statement: " + statement + " for method " + ifVertex.getMethod());
                     }
                 }
             }
@@ -274,7 +273,7 @@ public abstract class CFG implements Graph {
         }
 
         long end = System.currentTimeMillis();
-        Log.println("VertexMap construction took: " + (end-start) + " seconds");
+        Log.println("VertexMap construction took: " + (end - start) + " ms.");
         Log.println("Size of VertexMap: " + vertexMap.size());
 
         return vertexMap;
@@ -295,7 +294,7 @@ public abstract class CFG implements Graph {
      *
      * @param trace The trace describing the vertex.
      * @return Returns the vertex corresponding to the trace
-     *          or {@code null} if no vertex matches the trace.
+     * or {@code null} if no vertex matches the trace.
      */
     @Override
     public Vertex lookupVertex(String trace) {

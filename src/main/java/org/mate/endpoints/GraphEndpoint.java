@@ -1,11 +1,11 @@
 package org.mate.endpoints;
 
-import de.uni_passau.fim.auermich.graphs.Vertex;
-import de.uni_passau.fim.auermich.statement.BasicStatement;
-import de.uni_passau.fim.auermich.statement.BlockStatement;
-import de.uni_passau.fim.auermich.statement.ReturnStatement;
-import de.uni_passau.fim.auermich.statement.Statement;
-import de.uni_passau.fim.auermich.utility.Utility;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.ReturnStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.InstructionUtils;
 import org.apache.commons.io.FileUtils;
 import org.mate.graphs.Graph;
 import org.mate.graphs.GraphType;
@@ -32,15 +32,13 @@ import java.util.stream.Stream;
  * This endpoint offers an interface to operate with graphs in the background.
  * This can be a simple control flow graph to evaluate branch distance, but also
  * a system dependence graph. The usage of this endpoint requires the
- * android-graphs-all.jar as a dependency.
+ * android-graphs-lib.jar as a dependency.
  */
 public class GraphEndpoint implements Endpoint {
 
     private final AndroidEnvironment androidEnvironment;
     private Graph graph;
     private final Path appsDir;
-
-    private static final String BRANCHES_FILE = "branches.txt";
 
     // a target vertex (a random branch)
     private Vertex targetVertex;
@@ -80,12 +78,9 @@ public class GraphEndpoint implements Endpoint {
 
         if (raw) {
             Log.println("Drawing raw graph...");
-            File outputPath = new File(drawDir, "graph-raw.png");
-            graph.draw(outputPath);
+            graph.draw(drawDir);
         } else {
             Log.println("Drawing graph...");
-
-            File outputPath = new File(drawDir, "graph.png");
 
             // determine the target vertices (e.g. single branch or all branches)
             Set<Vertex> targetVertices = new HashSet<>();
@@ -100,7 +95,7 @@ public class GraphEndpoint implements Endpoint {
             Set<Vertex> visitedVertices = getVisitedVertices(appDir);
 
             // draw the graph where target and visited vertices are marked in different colours
-            graph.draw(targetVertices, visitedVertices, outputPath);
+            graph.draw(drawDir, visitedVertices, targetVertices);
         }
 
         return new Message("/graph/draw");
@@ -175,7 +170,10 @@ public class GraphEndpoint implements Endpoint {
                 return initIntraCFG(apkPath, methodName, useBasicBlocks, packageName, target);
             case INTER_CFG:
                 boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
-                return initInterCFG(apkPath, useBasicBlocks, excludeARTClasses, packageName, target);
+                boolean resolveOnlyAUTClasses
+                        = Boolean.parseBoolean(request.getParameter("resolve_only_aut_classes"));
+                return initInterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses,
+                        packageName, target);
             default:
                 throw new UnsupportedOperationException("Graph type not yet supported!");
         }
@@ -189,8 +187,8 @@ public class GraphEndpoint implements Endpoint {
     }
 
     private Message initInterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
-                                 String packageName, String target) {
-        graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, appsDir, packageName);
+                                 boolean resolveOnlyAUTClasses, String packageName, String target) {
+        graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
         targetVertex = selectTargetVertex(target);
         return new Message("/graph/init");
     }
@@ -221,6 +219,8 @@ public class GraphEndpoint implements Endpoint {
 
         // the minimal distance between a execution path and a chosen target vertex
         AtomicInteger minDistance = new AtomicInteger(Integer.MAX_VALUE);
+
+        // save the closest vertex -> required for approach level
         AtomicReference<Vertex> minDistanceVertex = new AtomicReference<>();
 
         // track global minimum distance + vertex (solely for debugging)
@@ -233,15 +233,19 @@ public class GraphEndpoint implements Endpoint {
 
             synchronized (this) {
                 if (distance < minDistance.get() && distance != -1) {
-                    // found shorter path
-                    if (distance == 0 || isIfVertex(visitedVertex)) {
+                    /*
+                    * We are only interested in a direct hit (covered branch) or the distance to an if statement.
+                    * This equals distances of either if statements or branches and excludes
+                    * distances to visited entry or exit vertices.
+                     */
+                    if ((distance == 0 && visitedVertex.isBranchVertex()) || visitedVertex.isIfVertex()) {
                         minDistanceVertex.set(visitedVertex);
                         minDistance.set(distance);
                     }
                 }
 
                 if (distance < minDistanceGlobal.get() && distance != -1) {
-                    // found global shorter path
+                    // found global shorter path, e.g. distance to a visited entry or exit vertex
                     minDistanceGlobal.set(distance);
                     minDistanceVertexGlobal.set(visitedVertex);
                 }
@@ -250,11 +254,14 @@ public class GraphEndpoint implements Endpoint {
 
         Log.println("Shortest path length: " + minDistance.get());
         Log.println("Shortest path length (global): " + minDistanceGlobal.get());
-        Log.println("Closest global vertex: " + minDistanceVertexGlobal.get().getMethod()
-                + "->[ " + minDistanceVertexGlobal.get().getStatement() + "]");
+
+        if (minDistanceVertexGlobal.get() != null) {
+            Log.println("Closest global vertex: " + minDistanceVertexGlobal.get().getMethod()
+                    + "->[ " + minDistanceVertexGlobal.get().getStatement() + "]");
+        }
 
         long end = System.currentTimeMillis();
-        Log.println("Computing approach level took: " + (end - start) + " seconds");
+        Log.println("Computing approach level took: " + (end - start) + " ms.");
 
         /*
          * We compute the fitness value according to the paper 'Reformulating Branch Coverage as
@@ -357,6 +364,8 @@ public class GraphEndpoint implements Endpoint {
 
             // find the shortest distance (approach level) to the given branch
             AtomicInteger minDistance = new AtomicInteger(Integer.MAX_VALUE);
+
+            // save the closest vertex -> required for approach level
             AtomicReference<Vertex> minDistanceVertex = new AtomicReference<>();
 
             // track global minimum distance + vertex (solely for debugging)
@@ -369,15 +378,19 @@ public class GraphEndpoint implements Endpoint {
 
                 synchronized (this) {
                     if (distance < minDistance.get() && distance != -1) {
-                        // found shorter path
-                        if (distance == 0 || isIfVertex(visitedVertex)) {
+                        /*
+                         * We are only interested in a direct hit (covered branch) or the distance to an if statement.
+                         * This equals distances of either if statements or branches and excludes
+                         * distances to visited entry or exit vertices.
+                         */
+                        if ((distance == 0 && visitedVertex.isBranchVertex()) || visitedVertex.isIfVertex()) {
                             minDistanceVertex.set(visitedVertex);
                             minDistance.set(distance);
                         }
                     }
 
                     if (distance < minDistanceGlobal.get() && distance != -1) {
-                        // found global shorter path
+                        // found global shorter path, e.g. distance to a visited entry or exit vertex
                         minDistanceGlobal.set(distance);
                         minDistanceVertexGlobal.set(visitedVertex);
                     }
@@ -386,8 +399,11 @@ public class GraphEndpoint implements Endpoint {
 
             Log.println("Shortest path length: " + minDistance.get());
             Log.println("Shortest path length (global): " + minDistanceGlobal.get());
-            Log.println("Closest global vertex: " + minDistanceVertexGlobal.get().getMethod()
-                    + "->[ " + minDistanceVertexGlobal.get().getStatement() + "]");
+
+            if (minDistanceVertexGlobal.get() != null) {
+                Log.println("Closest global vertex: " + minDistanceVertexGlobal.get().getMethod()
+                        + "->[ " + minDistanceVertexGlobal.get().getStatement() + "]");
+            }
 
             if (minDistance.get() == Integer.MAX_VALUE) {
                 // branch not reachable by execution path
@@ -453,33 +469,6 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Checks whether the vertex wraps an if statement.
-     *
-     * @param vertex The vertex to be inspected.
-     * @return Returns {@code true} if the vertex contains an if statement,
-     * otherwise {@code false} is returned.
-     */
-    private boolean isIfVertex(Vertex vertex) {
-
-        if (vertex.isEntryVertex() || vertex.isExitVertex()) {
-            return false;
-        }
-
-        Statement statement = vertex.getStatement();
-
-        if (statement instanceof ReturnStatement) {
-            return false;
-        } else if (statement instanceof BasicStatement) {
-            return Utility.isBranchingInstruction(((BasicStatement) statement).getInstruction());
-        } else if (statement instanceof BlockStatement) {
-            // the if instruction can only be the last instruction of a block
-            BasicStatement stmt = (BasicStatement) ((BlockStatement) statement).getLastStatement();
-            return Utility.isBranchingInstruction(stmt.getInstruction());
-        }
-        throw new UnsupportedOperationException("Statement type not recognized" + vertex.getStatement());
-    }
-
-    /**
      * Gets the list of traces files specified by the given chromosomes.
      *
      * @param tracesDir   The base directory containing the traces files.
@@ -537,7 +526,7 @@ public class GraphEndpoint implements Endpoint {
         }
 
         long end = System.currentTimeMillis();
-        Log.println("Reading traces from file(s) took: " + (end - start) + " seconds");
+        Log.println("Reading traces from file(s) took: " + (end - start) + " ms.");
 
         Log.println("Number of collected traces: " + traces.size());
         return traces;
@@ -599,7 +588,7 @@ public class GraphEndpoint implements Endpoint {
         });
 
         long end = System.currentTimeMillis();
-        Log.println("Mapping traces to vertices took: " + (end - start) + " seconds");
+        Log.println("Mapping traces to vertices took: " + (end - start) + " ms.");
 
         Log.println("Number of visited vertices: " + visitedVertices.size());
         return visitedVertices;

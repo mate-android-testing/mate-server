@@ -1,6 +1,6 @@
 package org.mate.graphs;
 
-import de.uni_passau.fim.auermich.graphs.Vertex;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 
 import java.io.File;
 import java.util.List;
@@ -33,5 +33,5 @@ public interface Graph {
     void draw(File outputPath);
 
     // draws the graph where target and visited vertices are marked
-    void draw(Set<Vertex> targets, Set<Vertex> visitedVertices, File outputPath);
+    void draw(File outputPath, Set<Vertex> visitedVertices, Set<Vertex> targets);
 }

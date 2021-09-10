@@ -368,7 +368,7 @@ public final class BasicBlockCoverageManager {
     private static Map<String, Integer> coveredBranchesPerClass(final List<File> tracesFiles) throws IOException {
 
         // stores a mapping of class -> (method -> basic block id) where a basic block can only contain a single branch!
-        final Map<String, Map<String, Set<Integer>>> covered_branches = new HashMap<>();
+        final Map<String, Map<String, Set<Integer>>> coveredBranches = new HashMap<>();
         for (var traceFile : tracesFiles) {
             try (var branchesReader = new BufferedReader(new InputStreamReader(new FileInputStream(traceFile)))) {
 
@@ -386,21 +386,21 @@ public final class BasicBlockCoverageManager {
 
                         if (isBranch) {
                             // ignore duplicate traces
-                            covered_branches.putIfAbsent(clazz, new HashMap<>());
-                            covered_branches.get(clazz).putIfAbsent(method, new HashSet<>());
-                            covered_branches.get(clazz).get(method).add(blockId);
+                            coveredBranches.putIfAbsent(clazz, new HashMap<>());
+                            coveredBranches.get(clazz).putIfAbsent(method, new HashSet<>());
+                            coveredBranches.get(clazz).get(method).add(blockId);
                         }
                     } else {
                         Log.printWarning("Found incomplete line \"" + line + "\" in traces file \""
-                                + traceFile.toString() + "\"");
+                                + traceFile + "\"");
                     }
                 }
             }
         }
 
         final Map<String, Integer> coveredBranchesPerClass = new HashMap<>();
-        covered_branches.keySet().forEach(clazz -> {
-            final int count = covered_branches.get(clazz).values().stream().mapToInt(Set::size).sum();
+        coveredBranches.keySet().forEach(clazz -> {
+            final int count = coveredBranches.get(clazz).values().stream().mapToInt(Set::size).sum();
             coveredBranchesPerClass.put(clazz, count);
         });
         return coveredBranchesPerClass;
