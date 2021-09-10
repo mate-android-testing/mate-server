@@ -165,26 +165,8 @@ public final class BranchCoverageManager {
         // the branches.txt should be located within the app directory
         File branchesFile = new File(appDir, "branches.txt");
 
-        List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
-
-        if (chromosomes != null) {
-
-            // only consider the traces files described by the chromosome ids
-            tracesFiles = new ArrayList<>();
-
-            for (String chromosome : chromosomes.split("\\+")) {
-                try {
-                    tracesFiles.addAll(
-                            Files.walk(tracesDir.toPath().resolve(chromosome))
-                                    .filter(Files::isRegularFile)
-                                    .map(Path::toFile)
-                                    .collect(Collectors.toList()));
-                } catch (IOException e) {
-                    Log.printError("Couldn't retrieve traces files!");
-                    throw new IllegalArgumentException(e);
-                }
-            }
-        }
+        // only consider the traces files described by the chromosome ids
+        List<File> tracesFiles = getTraceFiles(tracesDir, chromosomes);
 
         // evaluate branch coverage over all traces files
         double branchCoverage = 0d;
@@ -327,6 +309,41 @@ public final class BranchCoverageManager {
         Log.println("We have a total branch coverage of " + branchCoverage + "%.");
 
         return branchCoverage;
+    }
+
+    /**
+     * Gets the list of traces files specified by the given chromosomes.
+     *
+     * @param tracesDir   The base directory containing the traces files.
+     * @param chromosomes Encodes a mapping to one or several traces files.
+     * @return Returns the list of traces files described by the given chromosomes.
+     */
+    private static List<File> getTraceFiles(File tracesDir, String chromosomes) {
+
+        // collect the relevant traces files
+        List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
+
+        if (chromosomes != null) {
+
+            // only consider the traces files described by the chromosome ids
+            tracesFiles = new ArrayList<>();
+
+            for (String chromosome : chromosomes.split("\\+")) {
+                try {
+                    tracesFiles.addAll(
+                            Files.walk(tracesDir.toPath().resolve(chromosome))
+                                    .filter(Files::isRegularFile)
+                                    .map(Path::toFile)
+                                    .collect(Collectors.toList()));
+                } catch (IOException e) {
+                    Log.printError("Couldn't retrieve traces files!");
+                    throw new IllegalArgumentException(e);
+                }
+            }
+        }
+
+        Log.println("Number of considered traces files: " + tracesFiles.size());
+        return tracesFiles;
     }
 
 }
