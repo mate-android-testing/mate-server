@@ -1,5 +1,6 @@
 package org.mate.coverage;
 
+import com.google.common.collect.Lists;
 import org.apache.commons.io.FileUtils;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
@@ -24,17 +25,14 @@ public final class BasicBlockCoverageManager {
      * from the source chromosome (test suite) to the target chromosome (test suite).
      *
      * @param appsDir          The apps directory containing all app directories.
-     * @param deviceID         The emulator identifier.
+     * @param packageName      The package name of the AUT.
      * @param sourceChromosome The source chromosome (test suite).
      * @param targetChromosome The target chromosome (test suite).
      * @param entities         A list of test cases.
      * @return Returns a message describing the success/failure of the operation.
      */
-    public static Message copyCoverageData(Path appsDir, String deviceID, String sourceChromosome,
+    public static Message copyCoverageData(Path appsDir, String packageName, String sourceChromosome,
                                            String targetChromosome, String[] entities) {
-
-        Device device = Device.devices.get(deviceID);
-        String packageName = device.getPackageName();
 
         File appDir = new File(appsDir.toFile(), packageName);
         File tracesDir = new File(appDir, "traces");
@@ -74,16 +72,16 @@ public final class BasicBlockCoverageManager {
      *
      * @param androidEnvironment Defines the location of the adb/aapt binary.
      * @param deviceID           The id of the emulator, e.g. emulator-5554.
+     * @param packageName        The package name of the AUT.
      * @param chromosome         Identifies either a test case or a test suite.
      * @param entity             Identifies a test case if chromosome refers to
      *                           a test suite, otherwise {@code null}.
      * @return Returns the branch coverage for the given test case.
      */
-    public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID,
+    public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID, String packageName,
                                             String chromosome, String entity) {
         // grant runtime permissions
         Device device = Device.devices.get(deviceID);
-        String packageName = device.getPackageName();
         boolean granted = device.grantPermissions(packageName);
 
         if (!granted) {
@@ -157,26 +155,8 @@ public final class BasicBlockCoverageManager {
         // the blocks.txt should be located within the app directory
         File blocksFile = new File(appDir, "blocks.txt");
 
-        List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
-
-        if (chromosomes != null) {
-
-            // only consider the traces files described by the chromosome ids
-            tracesFiles = new ArrayList<>();
-
-            for (String chromosome : chromosomes.split("\\+")) {
-                try {
-                    tracesFiles.addAll(
-                            Files.walk(tracesDir.toPath().resolve(chromosome))
-                                    .filter(Files::isRegularFile)
-                                    .map(Path::toFile)
-                                    .collect(Collectors.toList()));
-                } catch (IOException e) {
-                    Log.printError("Couldn't retrieve traces files!");
-                    throw new IllegalArgumentException(e);
-                }
-            }
-        }
+        // only consider the traces files described by the chromosome ids
+        List<File> tracesFiles = getTraceFiles(tracesDir, chromosomes);
 
         // evaluate branch coverage over all traces files
         double coverage = 0d;
@@ -424,5 +404,106 @@ public final class BasicBlockCoverageManager {
             coveredBranchesPerClass.put(clazz, count);
         });
         return coveredBranchesPerClass;
+    }
+
+    /**
+     * Computes the line coverage for a single test case within a test suite.
+     *
+     * @param packageName The package name of the AUT.
+     * @param testSuiteId The id of the test suite.
+     * @param testCaseId  The id of the test case.
+     * @return Returns the line coverage for the given test case.
+     */
+    public static Message getLineCoverage(Path appsDir, String packageName, String testSuiteId, String testCaseId) {
+        return getCoverage(appsDir, packageName, testSuiteId, testCaseId, true);
+    }
+
+    /**
+     * Computes the branch coverage for a single test case within a test suite.
+     *
+     * @param packageName The package name of the AUT.
+     * @param testSuiteId The id of the test suite.
+     * @param testCaseId  The id of the test case.
+     * @return Returns the branch coverage for the given test case.
+     */
+    public static Message getBranchCoverage(Path appsDir, String packageName, String testSuiteId, String testCaseId) {
+        return getCoverage(appsDir, packageName, testSuiteId, testCaseId, false);
+    }
+
+    /**
+     * Computes the branch or line coverage of a single test case within a test suite.
+     *
+     * @param appsDir      The apps directory.
+     * @param packageName  The package name of the AUT.
+     * @param testSuiteId  The id of the test suite.
+     * @param testCaseId   The id of the test case.
+     * @param lineCoverage Whether line or branch coverage should be computed.
+     * @return Returns the branch or line coverage for the given test case.
+     */
+    private static Message getCoverage(Path appsDir, String packageName, String testSuiteId,
+                                       String testCaseId, boolean lineCoverage) {
+
+        // get list of traces file
+        File appDir = new File(appsDir.toFile(), packageName);
+        File tracesDir = new File(appDir, "traces");
+
+        // the blocks.txt should be located within the app directory
+        File blocksFile = new File(appDir, "blocks.txt");
+
+        // the trace file corresponding to the test case within the given test suite
+        File traceFile = tracesDir.toPath().resolve(testSuiteId).resolve(testCaseId).toFile();
+
+        double coverage = 0d;
+
+        try {
+            if (lineCoverage) {
+                coverage = evaluateLineCoverage(blocksFile, Lists.newArrayList(traceFile));
+            } else {
+                coverage = evaluateBranchCoverage(blocksFile, Lists.newArrayList(traceFile));
+            }
+        } catch (IOException e) {
+            Log.printError(e.getMessage());
+            final String kind = lineCoverage ? "Line" : "Block";
+            throw new IllegalStateException(kind + " coverage couldn't be evaluated!");
+        }
+
+        return new Message.MessageBuilder("/coverage/get")
+                .withParameter("coverage", String.valueOf(coverage))
+                .build();
+    }
+
+    /**
+     * Gets the list of traces files specified by the given chromosomes.
+     *
+     * @param tracesDir   The base directory containing the traces files.
+     * @param chromosomes Encodes a mapping to one or several traces files.
+     * @return Returns the list of traces files described by the given chromosomes.
+     */
+    private static List<File> getTraceFiles(File tracesDir, String chromosomes) {
+
+        // collect the relevant traces files
+        List<File> tracesFiles = new ArrayList<>(FileUtils.listFiles(tracesDir, null, true));
+
+        if (chromosomes != null) {
+
+            // only consider the traces files described by the chromosome ids
+            tracesFiles = new ArrayList<>();
+
+            for (String chromosome : chromosomes.split("\\+")) {
+                try {
+                    tracesFiles.addAll(
+                            Files.walk(tracesDir.toPath().resolve(chromosome))
+                                    .filter(Files::isRegularFile)
+                                    .map(Path::toFile)
+                                    .collect(Collectors.toList()));
+                } catch (IOException e) {
+                    Log.printError("Couldn't retrieve traces files!");
+                    throw new IllegalArgumentException(e);
+                }
+            }
+        }
+
+        Log.println("Number of considered traces files: " + tracesFiles.size());
+        return tracesFiles;
     }
 }
