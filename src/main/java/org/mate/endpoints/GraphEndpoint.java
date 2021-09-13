@@ -206,6 +206,8 @@ public class GraphEndpoint implements Endpoint {
             throw new IllegalStateException("Graph hasn't been initialised!");
         }
 
+        Log.println("Computing the branch distance for the chromosome: " + chromosome);
+
         // get list of traces file
         Path appDir = appsDir.resolve(packageName);
         File tracesDir = appDir.resolve("traces").toFile();
@@ -347,6 +349,8 @@ public class GraphEndpoint implements Endpoint {
             throw new IllegalStateException("Graph hasn't been initialised!");
         }
 
+        Log.println("Computing the branch distance vector for the chromosome: " + chromosome);
+
         // get list of traces file
         Path appDir = appsDir.resolve(packageName);
         File tracesDir = appDir.resolve("traces").toFile();
@@ -422,10 +426,9 @@ public class GraphEndpoint implements Endpoint {
                 int approachLevel = minDistance.get();
 
                 /*
-                 * The vertex with the closest distance represents an if stmt, at which
-                 * the execution path took the wrong direction. We need to find the shortest
-                 * branch distance value for the given if stmt. Note that the if stmt could have been
-                 * visited multiple times.
+                 * The vertex with the closest distance represents an if stmt, at which the execution path took the wrong
+                 * direction. We need to find the shortest branch distance value for the given if stmt. Note that the
+                 * if stmt could have been visited multiple times.
                  */
                 Vertex ifVertex = minDistanceVertex.get();
                 Statement stmt = ifVertex.getStatement();
