@@ -1,10 +1,5 @@
 package org.mate.io;
 
-import org.mate.pdf.Report;
-import org.mate.util.AndroidEnvironment;
-import org.mate.util.Log;
-import org.mate.util.Result;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -16,6 +11,10 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.mate.pdf.Report;
+import org.mate.util.AndroidEnvironment;
+import org.mate.util.Log;
+import org.mate.util.Result;
 
 public class Device {
 
@@ -96,43 +95,71 @@ public class Device {
      *          otherwise {@code false} is returned.
      */
     public boolean fetchTestCase(String testCaseDir, String testCase) {
+        return fetchTestFile(testCaseDir, testCase, "test-cases");
+    }
 
+    /**
+     * Fetches a serialized transition system from the internal storage. Afterwards, the transition
+     * system file is erased from the emulator.
+     *
+     * @param transitionSystemDir The transition system directory on the emulator.
+     * @param fileName            The name of the transition system file.
+     * @return Returns {@code true} if the transition system file could be fetched, otherwise {@code
+     * false} is returned.
+     */
+    public boolean fetchTransitionSystem(String transitionSystemDir, String fileName) {
+        return fetchTestFile(transitionSystemDir, fileName, "transition-system");
+    }
+
+    /**
+     * Fetches a file from the internal storage. Afterwards, the file is erased from the emulator.
+     *
+     * @param baseDir  The directory on the emulator.
+     * @param fileName The name of the file.
+     * @return Returns {@code true} if the file could be fetched, otherwise {@code false} is returned.
+     */
+    private boolean fetchTestFile(final String baseDir, final String fileName,
+        final String resultDirName) {
         // TODO: check whether on Windows the leading slash needs to be removed (it seems as it is not necessary)
 
-        // retrieve test cases inside test case directory
-        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", testCaseDir).getOk();
+        // retrieve files inside base directory
+        final List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+            "-s", deviceID, "shell", "ls", baseDir).getOk();
 
-        // check whether the test case file exists
-        if (!files.stream().anyMatch(str -> str.trim().equals(testCase))) {
+        // check whether the file exists
+        if (files.stream().noneMatch(str -> str.trim().equals(fileName))) {
             return false;
         }
 
-        File appDir = new File(appsDir.toFile(), packageName);
-        File testCasesDir = new File(appDir, "test-cases");
-        File testCaseFile = new File(testCasesDir, testCase);
+        final File appDir = new File(appsDir.toFile(), packageName);
+        final File resultDir = new File(appDir, resultDirName);
+        final File resultFile = new File(resultDir, fileName);
 
-        // create local test-cases directory if not present
-        if (!testCasesDir.exists()) {
-            Log.println("Creating test-cases directory: " + testCasesDir.mkdirs());
+        // create local directory if not present
+        if (!resultDir.exists()) {
+            Log.println(
+                String.format("Creating %s directory: %s", resultDirName, resultDir.mkdirs()));
         }
 
-        // fetch the test case file
+        // fetch the file from the emulator
         ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull",
-                testCaseDir + "/" + testCase, String.valueOf(testCaseFile));
+            baseDir + "/" + fileName, String.valueOf(resultFile));
 
-        if (!testCaseFile.exists()) {
-            Log.println("Pulling test case file " + testCaseFile + " failed!");
+        if (!resultFile.exists()) {
+            Log.println(String.format("Pulling %s file %s failed!", resultDirName.replace("-", " "),
+                resultFile));
         }
 
-        // remove test case file from emulator
+        // remove file from emulator
         var removeOp = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
-                "rm", "-f", testCaseDir + "/" + testCase);
+            androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+            "rm", "-f", baseDir + "/" + fileName);
 
-        Log.println("Removal of test case file succeeded: " + removeOp.isOk());
-        return testCaseFile.exists();
+        Log.println(
+            String.format("Removal of %s file succeeded: %s", resultDirName.replace("-", " "),
+                removeOp.isOk()));
+        return resultFile.exists();
     }
-
     /**
      * Grants read and write permission for external storage to the given app.
      *

@@ -1,11 +1,10 @@
 package org.mate.endpoints;
 
+import java.nio.file.Path;
 import org.mate.io.Device;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
-
-import java.nio.file.Path;
 
 /**
  * Handles requests that can't be directly assigned a dedicated end point.
@@ -28,8 +27,11 @@ public class UtilityEndpoint implements Endpoint {
         if (request.getSubject().startsWith("/utility/fetch_test_case")) {
             return fetchTestCase(request);
         }
+        if (request.getSubject().startsWith("/utility/fetch_transition_system")) {
+            return fetchTransitionSystem(request);
+        }
         throw new IllegalArgumentException("Message request with subject: "
-                + request.getSubject() + " can't be handled by UtilityEndpoint!");
+            + request.getSubject() + " can't be handled by UtilityEndpoint!");
     }
 
     /**
@@ -50,7 +52,30 @@ public class UtilityEndpoint implements Endpoint {
         boolean response = device.fetchTestCase(testCaseDir, testCase);
 
         return new Message.MessageBuilder("/utility/fetch_test_case")
-                .withParameter("response", String.valueOf(response))
-                .build();
+            .withParameter("response", String.valueOf(response))
+            .build();
     }
+
+    /**
+     * Fetches a serialized transition system from the internal storage and removes the transition
+     * system afterwards to keep memory clean.
+     *
+     * @param request A message containing the device id, the test case directory and the name of the
+     *                test case file.
+     * @return Returns a message wrapping the outcome of the operation, i.e. success or failure.
+     */
+    private Message fetchTransitionSystem(Message request) {
+
+        String deviceID = request.getParameter("deviceId");
+        String transitionSystemDir = request.getParameter("transitionSystemDir");
+        String transitionSystemFile = request.getParameter("transitionSystemFile");
+
+        Device device = Device.devices.get(deviceID);
+        boolean response = device.fetchTransitionSystem(transitionSystemDir, transitionSystemFile);
+
+        return new Message.MessageBuilder("/utility/fetch_transition_system")
+            .withParameter("response", String.valueOf(response))
+            .build();
+    }
+
 }
