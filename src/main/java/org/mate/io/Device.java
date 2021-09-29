@@ -108,7 +108,7 @@ public class Device {
      * false} is returned.
      */
     public boolean fetchTransitionSystem(String transitionSystemDir, String fileName) {
-        return fetchTestFile(transitionSystemDir, fileName, "transition-system");
+        return fetchTestFile(transitionSystemDir, fileName, "transition-systems");
     }
 
     /**
@@ -121,6 +121,8 @@ public class Device {
     private boolean fetchTestFile(final String baseDir, final String fileName,
         final String resultDirName) {
         // TODO: check whether on Windows the leading slash needs to be removed (it seems as it is not necessary)
+
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "root");
 
         // retrieve files inside base directory
         final List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
