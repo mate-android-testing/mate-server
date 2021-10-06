@@ -6,6 +6,7 @@ import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.network.message.Messages;
 import org.mate.util.AndroidEnvironment;
+import org.mate.util.Log;
 import org.mate.util.Result;
 
 import java.nio.file.Path;
@@ -31,10 +32,33 @@ public class AndroidEndpoint implements Endpoint {
             return getActivities(request);
         } else if (request.getSubject().startsWith("/android/get_current_activity")) {
             return getCurrentActivity(request);
+        } else if (request.getSubject().startsWith("/android/grant_runtime_permissions")) {
+            return grantRuntimePermissions(request);
         } else {
             throw new IllegalArgumentException("Message request with subject: "
                     + request.getSubject() + " can't be handled by AndroidEndpoint!");
         }
+    }
+
+    /**
+     * Grants certain runtime permissions to the AUT.
+     *
+     * @param request A message containing the device id and
+     *                the name of the AUT.
+     * @return Returns a message containing the response of grant operation.
+     */
+    private Message grantRuntimePermissions(Message request) {
+
+        String deviceID = request.getParameter("deviceId");
+        String packageName = request.getParameter("packageName");
+
+        Device device = Device.devices.get(deviceID);
+        boolean response = device.grantPermissions(packageName);
+        Log.println("Granted runtime permissions: " + response);
+
+        return new Message.MessageBuilder("/android/grant_runtime_permissions")
+                .withParameter("response", String.valueOf(response))
+                .build();
     }
 
     private Message getActivities(Message request) {
