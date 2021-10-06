@@ -61,6 +61,12 @@ public class AndroidEndpoint implements Endpoint {
                 .build();
     }
 
+    /**
+     * Returns the list of activities of the AUT.
+     *
+     * @param request The request message.
+     * @return Returns the list of activities of the AUT.
+     */
     private Message getActivities(Message request) {
 
         var deviceId = request.getParameter("deviceId");
@@ -72,6 +78,12 @@ public class AndroidEndpoint implements Endpoint {
                 .build();
     }
 
+    /**
+     * Returns the current activity name.
+     *
+     * @param request The request message.
+     * @return Returns the name of the currently visible activity.
+     */
     private Message getCurrentActivity(Message request) {
 
         var deviceId = request.getParameter("deviceId");
@@ -82,6 +94,12 @@ public class AndroidEndpoint implements Endpoint {
                 .build();
     }
 
+    /**
+     * Clears the app cache of the AUT.
+     *
+     * @param request The request message.
+     * @return Returns {@code null} if the operation succeeded, otherwise an error message is returned.
+     */
     private String clearApp(Message request) {
         var deviceId = request.getParameter("deviceId");
         var packageName = Device.getDevice(deviceId).getPackageName();
