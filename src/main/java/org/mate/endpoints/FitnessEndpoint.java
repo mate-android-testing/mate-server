@@ -29,6 +29,7 @@ public class FitnessEndpoint implements Endpoint {
 
     private static final String BLOCKS_FILE = "blocks.txt";
     private static final String BRANCHES_FILE = "branches.txt";
+    private static final String METHODS_FILE = "methods.txt";
 
     public FitnessEndpoint(AndroidEnvironment androidEnvironment, Path resultsPath, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
@@ -51,9 +52,40 @@ public class FitnessEndpoint implements Endpoint {
             return getBasicBlockFitnessVector(request);
         } else if (request.getSubject().startsWith("/fitness/get_branch_fitness_vector")) {
             return getBranchFitnessVector(request);
+        } else if (request.getSubject().startsWith("fitness/get_novelty")) {
+            return getNovelty(request);
         }
         throw new IllegalArgumentException("Message request with subject: "
                 + request.getSubject() + " can't be handled by FitnessEndpoint!");
+    }
+
+    /**
+     * Returns the novelty for a given chromosome.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the novelty of a given chromosome.
+     */
+    private Message getNovelty(Message request) {
+
+        String packageName = request.getParameter("packageName");
+        String chromosome = request.getParameter("chromosome");
+        List<String> population = Arrays.asList(request.getParameter("population").split("\\+"));
+        List<String> archive = Arrays.asList(request.getParameter("archive").split("\\+"));
+        int nearestNeighbours = Integer.parseInt(request.getParameter("nearestNeighbours"));
+
+        Log.println("Evaluating novelty for chromosome: " + chromosome);
+        Log.println("Number of chromosomes in current population: " + population.size());
+        Log.println("Number of chromosomes in current archive: " + archive.size());
+
+        Path appDir = appsDir.resolve(packageName);
+        File methodsFile = appDir.resolve(METHODS_FILE).toFile();
+
+        // TODO: add novelty computation
+        double novelty = 0.0d;
+
+        return new Message.MessageBuilder("/fitness/get_novelty")
+                .withParameter("novelty", String.valueOf(novelty))
+                .build();
     }
 
     /**
