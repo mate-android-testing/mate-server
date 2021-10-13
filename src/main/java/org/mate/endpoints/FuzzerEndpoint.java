@@ -24,8 +24,6 @@ public class FuzzerEndpoint implements Endpoint {
             return executeSystemEvent(request);
         } else if (request.getSubject().startsWith("/fuzzer/push_dummy_files")) {
             return pushDummyFiles(request);
-        } else if (request.getSubject().startsWith("/fuzzer/grant_runtime_permissions")) {
-            return grantRuntimePermissions(request);
         } else {
             throw new IllegalArgumentException("Message request with subject: "
                     + request.getSubject() + " can't be handled by FuzzerEndPoint!");
@@ -54,28 +52,6 @@ public class FuzzerEndpoint implements Endpoint {
         Log.println("System event broadcast: " + response);
 
         return new Message.MessageBuilder("/fuzzer/execute_system_event")
-                .withParameter("response", String.valueOf(response))
-                .build();
-    }
-
-    /**
-     * Grants certain runtime permissions to the AUT.
-     *
-     * @param request A message containing the device id and
-     *                the name of the AUT.
-     * @return Returns a message containing the response of grant operation.
-     */
-    private Message grantRuntimePermissions(Message request) {
-
-        String deviceID = request.getParameter("deviceId");
-        // TODO: use packageName of device
-        String packageName = request.getParameter("packageName");
-
-        Device device = Device.devices.get(deviceID);
-        boolean response = device.grantPermissions(packageName);
-        Log.println("Granted runtime permissions: " + response);
-
-        return new Message.MessageBuilder("/fuzzer/grant_runtime_permissions")
                 .withParameter("response", String.valueOf(response))
                 .build();
     }

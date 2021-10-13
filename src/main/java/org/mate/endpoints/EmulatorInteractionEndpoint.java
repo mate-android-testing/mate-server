@@ -3,8 +3,8 @@ package org.mate.endpoints;
 import org.mate.accessibility.ImageHandler;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
-import org.mate.network.message.Message;
 import org.mate.network.Endpoint;
+import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
 
@@ -23,6 +23,11 @@ public class EmulatorInteractionEndpoint implements Endpoint {
     @Override
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/emulator/interaction")) {
+
+            /*
+            * NOTE: The rotation operations are now directly invoked by MATE itself. We just keep the code in case of
+            * compatibility issues with newer emulator images.
+             */
             if ("rotation".equals(request.getParameter("type"))) {
 
                 String deviceID = request.getParameter("deviceId");
