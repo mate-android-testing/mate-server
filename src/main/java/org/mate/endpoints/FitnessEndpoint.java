@@ -54,7 +54,7 @@ public class FitnessEndpoint implements Endpoint {
             return getBasicBlockFitnessVector(request);
         } else if (request.getSubject().startsWith("/fitness/get_branch_fitness_vector")) {
             return getBranchFitnessVector(request);
-        } else if (request.getSubject().startsWith("fitness/get_novelty")) {
+        } else if (request.getSubject().startsWith("/fitness/get_novelty")) {
             return getNovelty(request);
         }
         throw new IllegalArgumentException("Message request with subject: "
