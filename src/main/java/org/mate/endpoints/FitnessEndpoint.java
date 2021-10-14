@@ -6,6 +6,8 @@ import org.mate.io.ProcessRunner;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.network.message.Messages;
+import org.mate.novelty.NoveltyMetric;
+import org.mate.novelty.NoveltyVector;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.FitnessFunction;
 import org.mate.util.Log;
@@ -80,8 +82,39 @@ public class FitnessEndpoint implements Endpoint {
         Path appDir = appsDir.resolve(packageName);
         File methodsFile = appDir.resolve(METHODS_FILE).toFile();
 
-        // TODO: add novelty computation
-        double novelty = 0.0d;
+        // a linked hashset maintains insertion order and contains is in O(1)
+        Set<String> methods = new LinkedHashSet<>();
+
+        try (Stream<String> stream = Files.lines(methodsFile.toPath(), StandardCharsets.UTF_8)) {
+            // hopefully this preserves the order
+            methods.addAll(stream.filter(line -> line.length() > 0).collect(Collectors.toList()));
+        } catch (IOException e) {
+            Log.printError("Reading methods.txt failed!");
+            throw new IllegalStateException(e);
+        }
+
+        /*
+        * We need to construct for each chromosome a vector that describes which methods it covers.
+         */
+        Path tracesDir = appDir.resolve("traces");
+
+        List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), chromosome);
+        Set<String> traces = readTraces(tracesFiles);
+        NoveltyVector solution = new NoveltyVector(methods, traces);
+
+        List<NoveltyVector> neighbours = new ArrayList<>();
+
+        // merge and remove duplicates
+        population.addAll(archive);
+        population = new ArrayList<>(new LinkedHashSet<>(population));
+
+        for (String member : population) {
+            tracesFiles = getTraceFiles(tracesDir.toFile(), member);
+            traces = readTraces(tracesFiles);
+            neighbours.add(new NoveltyVector(methods, traces));
+        }
+
+        double novelty = NoveltyMetric.evaluate(solution, neighbours, nearestNeighbours);
 
         return new Message.MessageBuilder("/fitness/get_novelty")
                 .withParameter("novelty", String.valueOf(novelty))

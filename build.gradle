@@ -42,6 +42,9 @@ dependencies {
     compile fileTree(dir: 'lib', include: '*.jar')
     compile group: 'org.jacoco', name: 'org.jacoco.report', version: '0.8.5'
     testImplementation 'junit:junit:4.12'
+
+    // https://mvnrepository.com/artifact/org.apache.commons/commons-text
+    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.9'
 }
 
 test {
