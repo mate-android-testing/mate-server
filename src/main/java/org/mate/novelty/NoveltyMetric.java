@@ -7,7 +7,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Provides a novelty metric based on cosine similarity.
+ * Provides a novelty metric based on cosine distance (= 1 - cosine similarity).
  */
 public class NoveltyMetric {
 
@@ -25,7 +25,7 @@ public class NoveltyMetric {
         List<Double> distances = new ArrayList<>();
 
         for (NoveltyVector member : population) {
-            distances.add(computeDistance(solution, member));
+            distances.add(computeCosineDistance(solution, member));
         }
 
         // sort the distances
@@ -42,13 +42,14 @@ public class NoveltyMetric {
     }
 
     /**
-     * Computes the distance (cosine similarity) between the vector v1 and v2.
+     * Computes the cosine distance between the vector v1 and v2. The result is bounded in [0,1] where 1 is the best
+     * value in terms of novelty.
      *
      * @param v1 The first vector.
      * @param v2 The second vector.
-     * @return Returns the distance between vector v1 and v2.
+     * @return Returns the cosine distance between vector v1 and v2. The result is bounded in [0,1].
      */
-    private static double computeDistance(NoveltyVector v1, NoveltyVector v2) {
-        return new CosineSimilarity().cosineSimilarity(v1.getVector(), v2.getVector());
+    private static double computeCosineDistance(NoveltyVector v1, NoveltyVector v2) {
+        return 1 - new CosineSimilarity().cosineSimilarity(v1.getVector(), v2.getVector());
     }
 }
