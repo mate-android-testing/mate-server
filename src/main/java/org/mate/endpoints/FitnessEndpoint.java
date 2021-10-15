@@ -1,5 +1,6 @@
 package org.mate.endpoints;
 
+import com.google.common.collect.Lists;
 import org.apache.commons.io.FileUtils;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
@@ -71,8 +72,8 @@ public class FitnessEndpoint implements Endpoint {
 
         String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
-        List<String> population = Arrays.asList(request.getParameter("population").split("\\+"));
-        List<String> archive = Arrays.asList(request.getParameter("archive").split("\\+"));
+        List<String> population = Lists.newArrayList(request.getParameter("population").split("\\+"));
+        List<String> archive = Lists.newArrayList(request.getParameter("archive").split("\\+"));
         int nearestNeighbours = Integer.parseInt(request.getParameter("nearestNeighbours"));
 
         Log.println("Evaluating novelty for chromosome: " + chromosome);
