@@ -49,4 +49,16 @@ public class NoveltyVector {
     public Map<CharSequence, Integer> getVector() {
         return Collections.unmodifiableMap(vector);
     }
+
+    /**
+     * Returns a simple string representation of the novelty vector.
+     *
+     * @return Returns the individual vector values as array.
+     */
+    @Override
+    public String toString() {
+        return "NoveltyVector{" +
+                "vector=" + vector.values() +
+                '}';
+    }
 }
