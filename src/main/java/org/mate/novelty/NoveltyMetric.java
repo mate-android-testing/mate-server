@@ -4,6 +4,7 @@ import org.apache.commons.text.similarity.CosineSimilarity;
 import org.mate.util.Log;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -35,6 +36,7 @@ public class NoveltyMetric {
             }
 
             // take the average distance to the k nearest neighbours if k neighbours are present
+            Collections.sort(distances);
             int neighbours = Math.min(nearestNeighbours, distances.size());
 
             double novelty = 0.0;
