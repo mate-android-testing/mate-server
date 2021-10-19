@@ -7,8 +7,8 @@ import org.mate.io.ProcessRunner;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.network.message.Messages;
+import org.mate.novelty.CoverageVector;
 import org.mate.novelty.NoveltyMetric;
-import org.mate.novelty.NoveltyVector;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.FitnessFunction;
 import org.mate.util.Log;
@@ -55,71 +55,87 @@ public class FitnessEndpoint implements Endpoint {
             return getBasicBlockFitnessVector(request);
         } else if (request.getSubject().startsWith("/fitness/get_branch_fitness_vector")) {
             return getBranchFitnessVector(request);
-        } else if (request.getSubject().startsWith("/fitness/get_novelty")) {
-            return getNovelty(request);
+        } else if (request.getSubject().startsWith("/fitness/get_novelty_vector")) {
+            return getNoveltyVector(request);
         }
         throw new IllegalArgumentException("Message request with subject: "
                 + request.getSubject() + " can't be handled by FitnessEndpoint!");
     }
 
     /**
-     * Returns the novelty for a given chromosome.
+     * Returns the novelty vector, i.e. a vector containing the novelty score for the chromosomes in the current
+     * population and the current archive.
      *
      * @param request The request message.
-     * @return Returns a message containing the novelty of a given chromosome.
+     * @return Returns a message containing the novelty vector.
      */
-    private Message getNovelty(Message request) {
+    private Message getNoveltyVector(Message request) {
 
         String packageName = request.getParameter("packageName");
-        String chromosome = request.getParameter("chromosome");
         List<String> population = Lists.newArrayList(request.getParameter("population").split("\\+"));
         List<String> archive = Lists.newArrayList(request.getParameter("archive").split("\\+"));
         int nearestNeighbours = Integer.parseInt(request.getParameter("nearestNeighbours"));
+        String objectives = request.getParameter("objectives");
 
-        Log.println("Evaluating novelty for chromosome: " + chromosome);
         Log.println("Number of chromosomes in current population: " + population.size());
         Log.println("Number of chromosomes in current archive: " + archive.size());
 
         Path appDir = appsDir.resolve(packageName);
-        File methodsFile = appDir.resolve(METHODS_FILE).toFile();
+        Path tracesDir = appDir.resolve("traces");
+        File targetsFile = appDir.resolve(mapObjectivesToFile(objectives)).toFile();
 
         // a linked hashset maintains insertion order and contains is in O(1)
-        Set<String> methods = new LinkedHashSet<>();
+        Set<String> targets = new LinkedHashSet<>();
 
-        try (Stream<String> stream = Files.lines(methodsFile.toPath(), StandardCharsets.UTF_8)) {
-            // hopefully this preserves the order
-            methods.addAll(stream.filter(line -> line.length() > 0).collect(Collectors.toList()));
+        // extract the targets, e.g. the methods that can be covered
+        try (Stream<String> stream = Files.lines(targetsFile.toPath(), StandardCharsets.UTF_8)) {
+            targets.addAll(stream.filter(line -> line.length() > 0).collect(Collectors.toList()));
         } catch (IOException e) {
-            Log.printError("Reading methods.txt failed!");
+            Log.printError("Reading " + targetsFile.getPath() + " failed!");
             throw new IllegalStateException(e);
         }
 
         /*
-        * We need to construct for each chromosome a vector that describes which methods it covers.
+        * NOTE: We don't remove possible duplicates that co-exist in the current population and in the archive.
+        * We assume that those duplicates eventually cancel them out.
          */
-        Path tracesDir = appDir.resolve("traces");
-
-        List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), chromosome);
-        Set<String> traces = readTraces(tracesFiles);
-        NoveltyVector solution = new NoveltyVector(methods, traces);
-
-        List<NoveltyVector> neighbours = new ArrayList<>();
-
-        // merge and remove duplicates
         population.addAll(archive);
-        population = new ArrayList<>(new LinkedHashSet<>(population));
+
+        /*
+         * We need to construct for each chromosome a vector that describes which targets it covers.
+         */
+        List<CoverageVector> coverageVectors = new ArrayList<>();
 
         for (String member : population) {
-            tracesFiles = getTraceFiles(tracesDir.toFile(), member);
-            traces = readTraces(tracesFiles);
-            neighbours.add(new NoveltyVector(methods, traces));
+            List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), member);
+            Set<String> traces = readTraces(tracesFiles);
+            coverageVectors.add(new CoverageVector(targets, traces));
         }
 
-        double novelty = NoveltyMetric.evaluate(solution, neighbours, nearestNeighbours);
+        List<String> noveltyVector = NoveltyMetric.evaluate(coverageVectors, nearestNeighbours)
+                .stream().map(Object::toString).collect(Collectors.toList());
 
-        return new Message.MessageBuilder("/fitness/get_novelty")
-                .withParameter("novelty", String.valueOf(novelty))
+        return new Message.MessageBuilder("/fitness/get_novelty_vector")
+                .withParameter("novelty_vector", String.join("+", noveltyVector))
                 .build();
+    }
+
+    /**
+     * Maps the objectives type to the respective file name describing the targets, e.g. branches.
+     *
+     * @param objectives The objective types.
+     * @return Returns the mapped objectives file name.
+     */
+    private String mapObjectivesToFile(String objectives) {
+
+        switch (objectives) {
+            case "BRANCHES": return BRANCHES_FILE;
+            case "BLOCKS": return BLOCKS_FILE;
+            case "METHODS": return METHODS_FILE;
+            default:
+                throw new UnsupportedOperationException("Objectives type " + objectives + " not yet supported!");
+        }
+
     }
 
     /**
