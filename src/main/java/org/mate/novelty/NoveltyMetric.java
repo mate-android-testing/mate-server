@@ -13,6 +13,36 @@ import java.util.List;
 public class NoveltyMetric {
 
     /**
+     * Evaluates the novelty for the given chromosome.
+     *
+     * @param chromosome The chromosome for which the novelty should be evaluated.
+     * @param population The population representing the current population plus the archive.
+     * @param nearestNeighbours The number of nearest neighbours k.
+     * @return Returns the novelty of the given chromosome.
+     */
+    public static double evaluate(CoverageVector chromosome, List<CoverageVector> population, int nearestNeighbours) {
+
+        List<Double> distances = new ArrayList<>();
+
+        // we need to compute the distance from the given chromosome to every other chromosome in the population
+        for (CoverageVector member : population) {
+            distances.add(computeCosineDistance(chromosome, member));
+        }
+
+        // take the average distance to the k nearest neighbours if k neighbours are present
+        Collections.sort(distances);
+        int neighbours = Math.min(nearestNeighbours, distances.size());
+
+        double novelty = 0.0;
+
+        for (int k = 0; k < neighbours; k++) {
+            novelty += distances.get(k);
+        }
+
+        return novelty / neighbours;
+    }
+
+    /**
      * Evaluates the novelty metric for the given population.
      *
      * @param population The population representing the current population plus the archive.

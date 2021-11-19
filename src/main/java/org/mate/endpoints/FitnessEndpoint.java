@@ -57,9 +57,66 @@ public class FitnessEndpoint implements Endpoint {
             return getBranchFitnessVector(request);
         } else if (request.getSubject().startsWith("/fitness/get_novelty_vector")) {
             return getNoveltyVector(request);
+        } else if (request.getSubject().startsWith("/fitness/get_novelty")) {
+            return getNovelty(request);
         }
         throw new IllegalArgumentException("Message request with subject: "
                 + request.getSubject() + " can't be handled by FitnessEndpoint!");
+    }
+
+    /**
+     * Computes the novelty for the chromosome contained in the request message.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the novelty for a given chromosome.
+     */
+    private Message getNovelty(Message request) {
+
+        String packageName = request.getParameter("packageName");
+        String chromosome = request.getParameter("chromosome");
+        List<String> population = Lists.newArrayList(request.getParameter("population").split("\\+"));
+        List<String> archive = Lists.newArrayList(request.getParameter("archive").split("\\+"));
+        int nearestNeighbours = Integer.parseInt(request.getParameter("nearestNeighbours"));
+        String objectives = request.getParameter("objectives");
+
+        Log.println("Evaluating novelty of chromosome: " + chromosome);
+        Log.println("Number of chromosomes in current population: " + population.size());
+        Log.println("Number of chromosomes in current archive: " + archive.size());
+
+        Path appDir = appsDir.resolve(packageName);
+        Path tracesDir = appDir.resolve("traces");
+        File targetsFile = appDir.resolve(mapObjectivesToFile(objectives)).toFile();
+
+        // a linked hashset maintains insertion order and contains is in O(1)
+        Set<String> targets = new LinkedHashSet<>();
+
+        // extract the targets, e.g. the methods that can be covered
+        try (Stream<String> stream = Files.lines(targetsFile.toPath(), StandardCharsets.UTF_8)) {
+            targets.addAll(stream.filter(line -> line.length() > 0).collect(Collectors.toList()));
+        } catch (IOException e) {
+            Log.printError("Reading " + targetsFile.getPath() + " failed!");
+            throw new IllegalStateException(e);
+        }
+
+        // derive the coverage vector for the chromosome
+        CoverageVector chromosomeCoverageVector = new CoverageVector(targets,
+                readTraces(getTraceFiles(tracesDir.toFile(), chromosome)));
+
+        population.addAll(archive);
+
+        // derive the coverage vectors for every chromosome in the (combined) population
+        List<CoverageVector> coverageVectors = population.stream().map(member -> {
+            List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), member);
+            Set<String> traces = readTraces(tracesFiles);
+            return new CoverageVector(targets, traces);
+        }).collect(Collectors.toList());
+
+        double novelty = NoveltyMetric.evaluate(chromosomeCoverageVector, coverageVectors, nearestNeighbours);
+        Log.println("Novelty of chromosome: " + novelty);
+
+        return new Message.MessageBuilder("/fitness/get_novelty")
+                .withParameter("novelty", String.valueOf(novelty))
+                .build();
     }
 
     /**
