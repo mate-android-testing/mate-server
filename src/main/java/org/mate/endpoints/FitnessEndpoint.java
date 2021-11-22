@@ -101,14 +101,18 @@ public class FitnessEndpoint implements Endpoint {
         // derive the coverage vector for the chromosome
         CoverageVector chromosomeCoverageVector = new CoverageVector(targets,
                 readTraces(getTraceFiles(tracesDir.toFile(), chromosome)));
+        Log.println("Coverage vector of chromosome " + chromosome + ": " + chromosomeCoverageVector);
 
         population.addAll(archive);
 
         // derive the coverage vectors for every chromosome in the (combined) population
+        // TODO: cache traces to avoid re-reading traces for duplicate chromosome
         List<CoverageVector> coverageVectors = population.stream().map(member -> {
             List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), member);
             Set<String> traces = readTraces(tracesFiles);
-            return new CoverageVector(targets, traces);
+            CoverageVector coverageVector = new CoverageVector(targets, traces);
+            Log.println("Coverage vector of population chromosome " + member + ": " + coverageVector);
+            return coverageVector;
         }).collect(Collectors.toList());
 
         double novelty = NoveltyMetric.evaluate(chromosomeCoverageVector, coverageVectors, nearestNeighbours);
@@ -120,8 +124,7 @@ public class FitnessEndpoint implements Endpoint {
     }
 
     /**
-     * Returns the novelty vector, i.e. a vector containing the novelty score for the chromosomes in the current
-     * population and the current archive.
+     * Returns the novelty vector, i.e. a vector containing the novelty values for the given chromosomes.
      *
      * @param request The request message.
      * @return Returns a message containing the novelty vector.
@@ -129,13 +132,11 @@ public class FitnessEndpoint implements Endpoint {
     private Message getNoveltyVector(Message request) {
 
         String packageName = request.getParameter("packageName");
-        List<String> population = Lists.newArrayList(request.getParameter("population").split("\\+"));
-        List<String> archive = Lists.newArrayList(request.getParameter("archive").split("\\+"));
+        List<String> chromosomes = Lists.newArrayList(request.getParameter("chromosomes").split("\\+"));
         int nearestNeighbours = Integer.parseInt(request.getParameter("nearestNeighbours"));
         String objectives = request.getParameter("objectives");
 
-        Log.println("Number of chromosomes in current population: " + population.size());
-        Log.println("Number of chromosomes in current archive: " + archive.size());
+        Log.println("Number of chromosomes: " + chromosomes.size());
 
         Path appDir = appsDir.resolve(packageName);
         Path tracesDir = appDir.resolve("traces");
@@ -153,18 +154,13 @@ public class FitnessEndpoint implements Endpoint {
         }
 
         /*
-        * NOTE: We don't remove possible duplicates that co-exist in the current population and in the archive.
-        * We assume that those duplicates eventually cancel them out.
-         */
-        population.addAll(archive);
-
-        /*
          * We need to construct for each chromosome a vector that describes which targets it covers.
          */
         List<CoverageVector> coverageVectors = new ArrayList<>();
 
-        for (String member : population) {
-            List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), member);
+        // TODO: cache traces to avoid re-reading traces for duplicate chromosome
+        for (String chromosome : chromosomes) {
+            List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), chromosome);
             Set<String> traces = readTraces(tracesFiles);
             coverageVectors.add(new CoverageVector(targets, traces));
         }

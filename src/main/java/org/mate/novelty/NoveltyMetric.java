@@ -43,25 +43,25 @@ public class NoveltyMetric {
     }
 
     /**
-     * Evaluates the novelty metric for the given population.
+     * Evaluates the novelty metric for the given chromosomes.
      *
-     * @param population The population representing the current population plus the archive.
+     * @param chromosomes The list of chromosomes for which the novelty should be computed.
      * @param nearestNeighbours The number of nearest neighbours k.
      * @return Returns the novelty vector.
      */
-    public static List<Double> evaluate(List<CoverageVector> population, int nearestNeighbours) {
+    public static List<Double> evaluate(List<CoverageVector> chromosomes, int nearestNeighbours) {
 
         List<Double> noveltyVector = new ArrayList<>();
 
-        // we need to compute the distance of each member with the rest of the population
-        for (CoverageVector member : population) {
+        // we need to compute the distance of each chromosome with the remaining chromosomes
+        for (CoverageVector chromosome : chromosomes) {
 
             List<Double> distances = new ArrayList<>();
 
-            for (CoverageVector other : population) {
+            for (CoverageVector other : chromosomes) {
 
-                if (!member.equals(other)) {
-                    distances.add(computeCosineDistance(member, other));
+                if (!chromosome.equals(other)) {
+                    distances.add(computeCosineDistance(chromosome, other));
                 }
             }
 
