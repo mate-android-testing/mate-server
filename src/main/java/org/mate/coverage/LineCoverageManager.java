@@ -27,6 +27,9 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Handles requests related to line coverage.
+ */
 public class LineCoverageManager {
 
     public static class Line {

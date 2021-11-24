@@ -15,6 +15,9 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Handles requests related to branch coverage.
+ */
 public final class BranchCoverageManager {
 
     /**
