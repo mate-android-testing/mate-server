@@ -15,6 +15,9 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Handles requests related to branch coverage.
+ */
 public final class BranchCoverageManager {
 
     /**
@@ -142,7 +145,7 @@ public final class BranchCoverageManager {
         }
 
         return new Message.MessageBuilder("/coverage/get")
-                .withParameter("coverage", String.valueOf(branchCoverage))
+                .withParameter("branch_coverage", String.valueOf(branchCoverage))
                 .build();
     }
 
@@ -179,7 +182,7 @@ public final class BranchCoverageManager {
         }
 
         return new Message.MessageBuilder("/coverage/combined")
-                .withParameter("coverage", String.valueOf(branchCoverage))
+                .withParameter("branch_coverage", String.valueOf(branchCoverage))
                 .build();
     }
 

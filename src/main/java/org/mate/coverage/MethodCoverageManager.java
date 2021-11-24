@@ -15,6 +15,9 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Handles requests related to method coverage.
+ */
 public class MethodCoverageManager {
 
     /**
@@ -139,7 +142,7 @@ public class MethodCoverageManager {
         }
 
         return new Message.MessageBuilder("/coverage/get")
-                .withParameter("coverage", String.valueOf(methodCoverage))
+                .withParameter("method_coverage", String.valueOf(methodCoverage))
                 .build();
     }
 
@@ -175,7 +178,7 @@ public class MethodCoverageManager {
         }
 
         return new Message.MessageBuilder("/coverage/combined")
-                .withParameter("coverage", String.valueOf(methodCoverage))
+                .withParameter("method_coverage", String.valueOf(methodCoverage))
                 .build();
     }
 

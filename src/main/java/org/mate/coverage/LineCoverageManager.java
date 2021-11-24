@@ -27,6 +27,9 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Handles requests related to line coverage.
+ */
 public class LineCoverageManager {
 
     public static class Line {
@@ -276,7 +279,7 @@ public class LineCoverageManager {
         ICounter counter = bundle.getLineCounter();
 
         return new Message.MessageBuilder("/coverage/get")
-                .withParameter("coverage", String.valueOf(counter.getCoveredRatio()))
+                .withParameter("line_coverage", String.valueOf(counter.getCoveredRatio()))
                 .build();
     }
 
@@ -302,7 +305,7 @@ public class LineCoverageManager {
         ICounter counter = bundle.getLineCounter();
 
         return new Message.MessageBuilder("/coverage/combined")
-                .withParameter("coverage", String.valueOf(counter.getCoveredRatio()))
+                .withParameter("line_coverage", String.valueOf(counter.getCoveredRatio()))
                 .build();
     }
 

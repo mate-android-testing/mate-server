@@ -63,9 +63,24 @@ public class CoverageEndpoint implements Endpoint {
                 return getBasicBlockLineCoverage(request);
             case BASIC_BLOCK_BRANCH_COVERAGE:
                 return getBasicBlockBranchCoverage(request);
+            case ALL_COVERAGE:
+                return getAllCoverage(request);
             default:
                 throw new UnsupportedOperationException("Coverage type not yet supported!");
         }
+    }
+
+    /**
+     * Gets the 'all coverage' of a single test case within a test suite.
+     *
+     * @param request The request message.
+     * @return Returns a response message containing the coverage information.
+     */
+    private Message getAllCoverage(Message request) {
+        String packageName = request.getParameter("packageName");
+        String testSuiteId = request.getParameter("testSuiteId");
+        String testCaseId = request.getParameter("testCaseId");
+        return AllCoverageManager.getCoverage(appsDir, packageName, testSuiteId, testCaseId);
     }
 
     /**
@@ -148,9 +163,19 @@ public class CoverageEndpoint implements Endpoint {
             case BASIC_BLOCK_LINE_COVERAGE:
             case BASIC_BLOCK_BRANCH_COVERAGE:
                 return copyBasicBlockCoverageData(request);
+            case ALL_COVERAGE:
+                return copyAllCoverageData(request);
             default:
                 throw new UnsupportedOperationException("Coverage type not yet supported!");
         }
+    }
+
+    private Message copyAllCoverageData(Message request) {
+        var packageName = request.getParameter("packageName");
+        var chromosomeSrc = request.getParameter("chromosome_src");
+        var chromosomeTarget = request.getParameter("chromosome_target");
+        var entities = request.getParameter("entities").split(",");
+        return AllCoverageManager.copyCoverageData(appsDir, packageName, chromosomeSrc, chromosomeTarget, entities);
     }
 
     private Message copyLineCoverageData(Message request) {
@@ -200,9 +225,19 @@ public class CoverageEndpoint implements Endpoint {
             case BASIC_BLOCK_LINE_COVERAGE:
             case BASIC_BLOCK_BRANCH_COVERAGE:
                 return storeBasicBlockCoverageData(request);
+            case ALL_COVERAGE:
+                return storeAllCoverageData(request);
             default:
                 throw new UnsupportedOperationException("Coverage type not yet supported!");
         }
+    }
+
+    private Message storeAllCoverageData(Message request) {
+        String packageName = request.getParameter("packageName");
+        String deviceID = request.getParameter("deviceId");
+        String chromosome = request.getParameter("chromosome");
+        String entity = request.getParameter("entity");
+        return AllCoverageManager.storeCoverageData(androidEnvironment, deviceID, packageName, chromosome, entity);
     }
 
     private Message storeLineCoverageData(Message request) {
@@ -253,9 +288,17 @@ public class CoverageEndpoint implements Endpoint {
                 return getCombinedBasicBlockLineCoverage(request);
             case BASIC_BLOCK_BRANCH_COVERAGE:
                 return getCombinedBasicBlockBranchCoverage(request);
+            case ALL_COVERAGE:
+                return getCombinedAllCoverage(request);
             default:
                 throw new UnsupportedOperationException("Coverage type not yet supported!");
         }
+    }
+
+    private Message getCombinedAllCoverage(Message request) {
+        String packageName = request.getParameter("packageName");
+        String testcaseIds = request.getParameter("chromosomes");
+        return AllCoverageManager.getCombinedCoverage(appsDir, packageName, testcaseIds);
     }
 
     private Message getCombinedLineCoverage(Message request) {
