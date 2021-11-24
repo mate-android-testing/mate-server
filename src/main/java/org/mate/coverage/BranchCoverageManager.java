@@ -142,7 +142,7 @@ public final class BranchCoverageManager {
         }
 
         return new Message.MessageBuilder("/coverage/get")
-                .withParameter("coverage", String.valueOf(branchCoverage))
+                .withParameter("branch_coverage", String.valueOf(branchCoverage))
                 .build();
     }
 
@@ -179,7 +179,7 @@ public final class BranchCoverageManager {
         }
 
         return new Message.MessageBuilder("/coverage/combined")
-                .withParameter("coverage", String.valueOf(branchCoverage))
+                .withParameter("branch_coverage", String.valueOf(branchCoverage))
                 .build();
     }
 

@@ -276,7 +276,7 @@ public class LineCoverageManager {
         ICounter counter = bundle.getLineCounter();
 
         return new Message.MessageBuilder("/coverage/get")
-                .withParameter("coverage", String.valueOf(counter.getCoveredRatio()))
+                .withParameter("line_coverage", String.valueOf(counter.getCoveredRatio()))
                 .build();
     }
 
@@ -302,7 +302,7 @@ public class LineCoverageManager {
         ICounter counter = bundle.getLineCounter();
 
         return new Message.MessageBuilder("/coverage/combined")
-                .withParameter("coverage", String.valueOf(counter.getCoveredRatio()))
+                .withParameter("line_coverage", String.valueOf(counter.getCoveredRatio()))
                 .build();
     }
 

@@ -174,7 +174,7 @@ public final class BasicBlockCoverageManager {
         }
 
         return new Message.MessageBuilder("/coverage/combined")
-                .withParameter("coverage", String.valueOf(coverage))
+                .withParameter(lineCoverage ? "line_coverage" : "branch_coverage", String.valueOf(coverage))
                 .build();
     }
 
@@ -468,7 +468,7 @@ public final class BasicBlockCoverageManager {
         }
 
         return new Message.MessageBuilder("/coverage/get")
-                .withParameter("coverage", String.valueOf(coverage))
+                .withParameter(lineCoverage ? "line_coverage" : "branch_coverage", String.valueOf(coverage))
                 .build();
     }
 
