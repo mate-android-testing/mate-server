@@ -1,6 +1,7 @@
 package org.mate.novelty;
 
 import org.apache.commons.text.similarity.CosineSimilarity;
+import org.mate.coverage.CoverageVector;
 import org.mate.util.Log;
 
 import java.util.ArrayList;

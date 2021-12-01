@@ -1,4 +1,4 @@
-package org.mate.novelty;
+package org.mate.coverage;
 
 import org.mate.util.Log;
 

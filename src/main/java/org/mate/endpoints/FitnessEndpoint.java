@@ -2,12 +2,12 @@ package org.mate.endpoints;
 
 import com.google.common.collect.Lists;
 import org.apache.commons.io.FileUtils;
+import org.mate.coverage.CoverageVector;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.network.message.Messages;
-import org.mate.novelty.CoverageVector;
 import org.mate.novelty.NoveltyMetric;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.FitnessFunction;
