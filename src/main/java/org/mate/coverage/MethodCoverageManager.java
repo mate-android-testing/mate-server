@@ -91,17 +91,12 @@ public class MethodCoverageManager {
                 "-s",
                 deviceID,
                 "shell",
-                "su",
-                "root",
                 "am",
                 "broadcast",
                 "-a",
                 "STORE_TRACES",
                 "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer",
-                "--es",
-                "packageName",
-                packageName);
+                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
 
         if (broadcastOperation.isErr()) {
             throw new IllegalStateException("Couldn't send broadcast!");
