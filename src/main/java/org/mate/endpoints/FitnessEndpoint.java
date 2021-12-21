@@ -564,10 +564,7 @@ public class FitnessEndpoint implements Endpoint {
                 "-a",
                 "STORE_TRACES",
                 "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer",
-                "--es",
-                "packageName",
-                packageName);
+                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
 
         if (broadcastOperation.isErr()) {
             throw new IllegalStateException("Couldn't send broadcast!");
@@ -610,10 +607,7 @@ public class FitnessEndpoint implements Endpoint {
                 "-a",
                 "STORE_TRACES",
                 "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer",
-                "--es",
-                "packageName",
-                packageName);
+                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
 
         if (broadcastOperation.isErr()) {
             throw new IllegalStateException("Couldn't send broadcast!");
@@ -720,10 +714,7 @@ public class FitnessEndpoint implements Endpoint {
                 "-a",
                 "STORE_TRACES",
                 "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer",
-                "--es",
-                "packageName",
-                packageName);
+                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
 
         if (broadcastOperation.isErr()) {
             throw new IllegalStateException("Couldn't send broadcast!");
