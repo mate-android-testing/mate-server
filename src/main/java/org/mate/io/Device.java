@@ -237,15 +237,15 @@ public class Device {
     }
 
     /**
-     * Checks whether writing the collected traces onto the external storage has been completed.
-     * This is done by checking if an info.txt file exists in the app-internal storage.
+     * Checks whether writing the collected traces onto the external storage has been completed, i.e. if the info.txt
+     * has been written to the external storage as well.
      *
-     * @return Returns {@code true} if the writing process has been finished,
-     *          otherwise {@code false}.
+     * @param externalStorage The path to the external storage.
+     * @return Returns {@code true} if the writing process has been finished, otherwise {@code false}.
      */
-    private boolean completedWritingTraces() {
+    private boolean completedWritingTraces(final String externalStorage) {
         List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID,
-                "shell", "run-as", packageName, "ls").getOk();
+                "shell", "ls", externalStorage).getOk();
         Log.println("Files: " + files);
 
         return files.stream().anyMatch(str -> str.trim().equals("info.txt"));
@@ -253,11 +253,9 @@ public class Device {
 
     /**
      * Pulls the traces.txt file from the external storage (sd card) if present.
-     * The file is stored in an app specific location.
      *
      * @param chromosome Identifies either a test case or test suite.
-     * @param entity If chromosome identifies a test suite, entity identifies the test case,
-     *               otherwise {@code null}.
+     * @param entity If chromosome identifies a test suite, entity identifies the test case, otherwise {@code null}.
      * @return Returns the path to the traces file.
      */
     public File pullTraceFile(String chromosome, String entity) {
@@ -268,7 +266,7 @@ public class Device {
         String tracesDir = "storage/emulated/0";
 
         // check whether writing traces has been completed yet
-        while(!completedWritingTraces()) {
+        while(!completedWritingTraces(tracesDir)) {
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
@@ -279,7 +277,7 @@ public class Device {
 
         // get number of traces from info.txt
         Result<List<String>, String> content = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
-                "-s", deviceID, "shell", "cat", "/data/data/" + packageName + "/info.txt");
+                "-s", deviceID, "shell", "cat", tracesDir + "/info.txt");
 
         if (content.isErr()) {
             Log.println("Couldn't read info.txt " + content.getErr());
@@ -371,7 +369,7 @@ public class Device {
         // remove info file from emulator
         var removeInfoFileOp = ProcessRunner.runProcess(
                 androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
-                "rm", "-f", "data/data/" + packageName + "/info.txt");
+                "rm", "-f", tracesDir + "/info.txt");
 
         Log.println("Removal of info file succeeded: " + removeInfoFileOp.isOk());
 
