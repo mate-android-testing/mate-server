@@ -16,7 +16,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Handles requests regarding basic block coverage, i.e. basic block line and basic block branch coverage.
+ * Handles requests related to basic block coverage, i.e. basic block line and basic block branch coverage.
  */
 public final class BasicBlockCoverageManager {
 
@@ -76,7 +76,7 @@ public final class BasicBlockCoverageManager {
      * @param chromosome         Identifies either a test case or a test suite.
      * @param entity             Identifies a test case if chromosome refers to
      *                           a test suite, otherwise {@code null}.
-     * @return Returns the branch coverage for the given test case.
+     * @return Returns an empty message.
      */
     public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID, String packageName,
                                             String chromosome, String entity) {
@@ -94,17 +94,12 @@ public final class BasicBlockCoverageManager {
                 "-s",
                 deviceID,
                 "shell",
-                "su",
-                "root",
                 "am",
                 "broadcast",
                 "-a",
                 "STORE_TRACES",
                 "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer",
-                "--es",
-                "packageName",
-                packageName);
+                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
 
         if (broadcastOperation.isErr()) {
             throw new IllegalStateException("Couldn't send broadcast!");
@@ -174,7 +169,7 @@ public final class BasicBlockCoverageManager {
         }
 
         return new Message.MessageBuilder("/coverage/combined")
-                .withParameter("coverage", String.valueOf(coverage))
+                .withParameter(lineCoverage ? "line_coverage" : "branch_coverage", String.valueOf(coverage))
                 .build();
     }
 
@@ -184,7 +179,7 @@ public final class BasicBlockCoverageManager {
      *
      * @param basicBlocksFile The blocks.txt file listing for each class the number of branches.
      * @param tracesFiles     The set of traces file.
-     * @return Returns the branch coverage for a single test case or the combined coverage.
+     * @return Returns the line coverage for a single test case or the combined coverage.
      * @throws IOException Should never happen.
      */
     private static double evaluateLineCoverage(File basicBlocksFile, List<File> tracesFiles) throws IOException {
@@ -468,7 +463,7 @@ public final class BasicBlockCoverageManager {
         }
 
         return new Message.MessageBuilder("/coverage/get")
-                .withParameter("coverage", String.valueOf(coverage))
+                .withParameter(lineCoverage ? "line_coverage" : "branch_coverage", String.valueOf(coverage))
                 .build();
     }
 

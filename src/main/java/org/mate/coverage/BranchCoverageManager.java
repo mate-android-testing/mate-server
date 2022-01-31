@@ -15,6 +15,9 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Handles requests related to branch coverage.
+ */
 public final class BranchCoverageManager {
 
     /**
@@ -91,17 +94,12 @@ public final class BranchCoverageManager {
                 "-s",
                 deviceID,
                 "shell",
-                "su",
-                "root",
                 "am",
                 "broadcast",
                 "-a",
                 "STORE_TRACES",
                 "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer",
-                "--es",
-                "packageName",
-                packageName);
+                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
 
         if (broadcastOperation.isErr()) {
             throw new IllegalStateException("Couldn't send broadcast!");
@@ -142,7 +140,7 @@ public final class BranchCoverageManager {
         }
 
         return new Message.MessageBuilder("/coverage/get")
-                .withParameter("coverage", String.valueOf(branchCoverage))
+                .withParameter("branch_coverage", String.valueOf(branchCoverage))
                 .build();
     }
 
@@ -179,7 +177,7 @@ public final class BranchCoverageManager {
         }
 
         return new Message.MessageBuilder("/coverage/combined")
-                .withParameter("coverage", String.valueOf(branchCoverage))
+                .withParameter("branch_coverage", String.valueOf(branchCoverage))
                 .build();
     }
 

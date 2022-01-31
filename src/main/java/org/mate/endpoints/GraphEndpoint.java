@@ -3,9 +3,7 @@ package org.mate.endpoints;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
-import de.uni_passau.fim.auermich.android_graphs.core.statements.ReturnStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.InstructionUtils;
 import org.apache.commons.io.FileUtils;
 import org.mate.graphs.Graph;
 import org.mate.graphs.GraphType;
@@ -193,6 +191,12 @@ public class GraphEndpoint implements Endpoint {
         return new Message("/graph/init");
     }
 
+    /**
+     * Computes the fitness value for a given chromosome combining approach level + branch distance.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the branch distance information.
+     */
     private Message getBranchDistance(Message request) {
 
         String packageName = request.getParameter("packageName");
@@ -201,6 +205,8 @@ public class GraphEndpoint implements Endpoint {
         if (graph == null) {
             throw new IllegalStateException("Graph hasn't been initialised!");
         }
+
+        Log.println("Computing the branch distance for the chromosome: " + chromosome);
 
         // get list of traces file
         Path appDir = appsDir.resolve(packageName);
@@ -263,23 +269,17 @@ public class GraphEndpoint implements Endpoint {
         long end = System.currentTimeMillis();
         Log.println("Computing approach level took: " + (end - start) + " ms.");
 
-        /*
-         * We compute the fitness value according to the paper 'Reformulating Branch Coverage as
-         * a Many-Objective Optimization Problem' in the context of the MOSA algorithm, although
-         * the algorithm itself should be responsible for the normalization of the fitness value.
-         * In contrast to traditional approaches, the fitness value lies in the range [0,1] where
-         * 1 is the best value, i.e. the target branch has been covered.
-         */
+        // the normalised fitness value in the range [0,1]
         String branchDistance;
 
         if (minDistance.get() == Integer.MAX_VALUE) {
             // branch not reachable by execution path
-            branchDistance = String.valueOf(0);
-        } else if (minDistance.get() == 0) {
-            // target branch covered (recall that '1' is the best fitness value)
             branchDistance = String.valueOf(1);
+        } else if (minDistance.get() == 0) {
+            // covered target branch
+            branchDistance = String.valueOf(0);
         } else {
-            // we need to combine approach level + branch distance
+            // combine approach level + branch distance
             int approachLevel = minDistance.get();
 
             /*
@@ -323,8 +323,10 @@ public class GraphEndpoint implements Endpoint {
             Log.println("Minimal branch distance: " + minBranchDistance);
 
             // combine and normalise
-            double combined = approachLevel + minBranchDistance;
-            branchDistance = String.valueOf(1 - (combined / (combined + 1)));
+            double normalisedBranchDistance = minBranchDistance / (minBranchDistance + 1);
+            double combined = approachLevel + normalisedBranchDistance;
+            combined = combined / (combined + 1);
+            branchDistance = String.valueOf(combined);
         }
 
         return new Message.MessageBuilder("/graph/get_branch_distance")
@@ -332,6 +334,12 @@ public class GraphEndpoint implements Endpoint {
                 .build();
     }
 
+    /**
+     * Computes the fitness value vector for a given chromosome combining approach level + branch distance.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the branch distance fitness vector.
+     */
     private Message getBranchDistanceVector(Message request) {
 
         String packageName = request.getParameter("packageName");
@@ -340,6 +348,8 @@ public class GraphEndpoint implements Endpoint {
         if (graph == null) {
             throw new IllegalStateException("Graph hasn't been initialised!");
         }
+
+        Log.println("Computing the branch distance vector for the chromosome: " + chromosome);
 
         // get list of traces file
         Path appDir = appsDir.resolve(packageName);
@@ -407,19 +417,18 @@ public class GraphEndpoint implements Endpoint {
 
             if (minDistance.get() == Integer.MAX_VALUE) {
                 // branch not reachable by execution path
-                branchDistanceVector.add(String.valueOf(0));
-            } else if (minDistance.get() == 0) {
-                // target branch covered (recall that '1' is the best fitness value)
                 branchDistanceVector.add(String.valueOf(1));
+            } else if (minDistance.get() == 0) {
+                // covered target branch
+                branchDistanceVector.add(String.valueOf(0));
             } else {
-                // we need to combine approach level + branch distance
+                // combine approach level + branch distance
                 int approachLevel = minDistance.get();
 
                 /*
-                 * The vertex with the closest distance represents an if stmt, at which
-                 * the execution path took the wrong direction. We need to find the shortest
-                 * branch distance value for the given if stmt. Note that the if stmt could have been
-                 * visited multiple times.
+                 * The vertex with the closest distance represents an if stmt, at which the execution path took the wrong
+                 * direction. We need to find the shortest branch distance value for the given if stmt. Note that the
+                 * if stmt could have been visited multiple times.
                  */
                 Vertex ifVertex = minDistanceVertex.get();
                 Statement stmt = ifVertex.getStatement();
@@ -445,7 +454,7 @@ public class GraphEndpoint implements Endpoint {
                         // found a branch distance value for the given if stmt
                         double distance = Double.parseDouble(trace.split(":")[1]);
 
-                        // we need to track minimal distance
+                        // we need to track the minimal distance
                         if (distance < minBranchDistance) {
                             minBranchDistance = distance;
                         }
@@ -456,8 +465,10 @@ public class GraphEndpoint implements Endpoint {
                 Log.println("Minimal branch distance: " + minBranchDistance);
 
                 // combine and normalise
-                double combined = approachLevel + minBranchDistance;
-                branchDistanceVector.add(String.valueOf(1 - (combined / (combined + 1))));
+                double normalisedBranchDistance = minBranchDistance / (minBranchDistance + 1);
+                double combined = approachLevel + normalisedBranchDistance;
+                combined = combined / (combined + 1);
+                branchDistanceVector.add(String.valueOf(combined));
             }
         }
 

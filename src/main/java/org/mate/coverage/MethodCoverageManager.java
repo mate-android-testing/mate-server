@@ -15,6 +15,9 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Handles requests related to method coverage.
+ */
 public class MethodCoverageManager {
 
     /**
@@ -88,17 +91,12 @@ public class MethodCoverageManager {
                 "-s",
                 deviceID,
                 "shell",
-                "su",
-                "root",
                 "am",
                 "broadcast",
                 "-a",
                 "STORE_TRACES",
                 "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer",
-                "--es",
-                "packageName",
-                packageName);
+                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
 
         if (broadcastOperation.isErr()) {
             throw new IllegalStateException("Couldn't send broadcast!");
@@ -139,7 +137,7 @@ public class MethodCoverageManager {
         }
 
         return new Message.MessageBuilder("/coverage/get")
-                .withParameter("coverage", String.valueOf(methodCoverage))
+                .withParameter("method_coverage", String.valueOf(methodCoverage))
                 .build();
     }
 
@@ -175,7 +173,7 @@ public class MethodCoverageManager {
         }
 
         return new Message.MessageBuilder("/coverage/combined")
-                .withParameter("coverage", String.valueOf(methodCoverage))
+                .withParameter("method_coverage", String.valueOf(methodCoverage))
                 .build();
     }
 
