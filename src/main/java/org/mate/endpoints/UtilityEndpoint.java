@@ -1,14 +1,15 @@
 package org.mate.endpoints;
 
-import java.nio.file.Path;
 import org.mate.io.Device;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
 
+import java.nio.file.Path;
+
 /**
- * Handles requests that can't be directly assigned a dedicated end point.
- * Should replace the {@link LegacyEndpoint} in the future.
+ * Handles requests that can't be directly assigned a dedicated end point. Should replace the {@link LegacyEndpoint}
+ * in the future.
  */
 public class UtilityEndpoint implements Endpoint {
 
@@ -26,12 +27,12 @@ public class UtilityEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/utility/fetch_test_case")) {
             return fetchTestCase(request);
-        }
-        if (request.getSubject().startsWith("/utility/fetch_transition_system")) {
+        } else if (request.getSubject().startsWith("/utility/fetch_transition_system")) {
             return fetchTransitionSystem(request);
+        } else {
+            throw new IllegalArgumentException("Message request with subject: "
+                    + request.getSubject() + " can't be handled by UtilityEndpoint!");
         }
-        throw new IllegalArgumentException("Message request with subject: "
-            + request.getSubject() + " can't be handled by UtilityEndpoint!");
     }
 
     /**
@@ -57,11 +58,10 @@ public class UtilityEndpoint implements Endpoint {
     }
 
     /**
-     * Fetches a serialized transition system from the internal storage and removes the transition
-     * system afterwards to keep memory clean.
+     * Fetches a serialized transition system from the internal storage and removes the transition system afterwards
+     * to keep memory clean.
      *
-     * @param request A message containing the device id, the test case directory and the name of the
-     *                test case file.
+     * @param request A message containing the device id, the test case directory and the name of the test case file.
      * @return Returns a message wrapping the outcome of the operation, i.e. success or failure.
      */
     private Message fetchTransitionSystem(Message request) {
@@ -77,5 +77,4 @@ public class UtilityEndpoint implements Endpoint {
             .withParameter("response", String.valueOf(response))
             .build();
     }
-
 }

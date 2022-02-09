@@ -2,24 +2,29 @@ package org.mate;
 
 import org.mate.accessibility.ImageHandler;
 import org.mate.endpoints.*;
-import org.mate.util.AndroidEnvironment;
 import org.mate.io.Device;
+import org.mate.network.Endpoint;
+import org.mate.network.Router;
 import org.mate.network.message.Message;
 import org.mate.network.message.Messages;
 import org.mate.network.message.serialization.Parser;
 import org.mate.network.message.serialization.Serializer;
-import org.mate.network.Endpoint;
-import org.mate.network.Router;
 import org.mate.pdf.Report;
+import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.Comparator;
+import java.util.Optional;
+import java.util.Properties;
 
 public class Server {
     private static final String MATE_SERVER_PROPERTIES_PATH = "mate-server.properties";
@@ -175,7 +180,6 @@ public class Server {
                 client.close();
                 Log.println("connection closed");
             }
-
         } catch (IOException ioe) {
             Device.listDevices(androidEnvironment);
             ioe.printStackTrace();

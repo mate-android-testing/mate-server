@@ -1,5 +1,10 @@
 package org.mate.io;
 
+import org.mate.pdf.Report;
+import org.mate.util.AndroidEnvironment;
+import org.mate.util.Log;
+import org.mate.util.Result;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -11,10 +16,6 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import org.mate.pdf.Report;
-import org.mate.util.AndroidEnvironment;
-import org.mate.util.Log;
-import org.mate.util.Result;
 
 public class Device {
 
@@ -86,8 +87,7 @@ public class Device {
     }
 
     /**
-     * Fetches a serialized test case from the internal storage.
-     * Afterwards, the test case file is erased from the emulator.
+     * Fetches a serialized test case from the internal storage. Afterwards, the test case file is erased from the emulator.
      *
      * @param testCaseDir The test case directory on the emulator.
      * @param testCase The name of the test case file.
@@ -99,13 +99,12 @@ public class Device {
     }
 
     /**
-     * Fetches a serialized transition system from the internal storage. Afterwards, the transition
-     * system file is erased from the emulator.
+     * Fetches a serialized transition system from the internal storage. Afterwards, the transition system file is
+     * erased from the emulator.
      *
      * @param transitionSystemDir The transition system directory on the emulator.
      * @param fileName            The name of the transition system file.
-     * @return Returns {@code true} if the transition system file could be fetched, otherwise {@code
-     * false} is returned.
+     * @return Returns {@code true} if the transition system file could be fetched, otherwise {@code false} is returned.
      */
     public boolean fetchTransitionSystem(String transitionSystemDir, String fileName) {
         return fetchTestFile(transitionSystemDir, fileName, "transition-systems");
@@ -118,11 +117,7 @@ public class Device {
      * @param fileName The name of the file.
      * @return Returns {@code true} if the file could be fetched, otherwise {@code false} is returned.
      */
-    private boolean fetchTestFile(final String baseDir, final String fileName,
-        final String resultDirName) {
-        // TODO: check whether on Windows the leading slash needs to be removed (it seems as it is not necessary)
-
-        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "root");
+    private boolean fetchTestFile(final String baseDir, final String fileName, final String resultDirName) {
 
         // retrieve files inside base directory
         final List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
