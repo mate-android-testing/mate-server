@@ -93,4 +93,21 @@ public class ProcessRunner {
     public static Result<List<String>, String> runProcess(Path outputFile, String input, String... cmd) {
         return runProcess(outputFile, input, List.of(cmd));
     }
+
+    public static void runBackgroundProcess(String... cmd) {
+        runBackgroundProcess(List.of(cmd));
+    }
+
+    public static void runBackgroundProcess(List<String> cmd) {
+        ProcessBuilder pb = new ProcessBuilder(cmd);
+        pb.redirectErrorStream(true);
+
+        try {
+            pb.start();
+        } catch (Exception e) {
+            var errMsg = "unable to execute cmd " + cmd + ": " + e.getMessage()
+                    + "\n" + e.fillInStackTrace();
+            Log.printError(errMsg);
+        }
+    }
 }

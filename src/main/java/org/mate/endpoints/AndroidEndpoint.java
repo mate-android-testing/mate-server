@@ -34,10 +34,24 @@ public class AndroidEndpoint implements Endpoint {
             return getCurrentActivity(request);
         } else if (request.getSubject().startsWith("/android/grant_runtime_permissions")) {
             return grantRuntimePermissions(request);
+        } else if (request.getSubject().startsWith("/android/launch_representation_layer")) {
+            return launchRepresentationLayer(request);
         } else {
             throw new IllegalArgumentException("Message request with subject: "
                     + request.getSubject() + " can't be handled by AndroidEndpoint!");
         }
+    }
+
+    private Message launchRepresentationLayer(Message request) {
+        String deviceID = request.getParameter("deviceId");
+
+        Device device = Device.devices.get(deviceID);
+        device.killRepresentationLayer();
+        device.launchRepresentationLayer();
+        Log.println("Launch representation layer");
+
+        return new Message.MessageBuilder("/android/launch_representation_layer")
+                .build();
     }
 
     /**

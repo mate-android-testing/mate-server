@@ -150,6 +150,23 @@ public class Device {
     }
 
     /**
+     * Kills Representation Layer if running
+     */
+    public void killRepresentationLayer() {
+        ProcessRunner.runProcess("pkill", "-f", "'org.mate.representation.DynamicTest'");
+    }
+
+    /**
+     * Launches Representation Layer
+     */
+    public void launchRepresentationLayer() {
+        ProcessRunner.runBackgroundProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                "am", "instrument", "-w",
+                "-e", "class", "'org.mate.representation.DynamicTest'",
+                "org.mate.representation.test/androidx.test.runner.AndroidJUnitRunner");
+    }
+
+    /**
      * Broadcasts the notification of a system event to a given receiver.
      *
      * @param packageName     The package name of the AUT.
