@@ -130,8 +130,17 @@ public class AndroidEndpoint implements Endpoint {
             return result.getErr();
         }
 
+        String[] inputCommands = {
+                "run-as " + packageName,
+                "mkdir -p files",
+                "touch files/coverage.exec",
+                "touch files/coverage.exe",
+                "exit",
+                "exit"
+        };
+
         result = ProcessRunner.runProcess((Path) null,
-                "run-as " + packageName + "\nmkdir -p files\ntouch files/coverage.exec\nexit\nexit\n",
+                 String.join("\n", inputCommands),
                 androidEnvironment.getAdbExecutable(), "-s", deviceId, "shell");
         if (result.isErr()) {
             return result.getErr();
