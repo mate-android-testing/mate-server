@@ -47,10 +47,11 @@ public class AndroidEndpoint implements Endpoint {
 
         Device device = Device.devices.get(deviceID);
         device.killRepresentationLayer();
-        device.launchRepresentationLayer();
+        boolean response = device.launchRepresentationLayer();
         Log.println("Launch representation layer");
 
         return new Message.MessageBuilder("/android/launch_representation_layer")
+                .withParameter("response", String.valueOf(response))
                 .build();
     }
 

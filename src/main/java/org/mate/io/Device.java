@@ -159,11 +159,25 @@ public class Device {
     /**
      * Launches Representation Layer
      */
-    public void launchRepresentationLayer() {
-        ProcessRunner.runBackgroundProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+    public boolean launchRepresentationLayer() {
+        Result<String, String> result = ProcessRunner.runBackgroundProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
                 "am", "instrument", "-w",
                 "-e", "class", "'org.mate.representation.DynamicTest'",
                 "org.mate.representation.test/androidx.test.runner.AndroidJUnitRunner");
+
+        if (result.isOk()) {
+            return true;
+        }
+
+        // there was a problem running instrumentation, what happened?
+        String output = result.getErr();
+        if (output.contains("does not have a signature matching the target")) {
+            throw new IllegalStateException("Unable to launch MATE Representation Layer. " +
+                    "MATE Representation Layer's APK has a different signature than AUT's APK");
+        }
+
+
+        return false;
     }
 
     /**

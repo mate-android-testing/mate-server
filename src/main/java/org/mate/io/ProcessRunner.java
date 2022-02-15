@@ -6,6 +6,8 @@ import org.mate.util.Result;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.sql.Array;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -94,20 +96,42 @@ public class ProcessRunner {
         return runProcess(outputFile, input, List.of(cmd));
     }
 
-    public static void runBackgroundProcess(String... cmd) {
-        runBackgroundProcess(List.of(cmd));
+    public static Result<String, String> runBackgroundProcess(String... cmd) {
+        return runBackgroundProcess(List.of(cmd));
     }
 
-    public static void runBackgroundProcess(List<String> cmd) {
+    public static Result<String, String> runBackgroundProcess(List<String> cmd) {
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
 
+        Process p;
+
         try {
-            pb.start();
+            p = pb.start();
         } catch (Exception e) {
             var errMsg = "unable to execute cmd " + cmd + ": " + e.getMessage()
                     + "\n" + e.fillInStackTrace();
             Log.printError(errMsg);
+            return Result.errOf(errMsg);
         }
+
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            Log.println("Waiting for background process status");
+        }
+
+        if (p.isAlive()) {
+            // Process is still in background, return an empty OK result
+            return Result.okOf("");
+        }
+
+        // process has finished very shortly, this is probably an error.
+        // return process output for analysis
+        String output = new BufferedReader(new InputStreamReader(p.getInputStream()))
+                .lines()
+                .collect(Collectors.joining());
+
+        return Result.errOf(output);
     }
 }
