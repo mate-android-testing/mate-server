@@ -241,8 +241,8 @@ public class GraphEndpoint implements Endpoint {
                 if (distance < minDistance.get() && distance != -1) {
                     /*
                     * We are only interested in a direct hit (covered branch) or the distance to an if statement.
-                    * This equals distances of either if statements or branches and excludes
-                    * distances to visited entry or exit vertices.
+                    * This equals distances of either if statements or branches and excludes distances to visited
+                    * entry or exit vertices.
                      */
                     if ((distance == 0 && visitedVertex.isBranchVertex()) || visitedVertex.isIfVertex()) {
                         minDistanceVertex.set(visitedVertex);
@@ -283,10 +283,9 @@ public class GraphEndpoint implements Endpoint {
             int approachLevel = minDistance.get();
 
             /*
-             * The vertex with the closest distance represents an if stmt, at which
-             * the execution path took the wrong direction. We need to find the shortest
-             * branch distance value for the given if stmt. Note that the if stmt could have been
-             * visited multiple times.
+             * The vertex with the closest distance represents an if stmt, at which the execution path took the wrong
+             * direction. We need to find the shortest branch distance value for the given if stmt. Note that the if
+             * stmt could have been visited multiple times.
              */
             Vertex ifVertex = minDistanceVertex.get();
             Statement stmt = ifVertex.getStatement();
@@ -306,14 +305,21 @@ public class GraphEndpoint implements Endpoint {
 
             double minBranchDistance = Double.MAX_VALUE;
 
+            /*
+            * We need to look for branch distance traces that refer to the if statement. A branch distance trace is
+            * produced for both branches, but we only need to consider those traces that describe the branch that
+            * couldn't be covered, otherwise we would have actually taken the right branch. Thus, the relevant distance
+            * traces (we may have visited the if statement multiple times) must contain a distance > 0, since a branch
+            * with a distance of 0 would have be taken. We simply need to pick the minimum of those distance traces.
+             */
             for (String trace : traces) {
                 if (trace.startsWith(prefix)) {
 
                     // found a branch distance value for the given if stmt
                     double distance = Double.parseDouble(trace.split(":")[1]);
 
-                    // we need to track minimal distance
-                    if (distance < minBranchDistance) {
+                    // we need to track the minimal distance > 0 (non-covered branch)
+                    if (distance > 0 && distance < minBranchDistance) {
                         minBranchDistance = distance;
                     }
                 }
@@ -448,14 +454,22 @@ public class GraphEndpoint implements Endpoint {
 
                 double minBranchDistance = Double.MAX_VALUE;
 
+                /*
+                 * We need to look for branch distance traces that refer to the if statement. A branch distance trace is
+                 * produced for both branches, but we only need to consider those traces that describe the branch that
+                 * couldn't be covered, otherwise we would have actually taken the right branch. Thus, the relevant
+                 * distance traces (we may have visited the if statement multiple times) must contain a distance > 0,
+                 * since a branch with a distance of 0 would have be taken. We simply need to pick the minimum of those
+                 * distance traces.
+                 */
                 for (String trace : traces) {
                     if (trace.startsWith(prefix)) {
 
                         // found a branch distance value for the given if stmt
                         double distance = Double.parseDouble(trace.split(":")[1]);
 
-                        // we need to track the minimal distance
-                        if (distance < minBranchDistance) {
+                        // we need to track the minimal distance > 0 (non-covered branch)
+                        if (distance > 0 && distance < minBranchDistance) {
                             minBranchDistance = distance;
                         }
                     }
