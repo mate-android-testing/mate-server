@@ -134,7 +134,6 @@ public class AndroidEndpoint implements Endpoint {
                 "run-as " + packageName,
                 "mkdir -p files",
                 "touch files/coverage.exec",
-                "touch files/coverage.exe",
                 "exit",
                 "exit"
         };
