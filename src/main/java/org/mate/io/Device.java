@@ -28,6 +28,9 @@ public class Device {
     private final int apiVersion;
     private String currentScreenShotLocation;
 
+    // the PID of the DynamicTest
+    private Long dynamicTestPID;
+
     // defines where the apps, in particular the APKs are located
     public static Path appsDir;
 
@@ -153,7 +156,13 @@ public class Device {
      * Kills Representation Layer if running
      */
     public void killRepresentationLayer() {
-        ProcessRunner.runProcess("pkill", "-f", "'org.mate.representation.DynamicTest'");
+        if (ProcessRunner.isWin) {
+            if (dynamicTestPID != null) {
+                ProcessRunner.runProcess("taskkill", "/F", "/PID", String.valueOf(dynamicTestPID)).getOk();
+            }
+        } else {
+            ProcessRunner.runProcess("pkill", "-f", "'org.mate.representation.DynamicTest'");
+        }
     }
 
     /**
@@ -166,6 +175,8 @@ public class Device {
                 "org.mate.representation.test/androidx.test.runner.AndroidJUnitRunner");
 
         if (result.isOk()) {
+            // we need to save the PID to later kill and restart the DynamicTest process
+            dynamicTestPID = ProcessRunner.getLastBackgroundPID();
             return true;
         }
 

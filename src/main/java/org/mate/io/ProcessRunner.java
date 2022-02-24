@@ -6,8 +6,6 @@ import org.mate.util.Result;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.sql.Array;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -18,6 +16,20 @@ public class ProcessRunner {
     private ProcessRunner() {}
 
     public static boolean isWin = System.getProperty("os.name").startsWith("Windows");
+
+    /**
+     * The PID of the last background process that was started.
+     */
+    private static long lastBackgroundPID;
+
+    /**
+     * Returns the PID of the last background process.
+     *
+     * @return Returns the pid of the last background process.
+     */
+    public static long getLastBackgroundPID() {
+        return lastBackgroundPID;
+    }
 
     /**
      * Executes cmd and returns the output lines as a list of Strings
@@ -108,6 +120,7 @@ public class ProcessRunner {
 
         try {
             p = pb.start();
+            lastBackgroundPID = p.pid();
         } catch (Exception e) {
             var errMsg = "unable to execute cmd " + cmd + ": " + e.getMessage()
                     + "\n" + e.fillInStackTrace();
