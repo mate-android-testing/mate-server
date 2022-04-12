@@ -466,6 +466,17 @@ public class Device {
             }
         }
 
+        if (getApiVersion() == 29) {
+            if (ProcessRunner.isWin) {
+                cmd = "$focused = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID
+                        + " shell dumpsys activity activities "
+                        + "| select-string mResumedActivity ; \"$focused\".Line.split(\" \")[7]";
+            } else {
+                cmd = androidEnvironment.getAdbExecutable() + " -s " + deviceID
+                        + " shell dumpsys activity activities | grep mResumedActivity | cut -d \" \" -f 8";
+            }
+        }
+
         List<String> result;
 
         if (ProcessRunner.isWin) {
