@@ -144,12 +144,39 @@ public class Device {
      * otherwise {@code false}.
      */
     public boolean grantPermissions(String packageName) {
+        // First, check what are the permissions already granted for the app
+        List<String> packageDumpSys = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID,
+                "shell", "dumpsys", "package", packageName).getOk();
 
-        List<String> responseRead = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "pm", "grant", packageName, "android.permission.READ_EXTERNAL_STORAGE").getOk();
-        List<String> responseWrite = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "pm", "grant", packageName, "android.permission.WRITE_EXTERNAL_STORAGE").getOk();
+        List<String> grantedPermissions = new ArrayList<>();
+        boolean grantedPermissionsSection = false;
+        for (String line : packageDumpSys) {
+            if (line.contains("grantedPermissions")) {
+                grantedPermissionsSection = true;
+                continue;
+            }
 
-        // empty response should signal no failure
-        return responseRead.isEmpty() && responseWrite.isEmpty();
+            if (grantedPermissionsSection) {
+                grantedPermissions.add(line.trim());
+            }
+        }
+
+        boolean success = true;
+
+        String readPermission = "android.permission.READ_EXTERNAL_STORAGE";
+        if (!grantedPermissions.contains(readPermission)) {
+            List<String> responseRead = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "pm", "grant", packageName, readPermission).getOk();
+            success = success && responseRead.isEmpty();
+        }
+
+        String writePermission = "android.permission.WRITE_EXTERNAL_STORAGE";
+        if (!grantedPermissions.contains(writePermission)) {
+            List<String> responseWrite = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "pm", "grant", packageName, writePermission).getOk();
+            success = success && responseWrite.isEmpty();
+        }
+
+        // empty response on both commands should signal no failure
+        return success;
     }
 
     /**

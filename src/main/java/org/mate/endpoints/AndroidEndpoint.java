@@ -131,7 +131,7 @@ public class AndroidEndpoint implements Endpoint {
         if (result.isErr()) {
             return result.getErr();
         }
-        
+
         result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
                 "-s",
                 deviceId,
