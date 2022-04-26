@@ -126,23 +126,31 @@ public class AndroidEndpoint implements Endpoint {
                 "pm",
                 "clear",
                 packageName);
+
+
+        if (result.isErr()) {
+            return result.getErr();
+        }
+        
+        result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s",
+                deviceId,
+                "shell",
+                "run-as",
+                packageName,
+                "mkdir -p files");
+
         if (result.isErr()) {
             return result.getErr();
         }
 
-        // pipe into stdin of 'adb shell'
-        String[] inputCommands = {
-                "run-as " + packageName,
-                "mkdir -p files",
-                "touch files/coverage.exec",
-                // TODO: are those exit commands really necessary at all?
-                "exit",
-                "exit"
-        };
-
-        result = ProcessRunner.runProcess((Path) null,
-                String.join("\n", inputCommands),
-                androidEnvironment.getAdbExecutable(), "-s", deviceId, "shell");
+        result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s",
+                deviceId,
+                "shell",
+                "run-as",
+                packageName,
+                "touch files/coverage.exec");
 
         if (result.isErr()) {
             return result.getErr();
