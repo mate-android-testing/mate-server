@@ -337,7 +337,7 @@ public class Device {
         // check whether writing traces has been completed yet
         while(!completedWritingTraces(tracesDir)) {
             try {
-                Thread.sleep(1000);
+                Thread.sleep(300);
             } catch (InterruptedException e) {
                 Log.println("Waiting for info.txt failed!");
                 throw new IllegalStateException(e);
