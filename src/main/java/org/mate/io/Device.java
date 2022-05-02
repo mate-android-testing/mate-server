@@ -338,7 +338,7 @@ public class Device {
             Log.println("Chromosome: " + chromosome);
             Log.println("Traces: " + Files.lines(tracesFile.toPath()).collect(Collectors.toList()));
 
-            int numberOfTraces = Integer.parseInt(content.getOk().get(0));
+            int numberOfTraces = Integer.parseInt(content.getOk().get(0).trim());
             Log.println("Number of traces according to info.txt: " + numberOfTraces);
 
             /*
