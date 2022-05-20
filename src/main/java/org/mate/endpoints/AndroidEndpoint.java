@@ -34,10 +34,25 @@ public class AndroidEndpoint implements Endpoint {
             return getCurrentActivity(request);
         } else if (request.getSubject().startsWith("/android/grant_runtime_permissions")) {
             return grantRuntimePermissions(request);
+        } else if (request.getSubject().startsWith("/android/launch_representation_layer")) {
+            return launchRepresentationLayer(request);
         } else {
             throw new IllegalArgumentException("Message request with subject: "
                     + request.getSubject() + " can't be handled by AndroidEndpoint!");
         }
+    }
+
+    private Message launchRepresentationLayer(Message request) {
+        String deviceID = request.getParameter("deviceId");
+
+        Device device = Device.devices.get(deviceID);
+        device.killRepresentationLayer();
+        boolean response = device.launchRepresentationLayer();
+        Log.println("Launch representation layer");
+
+        return new Message.MessageBuilder("/android/launch_representation_layer")
+                .withParameter("response", String.valueOf(response))
+                .build();
     }
 
     /**
@@ -111,23 +126,31 @@ public class AndroidEndpoint implements Endpoint {
                 "pm",
                 "clear",
                 packageName);
+
+
         if (result.isErr()) {
             return result.getErr();
         }
 
-        // pipe into stdin of 'adb shell'
-        String[] inputCommands = {
-                "run-as " + packageName,
-                "mkdir -p files",
-                "touch files/coverage.exec",
-                // TODO: are those exit commands really necessary at all?
-                "exit",
-                "exit"
-        };
+        result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s",
+                deviceId,
+                "shell",
+                "run-as",
+                packageName,
+                "mkdir -p files");
 
-        result = ProcessRunner.runProcess((Path) null,
-                String.join("\n", inputCommands),
-                androidEnvironment.getAdbExecutable(), "-s", deviceId, "shell");
+        if (result.isErr()) {
+            return result.getErr();
+        }
+
+        result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s",
+                deviceId,
+                "shell",
+                "run-as",
+                packageName,
+                "touch files/coverage.exec");
 
         if (result.isErr()) {
             return result.getErr();

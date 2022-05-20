@@ -28,6 +28,9 @@ public class Device {
     private final int apiVersion;
     private String currentScreenShotLocation;
 
+    // the PID of the DynamicTest
+    private Long dynamicTestPID;
+
     // defines where the apps, in particular the APKs are located
     public static Path appsDir;
 
@@ -141,12 +144,78 @@ public class Device {
      * otherwise {@code false}.
      */
     public boolean grantPermissions(String packageName) {
+        // First, check what are the permissions already granted for the app
+        List<String> packageDumpSys = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID,
+                "shell", "dumpsys", "package", packageName).getOk();
 
-        List<String> responseRead = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "pm", "grant", packageName, "android.permission.READ_EXTERNAL_STORAGE").getOk();
-        List<String> responseWrite = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "pm", "grant", packageName, "android.permission.WRITE_EXTERNAL_STORAGE").getOk();
+        List<String> grantedPermissions = new ArrayList<>();
+        boolean grantedPermissionsSection = false;
+        for (String line : packageDumpSys) {
+            if (line.contains("grantedPermissions")) {
+                grantedPermissionsSection = true;
+                continue;
+            }
 
-        // empty response should signal no failure
-        return responseRead.isEmpty() && responseWrite.isEmpty();
+            if (grantedPermissionsSection) {
+                grantedPermissions.add(line.trim());
+            }
+        }
+
+        boolean success = true;
+
+        String readPermission = "android.permission.READ_EXTERNAL_STORAGE";
+        if (!grantedPermissions.contains(readPermission)) {
+            List<String> responseRead = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "pm", "grant", packageName, readPermission).getOk();
+            success = success && responseRead.isEmpty();
+        }
+
+        String writePermission = "android.permission.WRITE_EXTERNAL_STORAGE";
+        if (!grantedPermissions.contains(writePermission)) {
+            List<String> responseWrite = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "pm", "grant", packageName, writePermission).getOk();
+            success = success && responseWrite.isEmpty();
+        }
+
+        // empty response on both commands should signal no failure
+        return success;
+    }
+
+    /**
+     * Kills Representation Layer if running
+     */
+    public void killRepresentationLayer() {
+        if (ProcessRunner.isWin) {
+            if (dynamicTestPID != null) {
+                ProcessRunner.runProcess("taskkill", "/F", "/PID", String.valueOf(dynamicTestPID)).getOk();
+            }
+        } else {
+            ProcessRunner.runProcess("pkill", "-f", "'org.mate.representation.DynamicTest'");
+        }
+    }
+
+    /**
+     * Launches Representation Layer
+     */
+    public boolean launchRepresentationLayer() {
+        Result<String, String> result = ProcessRunner.runBackgroundProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                "am", "instrument", "-w",
+                "-e", "class", "'org.mate.representation.DynamicTest'",
+                "org.mate.representation.test/androidx.test.runner.AndroidJUnitRunner");
+
+        if (result.isOk()) {
+            // we need to save the PID to later kill and restart the DynamicTest process
+            dynamicTestPID = ProcessRunner.getLastBackgroundPID();
+            return true;
+        }
+
+        // there was a problem running instrumentation, what happened?
+        String output = result.getErr();
+        if (output.contains("does not have a signature matching the target")) {
+            throw new IllegalStateException("Unable to launch MATE Representation Layer. " +
+                    "MATE Representation Layer's APK has a different signature than AUT's APK");
+        }
+
+
+        return false;
     }
 
     /**
