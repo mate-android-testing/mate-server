@@ -357,6 +357,9 @@ public class Device {
         } catch (IOException e) {
             Log.println("Couldn't count lines in traces.txt");
             throw new UncheckedIOException(e);
+        } catch (NumberFormatException e) {
+            // in very rare cases, the info.txt seems to be corrupted
+            Log.printWarning("Couldn't read number of traces from info.txt: " + e.getMessage());
         }
 
         // remove trace file from emulator
