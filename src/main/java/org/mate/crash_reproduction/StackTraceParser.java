@@ -14,7 +14,7 @@ public class StackTraceParser {
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("^Caused by: (\\S+): (.+)"), StackTraceParser::parseCausedByLine);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("^(\\S+): (.+)$"), StackTraceParser::parseCausedByLine);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\((.+):(\\d+)\\)"), StackTraceParser::parseNormalStackTraceLine);
-        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(.+\\)"), StackTraceParser::parseOtherStackTraceLine);
+        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(Native Method\\)"), StackTraceParser::parseOtherStackTraceLine);
     }
 
     private StackTraceParser() {
