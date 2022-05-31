@@ -81,8 +81,12 @@ public class GraphEndpoint implements Endpoint {
         } else if (request.getSubject().startsWith("/graph/get_max_activity_distance")) {
             return getMaxActivityDistance(request);
         } else if (request.getSubject().startsWith("/graph/stack_trace_tokens")) {
+            String packageName = request.getParameter("package");
+            Set<String> stackTraceTokens = stackTrace.getFuzzyTokens(packageName);
+            Stream<String> instructionTokens = branchLocator.getTokensForStackTrace(stackTrace, packageName);
+            Stream<String> tokens = Stream.concat(stackTraceTokens.stream(), instructionTokens);
             return new Message.MessageBuilder("/graph/stack_trace_tokens")
-                    .withParameter("tokens", String.join(",", stackTrace.getFuzzyTokens(request.getParameter("package"))))
+                    .withParameter("tokens", String.join(",", tokens.collect(Collectors.toSet())))
                     .build();
         } else if(request.getSubject().startsWith("/graph/stack_trace_user_tokens")) {
             return new Message.MessageBuilder("/graph/stack_trace_user_tokens")
