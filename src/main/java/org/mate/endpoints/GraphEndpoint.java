@@ -50,6 +50,7 @@ public class GraphEndpoint implements Endpoint {
     // a target vertex (a random branch)
     private List<Vertex> targetVertexes;
     private StackTrace stackTrace;
+    private BranchLocator branchLocator;
 
     public GraphEndpoint(AndroidEnvironment androidEnvironment, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
@@ -274,7 +275,7 @@ public class GraphEndpoint implements Endpoint {
                     stackTrace = StackTraceParser.parse(Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()));
 
                     Log.println("Branchlocator init");
-                    BranchLocator branchLocator = new BranchLocator(apkPath);
+                    branchLocator = new BranchLocator(apkPath);
                     Log.println("Get instruc");
                     List<Vertex> targetVertex = branchLocator.getInstructionForStackTrace(stackTrace.getAtLines(), packageName).stream().map(graph::lookupVertex).collect(Collectors.toList());
 
