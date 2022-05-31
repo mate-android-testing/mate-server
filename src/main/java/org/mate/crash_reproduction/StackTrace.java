@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class StackTrace {
     private static final Set<String> IGNORE_TOKENS = Set.of(
@@ -32,9 +33,14 @@ public class StackTrace {
     }
 
     public List<String> getAtLines() {
-        return stackTraceLines.stream()
-                .filter(line -> line instanceof AtStackTraceLine)
+        return getStackTraceAtLines()
                 .map(Objects::toString)
                 .collect(Collectors.toList());
+    }
+
+    public Stream<AtStackTraceLine> getStackTraceAtLines() {
+        return stackTraceLines.stream()
+                .filter(line -> line instanceof AtStackTraceLine)
+                .map(l -> (AtStackTraceLine) l);
     }
 }
