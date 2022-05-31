@@ -31,7 +31,7 @@ public abstract class CFG implements Graph {
     protected List<Vertex> branchVertices;
 
     // the search algorithm (bi-directional dijkstra seems to be the fastest one)
-    private final ShortestPathAlgorithm<Vertex, Edge> dijkstra;
+    protected final ShortestPathAlgorithm<Vertex, Edge> dijkstra;
 
     // the path to the apps dir
     protected final Path appsDir;
@@ -63,6 +63,8 @@ public abstract class CFG implements Graph {
         branchVertices = initBranchVertices();
         dijkstra = baseCFG.initBidirectionalDijkstraAlgorithm();
         vertexMap = initVertexMap();
+        Log.println("vertexMap Keys:");
+        vertexMap.keySet().forEach(Log::println);
     }
 
     /**
@@ -117,9 +119,9 @@ public abstract class CFG implements Graph {
         Log.println("Number of actual branches: " + branches.size());
         Log.println("Number of branch vertices: " + branchVertices.size());
 
-        if (branchVertices.size() != branches.size()) {
-            throw new IllegalStateException("Couldn't derive for certain branches the corresponding branch vertices!");
-        }
+//        if (branchVertices.size() != branches.size()) {
+//            throw new IllegalStateException("Couldn't derive for certain branches the corresponding branch vertices!");
+//        }
 
         return branchVertices;
     }

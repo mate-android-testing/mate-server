@@ -5,6 +5,9 @@ import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
@@ -27,9 +30,24 @@ public class UtilityEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/utility/fetch_test_case")) {
             return fetchTestCase(request);
+        } else if (request.getSubject().startsWith("/utility/write_file")) {
+            return writeFile(request);
         }
         throw new IllegalArgumentException("Message request with subject: "
                 + request.getSubject() + " can't be handled by UtilityEndpoint!");
+    }
+
+    private Message writeFile(Message request) {
+        String content = request.getParameter("content");
+        String fileName = request.getParameter("fileName");
+
+        try {
+            Files.writeString(Path.of("./results/").resolve(fileName), content);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+
+        return new Message.MessageBuilder("/utility/write_file").build();
     }
 
     /**

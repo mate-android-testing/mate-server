@@ -26,8 +26,10 @@ public class PropertiesEndpoint implements Endpoint {
     private Message getProperties() {
 
         Properties properties = new Properties();
+        String propertiesDir = System.getenv("MATE_PROPERTIES_DIR");
+        String path = (propertiesDir == null ? "." : propertiesDir) + "/mate.properties";
         try {
-            properties.load(new FileReader(new File("mate.properties")));
+            properties.load(new FileReader(new File(path)));
         } catch (IOException e) {
             Log.println("WARNING: Failed to load mate.properties file: " + e.getLocalizedMessage());
         }

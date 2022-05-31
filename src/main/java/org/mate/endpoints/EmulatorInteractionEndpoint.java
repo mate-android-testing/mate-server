@@ -8,6 +8,13 @@ import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
 
+import java.awt.*;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+
 public class EmulatorInteractionEndpoint implements Endpoint {
 
     private boolean disabledAutoRotate = false;
@@ -116,6 +123,8 @@ public class EmulatorInteractionEndpoint implements Endpoint {
                 return allocateEmulator(request);
             } else if ("take_screenshot".equals(request.getParameter("type"))) {
                 return takeScreenshot(request);
+            } else if ("mark_on_screenshot".equals(request.getParameter("type"))) {
+                return markOnScreenshots(request);
             }
         }
         throw new IllegalArgumentException("Message request with subject: "
@@ -132,6 +141,29 @@ public class EmulatorInteractionEndpoint implements Endpoint {
 
         Device device = Device.devices.get(deviceID);
         imageHandler.takeScreenshot(device, packageName, nodeID);
+
+        return new Message.MessageBuilder("/emulator/interaction").build();
+    }
+
+    private Message markOnScreenshots(Message request) {
+        var packageName = request.getParameter("packageName");
+        var stateId = request.getParameter("state");
+        List<Rectangle> rectangles = Arrays.stream(request.getParameter("rectangles").split(";"))
+                .map(recString -> {
+                    String[] parts = recString.split(",");
+                    int x1 = Integer.parseInt(parts[0]);
+                    int y1 = Integer.parseInt(parts[1]);
+                    int x2 = Integer.parseInt(parts[2]);
+                    int y2 = Integer.parseInt(parts[3]);
+
+                    return new Rectangle(x1, y1, x2 - x1, y2 - y1);
+                }).collect(Collectors.toList());
+
+        try {
+            imageHandler.markImage(rectangles, stateId, packageName);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
 
         return new Message.MessageBuilder("/emulator/interaction").build();
     }

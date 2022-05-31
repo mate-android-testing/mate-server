@@ -1,14 +1,19 @@
 package org.mate.endpoints;
 
+import de.uni_passau.fim.auermich.android_graphs.core.app.components.ComponentType;
+import de.uni_passau.fim.auermich.android_graphs.core.calltrees.CallTree;
+import de.uni_passau.fim.auermich.android_graphs.core.calltrees.CallTreeEdge;
+import de.uni_passau.fim.auermich.android_graphs.core.calltrees.CallTreeVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
 import org.apache.commons.io.FileUtils;
-import org.mate.graphs.Graph;
-import org.mate.graphs.GraphType;
-import org.mate.graphs.InterCFG;
-import org.mate.graphs.IntraCFG;
+import org.jgrapht.GraphPath;
+import org.mate.crash_reproduction.BranchLocator;
+import org.mate.crash_reproduction.StackTrace;
+import org.mate.crash_reproduction.StackTraceParser;
+import org.mate.graphs.*;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
@@ -16,6 +21,7 @@ import org.mate.util.Log;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 /**
@@ -36,10 +43,13 @@ public class GraphEndpoint implements Endpoint {
 
     private final AndroidEnvironment androidEnvironment;
     private Graph graph;
+    private CallTree callTree;
+    private ActivityGraph activityGraph;
     private final Path appsDir;
 
     // a target vertex (a random branch)
-    private Vertex targetVertex;
+    private List<Vertex> targetVertexes;
+    private StackTrace stackTrace;
 
     public GraphEndpoint(AndroidEnvironment androidEnvironment, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
@@ -50,16 +60,134 @@ public class GraphEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/graph/init")) {
             return initGraph(request);
+        } else if (request.getSubject().startsWith("/graph/activity_graph_init")) {
+            return activityGraphInit(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector")) {
             return getBranchDistanceVector(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
             return getBranchDistance(request);
         } else if (request.getSubject().startsWith("/graph/draw")) {
             return drawGraph(request);
+        } else if (request.getSubject().startsWith("/graph/get_target_activities")) {
+            String packageName = request.getParameter("package");
+            return new Message.MessageBuilder("/graph/get_target_activities")
+                    .withParameter("target_activities", String.join(",", getTargetComponents(packageName, ComponentType.ACTIVITY, ComponentType.FRAGMENT)))
+                    .build();
+        } else if (request.getSubject().startsWith("/graph/get_activity_distance")) {
+            return getActivityDistance(request);
+        }  else if (request.getSubject().startsWith("/graph/get_all_activity_distances")) {
+            return getAllActivityDistances(request);
+        } else if (request.getSubject().startsWith("/graph/get_max_activity_distance")) {
+            return getMaxActivityDistance(request);
+        } else if (request.getSubject().startsWith("/graph/stack_trace_tokens")) {
+            return new Message.MessageBuilder("/graph/stack_trace_tokens")
+                    .withParameter("tokens", String.join(",", stackTrace.getFuzzyTokens(request.getParameter("package"))))
+                    .build();
+        } else if(request.getSubject().startsWith("/graph/stack_trace_user_tokens")) {
+            return new Message.MessageBuilder("/graph/stack_trace_user_tokens")
+                    .withParameter("tokens", String.join(",", stackTrace.getUserTokens()))
+                    .build();
+        } else if (request.getSubject().startsWith("/graph/stack_trace")) {
+            return new Message.MessageBuilder("/graph/stack_trace")
+                    .withParameter("stack_trace", String.join(",", stackTrace.getAtLines()))
+                    .build();
+        } else if (request.getSubject().startsWith("/graph/call_tree_distance")) {
+            return getCallTreeDistance(request);
         } else {
             throw new IllegalArgumentException("Message request with subject: "
                     + request.getSubject() + " can't be handled by GraphEndpoint!");
         }
+    }
+
+    private Message getCallTreeDistance(Message request) {
+        String packageName = request.getParameter("packageName");
+        String chromosome = request.getParameter("chromosome");
+
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
+        Log.println("Computing the branch distance for the chromosome: " + chromosome);
+
+        // get list of traces file
+        Path appDir = appsDir.resolve(packageName);
+        File tracesDir = appDir.resolve("traces").toFile();
+
+        // collect the relevant traces files
+        List<File> tracesFiles = getTraceFiles(tracesDir, chromosome);
+
+        // read traces from trace file(s)
+        Set<String> traces = readTraces(tracesFiles).stream().map(this::traceToMethod).collect(Collectors.toSet());
+        List<CallTreeVertex> callTreeVertices = targetVertexes.stream().map(Vertex::getMethod).map(CallTreeVertex::new).collect(Collectors.toList());
+        Collections.reverse(callTreeVertices);
+
+        int minDistance = Integer.MAX_VALUE;
+        Optional<GraphPath<CallTreeVertex, CallTreeEdge>> minPath = Optional.empty();
+
+        for (String trace : traces) {
+            var path = callTree.getShortestPathWithStops(new CallTreeVertex(trace), callTreeVertices);
+            if (path.isPresent()) {
+                int distance = path.get().getLength();
+
+                if (distance < minDistance) {
+                    minPath = path;
+                    minDistance = distance;
+                }
+            }
+        }
+
+        double normalizedDistance = minDistance == Integer.MAX_VALUE
+                ? 1
+                : Math.max(0, (((double) minDistance / ((double) minDistance + 1)) - 0.5) * 2);
+
+        Log.println("CallTree distance for " + chromosome + " is: abs. distance " + minDistance + ", rel. distance " + normalizedDistance);
+
+        return new Message.MessageBuilder("/graph/call_tree_distance")
+                .withParameter("distance", "" + normalizedDistance)
+                .build();
+    }
+
+    private String traceToMethod(String method) {
+        String[] parts = method.split("->");
+        return parts[0] + "->" + parts[1];
+    }
+
+    private Set<String> getTargetComponents(String packageName, ComponentType... componentType) {
+        return ((InterCFG) graph).getTargetComponents(stackTrace.getAtLines().stream().filter(l -> l.contains(packageName)).collect(Collectors.toList()), componentType);
+    }
+
+    private Message getActivityDistance(Message request) {
+        Set<String> targetActivities = new HashSet<>(Arrays.asList(request.getParameter("targetActivities").split(",")));
+        List<String> activitySequence = Arrays.asList(request.getParameter("activitySequence").split(","));
+
+        // Calculate average distance
+        return new Message.MessageBuilder("/graph/get_activity_distance")
+                .withParameter("activity_distance", String.valueOf(activitySequence.stream().mapToInt(activity -> getActivityDistance(targetActivities, activity)).average().orElseThrow()))
+                .build();
+    }
+
+    private int getActivityDistance(Set<String> targetActivities, String activity) {
+        return targetActivities.stream().mapToInt(targetActivity -> activityGraph.getMinDistance(activity, targetActivity)).min().orElseThrow();
+    }
+
+    private Message getMaxActivityDistance(Message request) {
+        Set<String> targetActivities = new HashSet<>(Arrays.asList(request.getParameter("targetActivities").split(",")));
+        int maxActivityDistance = targetActivities.stream().mapToInt(activityGraph::getMaxDistance).max().orElseThrow();
+        Log.println("Max activity distance is: " + maxActivityDistance);
+
+        return new Message.MessageBuilder("/graph/get_max_activity_distance")
+                .withParameter("max_activity_distance", String.valueOf(maxActivityDistance))
+                .build();
+    }
+
+    private Message getAllActivityDistances(Message request) {
+        Set<String> targetActivities = new HashSet<>(Arrays.asList(request.getParameter("targetActivities").split(",")));
+
+        return new Message.MessageBuilder("/graph/get_max_activity_distance")
+                .withParameter("activity_distances", activityGraph.getMinDistances(targetActivities).entrySet().stream()
+                        .map(entry -> entry.getKey() + ":" + entry.getValue())
+                        .collect(Collectors.joining(";")))
+                .build();
     }
 
     private Message drawGraph(Message request) {
@@ -81,16 +209,13 @@ public class GraphEndpoint implements Endpoint {
             Log.println("Drawing graph...");
 
             // determine the target vertices (e.g. single branch or all branches)
-            Set<Vertex> targetVertices = new HashSet<>();
 
-            if (targetVertex != null) {
-                targetVertices.add(targetVertex);
-            } else {
-                targetVertices.addAll(new HashSet<>(graph.getBranchVertices()));
-            }
+            Set<Vertex> targetVertices = new HashSet<>(Objects.requireNonNullElseGet(targetVertexes, () -> new HashSet<>(graph.getBranchVertices())));
 
             // retrieve the visited vertices
-            Set<Vertex> visitedVertices = getVisitedVertices(appDir);
+            String chromosome = request.getParameter("chromosome");
+            Log.println("Drawing graph with visited vertices from chromosome: " + chromosome);
+            Set<Vertex> visitedVertices = getVisitedVertices(appDir, chromosome);
 
             // draw the graph where target and visited vertices are marked in different colours
             graph.draw(drawDir, visitedVertices, targetVertices);
@@ -99,13 +224,13 @@ public class GraphEndpoint implements Endpoint {
         return new Message("/graph/draw");
     }
 
-    private Set<Vertex> getVisitedVertices(File appDir) {
+    private Set<Vertex> getVisitedVertices(File appDir, String chromosomes) {
 
         // get list of traces file
         File tracesDir = new File(appDir, "traces");
 
         // collect the relevant traces files
-        List<File> tracesFiles = getTraceFiles(tracesDir, null);
+        List<File> tracesFiles = getTraceFiles(tracesDir, chromosomes);
 
         // read traces from trace file(s)
         Set<String> traces = readTraces(tracesFiles);
@@ -119,7 +244,7 @@ public class GraphEndpoint implements Endpoint {
      * @param target Describes how a target should be selected.
      * @return Returns the selected target vertex.
      */
-    private Vertex selectTargetVertex(String target) {
+    private List<Vertex> selectTargetVertex(String target, String packageName, File apkPath) {
 
         Log.println("Target vertex selection strategy: " + target);
 
@@ -136,17 +261,52 @@ public class GraphEndpoint implements Endpoint {
 
                     if (graph.isReachable(randomVertex)) {
                         Log.println("Randomly selected target vertex: " + randomVertex + " [" + randomVertex.getMethod() + "]");
-                        return randomVertex;
+                        return List.of(randomVertex);
                     }
                 }
-            default:
-                Vertex targetVertex = graph.lookupVertex(target);
+            case "stack_trace":
+                File appDir = new File(appsDir.toFile(), packageName);
 
-                if (targetVertex == null) {
+                // the stack_trace.txt should be located within the app directory
+                File stackTraceFile = new File(appDir, "stack_trace.txt");
+
+                try {
+                    stackTrace = StackTraceParser.parse(Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()));
+
+                    Log.println("Branchlocator init");
+                    BranchLocator branchLocator = new BranchLocator(apkPath);
+                    Log.println("Get instruc");
+                    List<Vertex> targetVertex = branchLocator.getInstructionForStackTrace(stackTrace.getAtLines(), packageName).stream().map(graph::lookupVertex).collect(Collectors.toList());
+
+                    if (targetVertex.isEmpty()) {
+                        throw new UnsupportedOperationException("To targets found for stack trace: " + target);
+                    }
+                    return targetVertex;
+                } catch (IOException e) {
+                    Log.printError("Could not read stack trace file from '" + stackTraceFile.getAbsolutePath() + "'!");
+                    throw new UncheckedIOException(e);
+                }
+            default:
+                List<Vertex> targetVertex = Arrays.stream(target.split(",")).map(graph::lookupVertex).collect(Collectors.toList());
+
+                if (targetVertex.isEmpty()) {
                     throw new UnsupportedOperationException("Custom target vertex not found: " + target);
                 }
                 return targetVertex;
         }
+    }
+
+    private Message activityGraphInit(Message request) {
+        String packageName = request.getParameter("packageName");
+
+        File activityGraphMap = appsDir.resolve(packageName).resolve("activity-graph.txt").toFile();
+
+        if (!activityGraphMap.exists()) {
+            throw new IllegalArgumentException("Can't locate activity graph " + activityGraphMap.getAbsolutePath());
+        }
+        activityGraph = new ActivityGraph(activityGraphMap);
+
+        return new Message("/graph/activity_graph_init");
     }
 
     private Message initGraph(Message request) {
@@ -180,14 +340,16 @@ public class GraphEndpoint implements Endpoint {
     private Message initIntraCFG(File apkPath, String methodName, boolean useBasicBlocks,
                                  String packageName, String target) {
         graph = new IntraCFG(apkPath, methodName, useBasicBlocks, appsDir, packageName);
-        targetVertex = selectTargetVertex(target);
+        targetVertexes = selectTargetVertex(target, packageName, apkPath);
         return new Message("/graph/init");
     }
 
     private Message initInterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
                                  boolean resolveOnlyAUTClasses, String packageName, String target) {
-        graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
-        targetVertex = selectTargetVertex(target);
+        var g = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
+        callTree = g.getCallTree();
+        graph = g;
+        targetVertexes = selectTargetVertex(target, packageName, apkPath);
         return new Message("/graph/init");
     }
 
@@ -221,6 +383,25 @@ public class GraphEndpoint implements Endpoint {
         // we need to mark vertices we visited
         Set<Vertex> visitedVertices = mapTracesToVertices(traces);
 
+        Log.println("Looking at " + chromosome);
+        Log.println(visitedVertices.stream().map(Vertex::toString).collect(Collectors.joining("\n")));
+        double sum = IntStream.range(0, targetVertexes.size()).parallel().mapToDouble(index -> {
+            double branchDistance = getBranchDistance(visitedVertices, traces, targetVertexes.get(index));
+            Log.println("Branchdistance is: " + branchDistance + " for index " + index + " is: " + branchDistance * (index + 1));
+            return branchDistance * (index + 1);
+        }).sum();
+        Log.println("Total branchDistance is " + sum);
+        int n = targetVertexes.size();
+        int sumUp = (n * (n+1)) / 2;
+        double avgBranchDistance = sum / sumUp;
+        Log.println("Avg branchdistance is " + avgBranchDistance + " (n=" + n + "sumUp=" + sumUp + ")");
+
+        return new Message.MessageBuilder("/graph/get_branch_distance")
+                .withParameter("branch_distance", String.valueOf(avgBranchDistance))
+                .build();
+    }
+
+    private double getBranchDistance(Set<Vertex> visitedVertices, Set<String> traces, Vertex targetVertex) {
         long start = System.currentTimeMillis();
 
         // the minimal distance between a execution path and a chosen target vertex
@@ -240,11 +421,11 @@ public class GraphEndpoint implements Endpoint {
             synchronized (this) {
                 if (distance < minDistance.get() && distance != -1) {
                     /*
-                    * We are only interested in a direct hit (covered branch) or the distance to an if statement.
-                    * This equals distances of either if statements or branches and excludes distances to visited
-                    * entry or exit vertices.
+                     * We are only interested in a direct hit (covered branch) or the distance to an if statement.
+                     * This equals distances of either if statements or branches and excludes distances to visited
+                     * entry or exit vertices.
                      */
-                    if ((distance == 0 && visitedVertex.isBranchVertex()) || visitedVertex.isIfVertex()) {
+                    if ((distance == 0) || visitedVertex.isIfVertex()) {
                         minDistanceVertex.set(visitedVertex);
                         minDistance.set(distance);
                     }
@@ -269,15 +450,12 @@ public class GraphEndpoint implements Endpoint {
         long end = System.currentTimeMillis();
         Log.println("Computing approach level took: " + (end - start) + " ms.");
 
-        // the normalised fitness value in the range [0,1]
-        String branchDistance;
-
         if (minDistance.get() == Integer.MAX_VALUE) {
             // branch not reachable by execution path
-            branchDistance = String.valueOf(1);
+            return 1;
         } else if (minDistance.get() == 0) {
             // covered target branch
-            branchDistance = String.valueOf(0);
+            return 0;
         } else {
             // combine approach level + branch distance
             int approachLevel = minDistance.get();
@@ -306,11 +484,11 @@ public class GraphEndpoint implements Endpoint {
             double minBranchDistance = Double.MAX_VALUE;
 
             /*
-            * We need to look for branch distance traces that refer to the if statement. A branch distance trace is
-            * produced for both branches, but we only need to consider those traces that describe the branch that
-            * couldn't be covered, otherwise we would have actually taken the right branch. Thus, the relevant distance
-            * traces (we may have visited the if statement multiple times) must contain a distance > 0, since a branch
-            * with a distance of 0 would have be taken. We simply need to pick the minimum of those distance traces.
+             * We need to look for branch distance traces that refer to the if statement. A branch distance trace is
+             * produced for both branches, but we only need to consider those traces that describe the branch that
+             * couldn't be covered, otherwise we would have actually taken the right branch. Thus, the relevant distance
+             * traces (we may have visited the if statement multiple times) must contain a distance > 0, since a branch
+             * with a distance of 0 would have be taken. We simply need to pick the minimum of those distance traces.
              */
             for (String trace : traces) {
                 if (trace.startsWith(prefix)) {
@@ -329,15 +507,13 @@ public class GraphEndpoint implements Endpoint {
             Log.println("Minimal branch distance: " + minBranchDistance);
 
             // combine and normalise
+            // 1 / (1 + 1) = 0.5
             double normalisedBranchDistance = minBranchDistance / (minBranchDistance + 1);
+            // 0
             double combined = approachLevel + normalisedBranchDistance;
             combined = combined / (combined + 1);
-            branchDistance = String.valueOf(combined);
+            return combined;
         }
-
-        return new Message.MessageBuilder("/graph/get_branch_distance")
-                .withParameter("branch_distance", branchDistance)
-                .build();
     }
 
     /**
