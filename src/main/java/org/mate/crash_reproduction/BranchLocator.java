@@ -48,7 +48,6 @@ public class BranchLocator {
     }
 
     public List<String> getInstructionForStackTrace(List<String> stackTrace, String packageName) {
-        Log.println("getInstructionForStackTraceline(1)");
         return stackTrace.stream()
                 .filter(line -> line.contains(packageName))
                 .map(this::getInstructionForStackTraceLine)
@@ -57,7 +56,6 @@ public class BranchLocator {
     }
 
     public Set<String> getInstructionForStackTraceLine(String stackTraceLine) {
-        Log.println("getInstructionForStackTraceline(2)");
         Pattern pattern = Pattern.compile("at (.+)\\.(.+)\\((.+):(.+)\\)");
         Matcher matcher = pattern.matcher(stackTraceLine.trim());
 
@@ -72,14 +70,11 @@ public class BranchLocator {
     }
 
     public Set<String> getInstructionForStackTraceLine(String methodName, String sourceFile, int lineInFile) {
-        Log.println("getInstructionForStackTraceline(3)");
         Set<String> targets = new HashSet<>();
         for (DexFile dexFile : dexFiles) {
             for (ClassDef classDef : dexFile.getClasses()) {
-                Log.println("Looking at " + classDef);
                 if (sourceFile.equals(classDef.getSourceFile())) {
                     for (Method method : classDef.getMethods()) {
-                        Log.println("Looking at " + method);
                         if (method.toString().contains(methodName) && method.getImplementation() != null) {
                             MutableMethodImplementation mutableMethodImplementation = new MutableMethodImplementation(method.getImplementation());
                             List<BuilderInstruction> instructions = mutableMethodImplementation.getInstructions();
@@ -95,7 +90,6 @@ public class BranchLocator {
             }
         }
 
-        Log.println("Found target");
         return targets;
     }
 
