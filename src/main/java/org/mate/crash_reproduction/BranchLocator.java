@@ -2,6 +2,8 @@ package org.mate.crash_reproduction;
 
 import de.uni_passau.fim.auermich.android_graphs.core.utility.Utility;
 import org.jf.dexlib2.DexFileFactory;
+import org.jf.dexlib2.Opcode;
+import org.jf.dexlib2.ReferenceType;
 import org.jf.dexlib2.builder.BuilderDebugItem;
 import org.jf.dexlib2.builder.BuilderInstruction;
 import org.jf.dexlib2.builder.MutableMethodImplementation;
@@ -12,15 +14,19 @@ import org.jf.dexlib2.iface.DexFile;
 import org.jf.dexlib2.iface.Method;
 import org.jf.dexlib2.iface.MultiDexContainer;
 import org.jf.dexlib2.iface.debug.LineNumber;
+import org.jf.dexlib2.iface.instruction.Instruction;
+import org.jf.dexlib2.iface.instruction.ReferenceInstruction;
 import org.mate.util.Log;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.reflect.Array;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class BranchLocator {
     private final List<DexFile> dexFiles;
@@ -53,6 +59,13 @@ public class BranchLocator {
                 .map(this::getInstructionForStackTraceLine)
                 .flatMap(Collection::stream)
                 .collect(Collectors.toList());
+    }
+
+    public Stream<String> getTokensForStackTrace(StackTrace stackTrace, String packageName) {
+        return stackTrace.getStackTraceAtLines()
+                .filter(l -> l.isFromPackage(packageName))
+                .filter(line -> line.getFileName().isPresent() && line.getLineNumber().isPresent())
+                .flatMap(line -> getTokensFromStackTraceLine(line.getMethodName(), line.getFileName().get(), line.getLineNumber().get()));
     }
 
     public Set<String> getInstructionForStackTraceLine(String stackTraceLine) {
@@ -91,6 +104,45 @@ public class BranchLocator {
         }
 
         return targets;
+    }
+
+    public Stream<String> getTokensFromStackTraceLine(String methodName, String sourceFile, int lineInFile) {
+        return getInstructionsForStackTraceLine(methodName, sourceFile, lineInFile).stream()
+                .flatMap(this::getTokensFromInstruction);
+    }
+
+    private Stream<String> getTokensFromInstruction(Instruction instruction) {
+        if (instruction instanceof ReferenceInstruction) {
+            ReferenceInstruction referenceInstruction = (ReferenceInstruction) instruction;
+
+            if (referenceInstruction.getReferenceType() == ReferenceType.STRING) {
+                return Arrays.stream(referenceInstruction.getReference().toString().split("[-_\\s]"));
+            }
+        }
+        return Stream.empty();
+    }
+
+    public Set<Instruction> getInstructionsForStackTraceLine(String methodName, String sourceFile, int lineInFile) {
+        Set<Instruction> result = new HashSet<>();
+        for (DexFile dexFile : dexFiles) {
+            for (ClassDef classDef : dexFile.getClasses()) {
+                if (sourceFile.equals(classDef.getSourceFile())) {
+                    for (Method method : classDef.getMethods()) {
+                        if (method.toString().contains(methodName) && method.getImplementation() != null) {
+                            MutableMethodImplementation mutableMethodImplementation = new MutableMethodImplementation(method.getImplementation());
+                            List<BuilderInstruction> instructions = mutableMethodImplementation.getInstructions();
+                            for (BuilderInstruction instruction : instructions) {
+                                if (getLineNumber(instruction.getLocation().getDebugItems()).map(line -> lineInFile == line).orElse(false)) {
+                                    result.add(instruction);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return result;
     }
 
     private Optional<Integer> getLineNumber(Set<BuilderDebugItem> debugItemSet) {
