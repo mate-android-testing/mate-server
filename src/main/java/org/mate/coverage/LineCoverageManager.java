@@ -79,13 +79,17 @@ public class LineCoverageManager {
      * @param appsDir The apps directory.
      * @param packageName The package name of the AUT.
      * @param chromosomes Identifies the chromosomes for which the line coverage percentage metric should be derived.
-     * @param lines The list of source lines.
      * @return Returns the line coverage percentage metric.
      */
-    public static Message getLineCoveredPercentages(final Path appsDir, final String packageName,
-                                                    final String chromosomes, List<String> lines) {
+    public static Message getLineCoveredPercentages(final Path appsDir, final String packageName, final String chromosomes) {
 
-        var sourceLines = lines.stream()
+        Result<List<String>, String> lines = getLines(appsDir, packageName);
+
+        if (lines.isErr()) {
+            return Messages.errorMessage(lines.getErr());
+        }
+
+        var sourceLines = lines.getOk().stream()
                 .map(LineCoverageManager.Line::valueOf)
                 .collect(Collectors.toList());
 
@@ -466,14 +470,7 @@ public class LineCoverageManager {
         return new Message("/coverage/copy");
     }
 
-    /**
-     * Retrieves the source lines of the app under test.
-     *
-     * @param appsDir The apps directory.
-     * @param packageName The package name of the AUT.
-     * @return Returns a message containing the source lines in case of success, otherwise a error message is returned.
-     */
-    public static Message getSourceLines(final Path appsDir, final String packageName) {
+    private static Result<List<String>, String> getLines(final Path appsDir, final String packageName) {
 
         Path reportFile = appsDir.resolve(packageName).resolve(packageName + ".report");
         String separator = "+";
@@ -484,7 +481,7 @@ public class LineCoverageManager {
         } catch (ParserConfigurationException e) {
             final var errorMsg = "Failed to get source lines: unable to set FEATURE_SECURE_PROCESSING for DocumentBuilderFactory";
             Log.printError(errorMsg);
-            return Messages.errorMessage(errorMsg);
+            return Result.errOf(errorMsg);
         }
 
         DocumentBuilder builder;
@@ -493,7 +490,7 @@ public class LineCoverageManager {
         } catch (ParserConfigurationException e) {
             final var errorMsg = "Failed to get source lines: unable to create document builder";
             Log.printError(errorMsg);
-            return Messages.errorMessage(errorMsg);
+            return Result.errOf(errorMsg);
         }
 
         // ignore dtd file
@@ -504,16 +501,17 @@ public class LineCoverageManager {
         } catch (SAXException e) {
             final var errorMsg = "Failed to get source lines: unable to parse report file (" + reportFile + ")";
             Log.printError(errorMsg);
-            return Messages.errorMessage(errorMsg);
+            return Result.errOf(errorMsg);
         } catch (IOException e) {
             e.printStackTrace();
             final var errorMsg = "Failed to get source lines: IOException while reading report file (" + reportFile + ")";
             Log.printError(errorMsg);
-            return Messages.errorMessage(errorMsg);
+            return Result.errOf(errorMsg);
         }
 
         List<String> sourceLines = new ArrayList<>();
         NodeList packages = document.getDocumentElement().getElementsByTagName("package");
+
         for (int i = 0; i < packages.getLength(); i++) {
             var currentPackage = (Element) packages.item(i);
             var currentPackageName = currentPackage.getAttribute("name");
@@ -530,8 +528,47 @@ public class LineCoverageManager {
             }
         }
 
-        return new Message.MessageBuilder("/coverage/getSourceLines")
-                .withParameter("lines", String.join("\n", sourceLines))
-                .build();
+        return Result.okOf(sourceLines);
+    }
+
+    /**
+     * Retrieves the source lines of the app under test.
+     *
+     * @param appsDir The apps directory.
+     * @param packageName The package name of the AUT.
+     * @return Returns a message containing the source lines in case of success, otherwise a error message is returned.
+     */
+    public static Message getSourceLines(final Path appsDir, final String packageName) {
+
+        Result<List<String>, String> sourceLines = getLines(appsDir, packageName);
+
+        if (sourceLines.isErr()) {
+            return Messages.errorMessage(sourceLines.getErr());
+        } else {
+            return new Message.MessageBuilder("/coverage/getSourceLines")
+                    .withParameter("lines", String.join("\n", sourceLines.getOk()))
+                    .build();
+        }
+    }
+
+    /**
+     * Retrieves the number of source lines of the app under test.
+     *
+     * @param appsDir The apps directory.
+     * @param packageName The package name of the AUT.
+     * @return Returns a message containing the number of source lines in case of success, otherwise a error message is
+     *         returned.
+     */
+    public static Message getNumberOfSourceLines(final Path appsDir, final String packageName) {
+
+        Result<List<String>, String> sourceLines = getLines(appsDir, packageName);
+
+        if (sourceLines.isErr()) {
+            return Messages.errorMessage(sourceLines.getErr());
+        } else {
+            return new Message.MessageBuilder("/coverage/getNumberOfSourceLines")
+                    .withParameter("lines", String.valueOf(sourceLines.getOk().size()))
+                    .build();
+        }
     }
 }
