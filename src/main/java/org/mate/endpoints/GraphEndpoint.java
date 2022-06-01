@@ -452,7 +452,7 @@ public class GraphEndpoint implements Endpoint {
 
                 Log.println("Trace describing closest if stmt: " + prefix);
 
-                double minBranchDistance = Double.MAX_VALUE;
+                int minBranchDistance = Integer.MAX_VALUE;
 
                 /*
                  * We need to look for branch distance traces that refer to the if statement. A branch distance trace is
@@ -466,7 +466,7 @@ public class GraphEndpoint implements Endpoint {
                     if (trace.startsWith(prefix)) {
 
                         // found a branch distance value for the given if stmt
-                        double distance = Double.parseDouble(trace.split(":")[1]);
+                        int distance = Integer.parseInt(trace.split(":")[1]);
 
                         // we need to track the minimal distance > 0 (non-covered branch)
                         if (distance > 0 && distance < minBranchDistance) {
@@ -479,8 +479,8 @@ public class GraphEndpoint implements Endpoint {
                 Log.println("Minimal branch distance: " + minBranchDistance);
 
                 // combine and normalise
-                double normalisedBranchDistance = minBranchDistance / (minBranchDistance + 1);
-                double combined = approachLevel + normalisedBranchDistance;
+                float normalisedBranchDistance = (float) minBranchDistance / (minBranchDistance + 1);
+                float combined = approachLevel + normalisedBranchDistance;
                 combined = combined / (combined + 1);
                 branchDistanceVector.add(String.valueOf(combined));
             }
