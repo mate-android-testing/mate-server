@@ -5,19 +5,13 @@ import de.uni_passau.fim.auermich.android_graphs.core.app.components.Component;
 import de.uni_passau.fim.auermich.android_graphs.core.app.components.ComponentType;
 import de.uni_passau.fim.auermich.android_graphs.core.calltrees.CallTree;
 import de.uni_passau.fim.auermich.android_graphs.core.calltrees.CallTreeVertex;
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.Edge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
-import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
-import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.ClassHierarchy;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.ClassUtils;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.GraphUtils;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.UsageSearch;
-import org.apache.commons.lang3.tuple.Pair;
-import org.jf.dexlib2.iface.ClassDef;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.*;
+import org.jf.dexlib2.DexFileFactory;
+import org.jf.dexlib2.dexbacked.DexBackedDexFile;
 import org.jf.dexlib2.iface.DexFile;
-import org.jf.dexlib2.iface.Method;
-import org.jgrapht.GraphPath;
+import org.jf.dexlib2.iface.MultiDexContainer;
+import org.mate.crash_reproduction.AtStackTraceLine;
 import org.mate.crash_reproduction.BranchLocator;
 import org.mate.crash_reproduction.StackTrace;
 import org.mate.crash_reproduction.StackTraceParser;
@@ -94,14 +88,14 @@ public class InterCFG extends CFG {
         return callTree;
     }
 
-    public Set<String> getTargetComponents(List<String> stackTrace, ComponentType... componentTypes) {
+    public Set<String> getTargetComponents(List<AtStackTraceLine> stackTrace, ComponentType... componentTypes) {
         Set<String> targetActivities = getTargets(stackTrace, stackTraceLine -> getTargetComponentsByClassUsage(stackTraceLine, componentTypes));
 
         Log.println("Target {" + Arrays.stream(componentTypes).map(ComponentType::name).collect(Collectors.joining(" or ")) + "} are: [" + String.join(", ", targetActivities) + "]");
         return targetActivities;
     }
 
-    private Set<String> getTargets(List<String> stackTrace, Function<String, Set<String>> stackTraceLineToUsages) {
+    private Set<String> getTargets(List<AtStackTraceLine> stackTrace, Function<AtStackTraceLine, Set<String>> stackTraceLineToUsages) {
         return stackTrace.stream()
                 .map(stackTraceLineToUsages)
                 .filter(Predicate.not(Set::isEmpty))
@@ -165,86 +159,19 @@ public class InterCFG extends CFG {
         return satisfied;
     }
 
-    public Set<String> getTargetComponentsByClassUsage(String line, ComponentType... componentTypes) {
-        return getTargetsByClassUsage(line, clazz -> Arrays.stream(componentTypes).anyMatch(componentType -> getComponentOfClass(clazz, componentType).isPresent()));
+    public Set<String> getTargetComponentsByClassUsage(AtStackTraceLine line, ComponentType... componentTypes) {
+        return getTargetsByClassUsage(line, method -> Arrays.stream(componentTypes).anyMatch(componentType -> getComponentOfClass(method.getClassName(), componentType).isPresent()))
+                .stream().map(CallTreeVertex::getClassName).collect(Collectors.toSet());
     }
 
-    public Set<String> getTargetsByClassUsage(String line, Predicate<String> satisfies) {
-        Pattern pattern = Pattern.compile("at (.+)\\.\\S+\\(.+\\)");
-        Matcher matcher = pattern.matcher(line);
+    public Set<CallTreeVertex> getTargetsByClassUsage(AtStackTraceLine line, Predicate<CallTreeVertex> methodSatisfies) {
+        if (line.getFileName().isPresent() && line.getLineNumber().isPresent()) {
+            String startMethod = BranchLocator.getInstructionsInMethod(apk.getDexFiles(), line.getMethodName(), line.getFileName().get(), line.getLineNumber().get()).first.toString();
 
-        if (matcher.matches()) {
-            String className = matcher.group(1);
-
-            return goUntilSatisfied(
-                    ClassUtils.convertDottedClassName(className),
-                    clazz -> UsageSearch.findClassUsages(apk, clazz).stream().map(u -> u.getClazz().toString()),
-                    satisfies::test
-            );
+            return callTree.getMethodCallers(new CallTreeVertex(startMethod), methodSatisfies);
         } else {
             throw new IllegalStateException();
         }
-    }
-
-    private Optional<Method> findMethod(String dottedClassName, String methodName) {
-        String slashedClassName = ClassUtils.convertDottedClassName(dottedClassName);
-        String methodPrefix = slashedClassName + "->" + methodName + "(";
-
-        for (DexFile dexFile : apk.getDexFiles()) {
-            for (ClassDef classDef : dexFile.getClasses()) {
-                if (classDef.toString().equals(slashedClassName)) {
-                    for (Method method : classDef.getMethods()) {
-                        if (method.toString().startsWith(methodPrefix)) {
-                            return Optional.of(method);
-                        }
-                    }
-                }
-            }
-        }
-        return Optional.empty();
-    }
-
-    public Set<String> getTargetActivities(Vertex vertex) {
-        Queue<Vertex> vertices = new LinkedList<>();
-        vertices.add(vertex);
-        Set<Vertex> seenVertices = new HashSet<>();
-        Set<Component> targetActivities = new HashSet<>();
-
-        Log.println("Starting while loop");
-        Set<Pair<String, String>> pairs = new HashSet<>();
-        Field typeField;
-        try {
-            typeField = Vertex.class.getDeclaredField("type");
-            typeField.setAccessible(true);
-        } catch (NoSuchFieldException e) {
-            throw new IllegalStateException(e);
-        }
-        while (!vertices.isEmpty()) {
-            Vertex source = vertices.poll();
-            Log.println("Handling: " + source.getMethod() + " remaining: " + vertices.size());
-            seenVertices.add(source);
-
-            Optional<Component> sourceActivity = getActivityOfVertex(source);
-
-            if (sourceActivity.isPresent()) {
-                targetActivities.add(sourceActivity.get());
-            } else {
-                Set<Edge> edges = baseCFG.getIncomingEdges(source);
-                edges.forEach(e -> {
-                    try {
-                        pairs.add(Pair.of(((Enum) typeField.get(e.getSource())).name(), ((Enum) typeField.get(e.getTarget())).name()));
-                    } catch (IllegalAccessException ex) {
-                        ex.printStackTrace();
-                    }
-                });
-                vertices.addAll(edges.stream().map(Edge::getSource).collect(Collectors.toList()));
-                vertices.removeIf(Vertex::isExitVertex); // Not a real source vertex
-                vertices.removeIf(seenVertices::contains);
-            }
-        }
-        Log.println("Done with while loop");
-
-        return targetActivities.stream().map(Component::getName).collect(Collectors.toSet());
     }
 
     public Optional<Component> getActivityOfVertex(Vertex vertex) {

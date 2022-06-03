@@ -2,7 +2,6 @@ package org.mate.crash_reproduction;
 
 import de.uni_passau.fim.auermich.android_graphs.core.utility.Utility;
 import org.jf.dexlib2.DexFileFactory;
-import org.jf.dexlib2.Opcode;
 import org.jf.dexlib2.ReferenceType;
 import org.jf.dexlib2.builder.BuilderDebugItem;
 import org.jf.dexlib2.builder.BuilderInstruction;
@@ -16,12 +15,9 @@ import org.jf.dexlib2.iface.MultiDexContainer;
 import org.jf.dexlib2.iface.debug.LineNumber;
 import org.jf.dexlib2.iface.instruction.Instruction;
 import org.jf.dexlib2.iface.instruction.ReferenceInstruction;
-import org.mate.util.Log;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.lang.reflect.Array;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -107,7 +103,7 @@ public class BranchLocator {
     }
 
     public Stream<String> getTokensFromStackTraceLine(String methodName, String sourceFile, int lineInFile) {
-        return getInstructionsForStackTraceLine(methodName, sourceFile, lineInFile).stream()
+        return getInstructionsForStackTraceLine(dexFiles, methodName, sourceFile, lineInFile).stream()
                 .flatMap(this::getTokensFromInstruction);
     }
 
@@ -122,7 +118,13 @@ public class BranchLocator {
         return Stream.empty();
     }
 
-    public Set<Instruction> getInstructionsForStackTraceLine(String methodName, String sourceFile, int lineInFile) {
+    public static Set<Instruction> getInstructionsForStackTraceLine(List<DexFile> dexFiles, String methodName, String sourceFile, int lineInFile) {
+        return getInstructionsInMethod(dexFiles, methodName, sourceFile, lineInFile).second;
+    }
+
+    public static Pair<Method, Set<Instruction>> getInstructionsInMethod(List<DexFile> dexFiles, String methodName, String sourceFile, int lineInFile) {
+        Method stackTraceMethod = null;
+
         Set<Instruction> result = new HashSet<>();
         for (DexFile dexFile : dexFiles) {
             for (ClassDef classDef : dexFile.getClasses()) {
@@ -134,6 +136,7 @@ public class BranchLocator {
                             for (BuilderInstruction instruction : instructions) {
                                 if (getLineNumber(instruction.getLocation().getDebugItems()).map(line -> lineInFile == line).orElse(false)) {
                                     result.add(instruction);
+                                    stackTraceMethod = method;
                                 }
                             }
                         }
@@ -142,10 +145,10 @@ public class BranchLocator {
             }
         }
 
-        return result;
+        return new Pair<>(stackTraceMethod, result);
     }
 
-    private Optional<Integer> getLineNumber(Set<BuilderDebugItem> debugItemSet) {
+    private static Optional<Integer> getLineNumber(Set<BuilderDebugItem> debugItemSet) {
         return debugItemSet.stream().map(a -> {
             if (a instanceof LineNumber) {
                 return Optional.of((LineNumber) a);
@@ -174,5 +177,28 @@ public class BranchLocator {
 
     private String map(Method method) {
         return method.toString() + "->exit";
+    }
+
+    public static class Pair<F, S> {
+        public final F first;
+        public final S second;
+
+        private Pair(F first, S second) {
+            this.first = first;
+            this.second = second;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Pair<?, ?> pair = (Pair<?, ?>) o;
+            return Objects.equals(first, pair.first) && Objects.equals(second, pair.second);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(first, second);
+        }
     }
 }

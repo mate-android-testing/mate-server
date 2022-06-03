@@ -158,7 +158,7 @@ public class GraphEndpoint implements Endpoint {
     }
 
     private Set<String> getTargetComponents(String packageName, ComponentType... componentType) {
-        return ((InterCFG) graph).getTargetComponents(stackTrace.getAtLines().stream().filter(l -> l.contains(packageName)).collect(Collectors.toList()), componentType);
+        return ((InterCFG) graph).getTargetComponents(stackTrace.getStackTraceAtLines().filter(l -> l.isFromPackage(packageName)).collect(Collectors.toList()), componentType);
     }
 
     private Message getActivityDistance(Message request) {
