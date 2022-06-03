@@ -5,8 +5,10 @@ import de.uni_passau.fim.auermich.android_graphs.core.app.components.Component;
 import de.uni_passau.fim.auermich.android_graphs.core.app.components.ComponentType;
 import de.uni_passau.fim.auermich.android_graphs.core.calltrees.CallTree;
 import de.uni_passau.fim.auermich.android_graphs.core.calltrees.CallTreeVertex;
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.*;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.ClassHierarchy;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.ClassUtils;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.GraphUtils;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.Utility;
 import org.jf.dexlib2.DexFileFactory;
 import org.jf.dexlib2.dexbacked.DexBackedDexFile;
 import org.jf.dexlib2.iface.DexFile;
@@ -25,10 +27,7 @@ import java.util.*;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class InterCFG extends CFG {
     private final CallTree callTree;
@@ -38,26 +37,85 @@ public class InterCFG extends CFG {
 
     public static void main(String[] args) throws IOException {
         Log.registerLogger(new Log());
-        String packageName = "com.liato.bankdroid";
         Path appDir = Path.of("/home/dominik/IdeaProjects/mate-commander/apps");
-        File stackTraceFile = new File(appDir.resolve(packageName).toFile(), "stack_trace.txt");
+        Path plainAppsDir = Path.of("/home/dominik/IdeaProjects/mate-commander/plain-apps/");
+        Collection<String> packageNames =
+//                List.of("com.mitzuli");
+                Arrays.stream(plainAppsDir.toFile().listFiles()).map(File::getName).map(n -> n.replace(".apk", "")).sorted().collect(Collectors.toList());
 
-        StackTrace stackTrace = StackTraceParser.parse(Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()));
-        var inter = new InterCFG(new File("/home/dominik/IdeaProjects/mate-commander/plain-apps/com.liato.bankdroid.apk"), true, true, true, appDir, packageName);
-        var callTree = new CallTree((de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.InterCFG) inter.baseCFG);
+        for (String packageName : packageNames) {
+            if (packageName.contains("fantastisch")) {
+                continue;
+            }
+            Log.println("Looking at: " + packageName);
+            File apkPath = plainAppsDir.resolve(packageName + ".apk").toFile();
+            File stackTraceFile = appDir.resolve(packageName).resolve("stack_trace.txt").toFile();
 
-        List<Vertex> targetVertex = new BranchLocator(inter.apk.getDexFiles()).getInstructionForStackTrace(stackTrace.getAtLines(), packageName).stream()
-                .map(inter::lookupVertex)
-                .collect(Collectors.toList());
+            StackTrace stackTrace = StackTraceParser.parse(Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()));
+            var inter = new InterCFG(apkPath, true, true, true, appDir, packageName);
+            var targetComponents = inter.getTargetComponents(stackTrace.getStackTraceAtLines().filter(l -> l.isFromPackage(packageName)).collect(Collectors.toList()), ComponentType.ACTIVITY, ComponentType.FRAGMENT);
 
-        inter.draw(new File("."));
-        List<?> paths = targetVertex.stream()
-                .map(v -> callTree.getShortestPath(v.getMethod()).map(GraphPath::getVertexList))
-                .collect(Collectors.toList());
-        Collections.reverse(targetVertex);
-        Optional<?> path = callTree.getShortestPathWithStops(targetVertex.stream().map(Vertex::getMethod).map(CallTreeVertex::new).collect(Collectors.toList()))
-                .map(GraphPath::getVertexList);
+            try (var filePrinter = new PrintWriter(new FileWriter("targets.txt", true))) {
+                filePrinter.println(packageName);
+                targetComponents.forEach(filePrinter::println);
+                filePrinter.println();
+            }
+
+//        var callTree = new CallTree((de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.InterCFG) inter.baseCFG);
+//        callTree.toDot(new File("calltree.dot"));
+//
+//            BranchLocator branchLocator = new BranchLocator(dexFiles(apkPath));
+//            Set<String> instructionTokens = branchLocator.getTokensForStackTrace(stackTrace, packageName).collect(Collectors.toSet());
+//            Set<String> fuzzyTokens = stackTrace.getFuzzyTokens(packageName);
+//            Set<String> userInputTokens = stackTrace.getUserTokens();
+//            Log.println("Instruction Tokens: " + String.join(", ", instructionTokens));
+//            Log.println("Fuzzy Tokens: " + String.join(", ", fuzzyTokens));
+//            Log.println("User input Tokens: " + String.join(", ", userInputTokens));
+
+//            List<String> targets = branchLocator.getInstructionForStackTrace(stackTrace.getAtLines(), packageName);
+//        List<Vertex> targetVertex = targets.stream()
+//                .map(inter::lookupVertex)
+//                .collect(Collectors.toList());
+//
+//        inter.draw(new File("."));
+//        List<?> paths = targetVertex.stream()
+//                .map(v -> callTree.getShortestPath(v.getMethod()).map(GraphPath::getVertexList))
+//                .collect(Collectors.toList());
+//        Collections.reverse(targetVertex);
+//        Optional<?> path = callTree.getShortestPathWithStops(targetVertex.stream().map(Vertex::getMethod).map(CallTreeVertex::new).collect(Collectors.toList()))
+//                .map(GraphPath::getVertexList);
+//        callTree.toDot(new File("calltree.dot"));
+            System.out.println("");
+        }
         System.out.println("");
+    }
+
+    private static List<DexFile> dexFiles(File apkPath) {
+        MultiDexContainer<? extends DexBackedDexFile> apk = null;
+
+        try {
+            apk = DexFileFactory.loadDexContainer(apkPath, Utility.API_OPCODE);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+
+        List<DexFile> dexFiles = new ArrayList<>();
+        List<String> dexEntries = new ArrayList<>();
+
+        try {
+            dexEntries = apk.getDexEntryNames();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+
+        for (String dexEntry : dexEntries) {
+            try {
+                dexFiles.add(apk.getEntry(dexEntry).getDexFile());
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+        return dexFiles;
     }
 
     public InterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses, boolean resolveOnlyAUTClasses,
@@ -137,28 +195,6 @@ public class InterCFG extends CFG {
         return result;
     }
 
-    private <T> Set<T> goUntilSatisfied(T start, Function<T, Stream<T>> childGetter, Predicate<T> predicate) {
-        Queue<T> workQueue = new LinkedList<>();
-        workQueue.add(start);
-        Set<T> satisfied = new HashSet<>();
-        Set<T> seen = new HashSet<>();
-
-        while (!workQueue.isEmpty()) {
-            T current = workQueue.poll();
-            seen.add(current);
-
-            if (predicate.test(current)) {
-                satisfied.add(current);
-            } else {
-                childGetter.apply(current)
-                        .filter(Predicate.not(seen::contains))
-                        .forEach(workQueue::add);
-            }
-        }
-
-        return satisfied;
-    }
-
     public Set<String> getTargetComponentsByClassUsage(AtStackTraceLine line, ComponentType... componentTypes) {
         return getTargetsByClassUsage(line, method -> Arrays.stream(componentTypes).anyMatch(componentType -> getComponentOfClass(method.getClassName(), componentType).isPresent()))
                 .stream().map(CallTreeVertex::getClassName).collect(Collectors.toSet());
@@ -174,46 +210,9 @@ public class InterCFG extends CFG {
         }
     }
 
-    public Optional<Component> getActivityOfVertex(Vertex vertex) {
-        return getVertexClass(vertex).flatMap(this::getActivityOfClass);
-    }
-
-    public Optional<Component> getActivityOfClass(String clazz) {
-        return getComponentOfClass(clazz, ComponentType.ACTIVITY);
-    }
-
-    public Optional<Component> getFragmentOfClass(String clazz) {
-        return getComponentOfClass(clazz, ComponentType.FRAGMENT);
-    }
-
     public Optional<Component> getComponentOfClass(String clazz, ComponentType componentType) {
         return components.stream().filter(c -> c.getName().equals(clazz))
                 .filter(c -> c.getComponentType() == componentType)
                 .findAny();
-    }
-
-    public Optional<String> getVertexClass(Vertex vertex) {
-        if (vertex.getMethod().equals("global")) {
-            return Optional.empty();
-        }
-
-        List<Pattern> patterns = List.of(
-                Pattern.compile("(L.+;)->.+"),
-                Pattern.compile("\\S+ (L.+;)$")
-        );
-
-        return Optional.of(matchAny(vertex.getMethod(), patterns).orElseThrow(() -> new IllegalArgumentException("Cannot get vertex class for '" + vertex.getMethod() + "'")));
-    }
-
-    private Optional<String> matchAny(String input, List<Pattern> patterns) {
-        for (Pattern pattern : patterns) {
-            Matcher matcher = pattern.matcher(input);
-
-            if (matcher.matches()) {
-                return Optional.of(matcher.group(1));
-            }
-        }
-
-        return Optional.empty();
     }
 }
