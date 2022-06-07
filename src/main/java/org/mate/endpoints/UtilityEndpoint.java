@@ -27,6 +27,8 @@ public class UtilityEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/utility/fetch_test_case")) {
             return fetchTestCase(request);
+        } else if (request.getSubject().startsWith("/utility/fetch_espresso_test")) {
+            return fetchEspressoTest(request);
         }
         throw new IllegalArgumentException("Message request with subject: "
                 + request.getSubject() + " can't be handled by UtilityEndpoint!");
@@ -50,6 +52,26 @@ public class UtilityEndpoint implements Endpoint {
         boolean response = device.fetchTestCase(testCaseDir, testCase);
 
         return new Message.MessageBuilder("/utility/fetch_test_case")
+                .withParameter("response", String.valueOf(response))
+                .build();
+    }
+
+    /**
+     * Fetches and removes an espresso test from the emulator.
+     *
+     * @param request The request message.
+     * @return Returns a message wrapping the outcome of the operation, i.e. success or failure.
+     */
+    private Message fetchEspressoTest(Message request) {
+
+        String deviceID = request.getParameter("deviceId");
+        String espressoDir = request.getParameter("espressoDir");
+        String testCase = request.getParameter("testcase");
+
+        Device device = Device.devices.get(deviceID);
+        boolean response = device.fetchEspressoTest(espressoDir, testCase);
+
+        return new Message.MessageBuilder("/utility/fetch_espresso_test")
                 .withParameter("response", String.valueOf(response))
                 .build();
     }
