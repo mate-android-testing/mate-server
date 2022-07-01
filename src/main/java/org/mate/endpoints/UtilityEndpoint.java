@@ -5,6 +5,8 @@ import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
 
+import javax.swing.*;
+import java.awt.*;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -32,6 +34,8 @@ public class UtilityEndpoint implements Endpoint {
             return fetchTestCase(request);
         } else if (request.getSubject().startsWith("/utility/write_file")) {
             return writeFile(request);
+        } else if (request.getSubject().startsWith("/utility/let_user_pick")) {
+            return letUserPickOption(request);
         }
         throw new IllegalArgumentException("Message request with subject: "
                 + request.getSubject() + " can't be handled by UtilityEndpoint!");
@@ -70,5 +74,42 @@ public class UtilityEndpoint implements Endpoint {
         return new Message.MessageBuilder("/utility/fetch_test_case")
                 .withParameter("response", String.valueOf(response))
                 .build();
+    }
+
+    private Message letUserPickOption(Message request) {
+        int numberOfOptions = Integer.parseInt(request.getParameter("options"));
+        String[] options = new String[numberOfOptions];
+
+        for (int i = 0; i < numberOfOptions; i++) {
+            options[i] = request.getParameter("option_" + i);
+        }
+
+        return new Message.MessageBuilder("/utility/let_user_pick").withParameter("picked_option", String.valueOf(letUserPickOption(options))).build();
+    }
+
+    private int letUserPickOption(String[] options) {
+        JDialog dialog = new JDialog((JFrame) null, "Select one",true);
+
+        int[] selected = new int[1];
+        JPanel panel = new JPanel();
+        panel.setLayout(new GridLayout(options.length,1));
+        JButton[] buttons = new JButton[options.length];
+        for (int i = 0; i < options.length; i++) {
+            buttons[i] = new JButton(options[i]);
+            int finalI = i;
+            buttons[i].addActionListener(actionEvent -> {
+                selected[0] = finalI;
+                dialog.setVisible(false);
+            });
+            panel.add(buttons[i]);
+        }
+
+        dialog.setContentPane(panel);
+        dialog.pack();
+        dialog.setLocationRelativeTo(null);
+        dialog.setVisible(true);
+        dialog.dispose();
+
+        return selected[0];
     }
 }
