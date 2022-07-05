@@ -496,7 +496,7 @@ public class Device {
             }
         }
 
-        if (getApiVersion() == 29) {
+        if (getApiVersion() == 29 || getApiVersion() == 30) {
             if (ProcessRunner.isWin) {
                 cmd = "$focused = " + androidEnvironment.getAdbExecutable() + " -s " + deviceID
                         + " shell dumpsys activity activities "
