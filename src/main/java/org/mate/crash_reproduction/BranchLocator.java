@@ -133,8 +133,11 @@ public class BranchLocator {
                         if (method.toString().contains(methodName) && method.getImplementation() != null) {
                             MutableMethodImplementation mutableMethodImplementation = new MutableMethodImplementation(method.getImplementation());
                             List<BuilderInstruction> instructions = mutableMethodImplementation.getInstructions();
+                            Integer lineNumber = null;
                             for (BuilderInstruction instruction : instructions) {
-                                if (getLineNumber(instruction.getLocation().getDebugItems()).map(line -> lineInFile == line).orElse(false)) {
+                                lineNumber = getLineNumber(instruction.getLocation().getDebugItems()).orElse(lineNumber);
+
+                                if (lineNumber != null && lineNumber == lineInFile) {
                                     result.add(instruction);
                                     stackTraceMethod = method;
                                 }
