@@ -16,6 +16,10 @@ public class AtStackTraceLine implements StackTraceLine {
         this(line, packageName, className, methodName, null, null);
     }
 
+    public AtStackTraceLine(String line, String packageName, String className, String methodName, String fileName) {
+        this(line, packageName, className, methodName, fileName, null);
+    }
+
     public AtStackTraceLine(String line, String packageName, String className, String methodName, String fileName, Integer lineNumber) {
         this.line = line;
         this.packageName = packageName;

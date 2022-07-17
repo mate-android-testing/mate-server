@@ -15,6 +15,7 @@ public class StackTraceParser {
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("^(\\S+): (.+)$"), StackTraceParser::parseCausedByLine);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\((.+):(\\d+)\\)"), StackTraceParser::parseNormalStackTraceLine);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(Native Method\\)"), StackTraceParser::parseOtherStackTraceLine);
+        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\((\\S+)\\.java\\)"), StackTraceParser::parseStackTraceLineWithoutLineNumber);
     }
 
     private StackTraceParser() {
@@ -23,6 +24,7 @@ public class StackTraceParser {
 
     public static StackTrace parse(List<String> lines) {
         List<StackTraceLine> parsedLines = lines.stream()
+                .map(String::trim)
                 .map(StackTraceParser::parseLine)
                 .collect(Collectors.toList());
         return new StackTrace(parsedLines);
@@ -63,5 +65,14 @@ public class StackTraceParser {
         String methodName = matcher.group(3);
 
         return new AtStackTraceLine(matcher.group(0), packageName, className, methodName);
+    }
+
+    private static AtStackTraceLine parseStackTraceLineWithoutLineNumber(Matcher matcher) {
+        String packageName = matcher.group(1);
+        String className = matcher.group(2);
+        String methodName = matcher.group(3);
+        String fileName = matcher.group(4);
+
+        return new AtStackTraceLine(matcher.group(0), packageName, className, methodName, fileName);
     }
 }
