@@ -1,5 +1,6 @@
 package org.mate.crash_reproduction;
 
+import de.uni_passau.fim.auermich.android_graphs.core.utility.MethodUtils;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.Utility;
 import org.jf.dexlib2.DexFileFactory;
 import org.jf.dexlib2.ReferenceType;
@@ -50,11 +51,27 @@ public class BranchLocator {
     }
 
     public List<String> getInstructionForStackTrace(List<String> stackTrace, String packageName) {
-        return stackTrace.stream()
-                .filter(line -> line.contains(packageName))
+        return getLastConsecutiveLines(stackTrace, packageName).stream()
                 .map(this::getInstructionForStackTraceLine)
                 .flatMap(Collection::stream)
                 .collect(Collectors.toList());
+    }
+
+    private List<String> getLastConsecutiveLines(List<String> stackTrace, String packageName) {
+        List<String> instructions = new LinkedList<>();
+        boolean reachedPackage = false;
+
+        for (int i = stackTrace.size() - 1; i >= 0; i--) {
+            String line = stackTrace.get(i);
+            if (line.contains(packageName)) {
+                reachedPackage = true;
+                instructions.add(0, line);
+            } else if (reachedPackage) {
+                return instructions;
+            }
+        }
+
+        return instructions;
     }
 
     public Stream<String> getTokensForStackTrace(StackTrace stackTrace, String packageName) {
