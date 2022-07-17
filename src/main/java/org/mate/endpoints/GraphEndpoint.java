@@ -29,6 +29,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -101,14 +102,14 @@ public class GraphEndpoint implements Endpoint {
                     .withParameter("stack_trace", String.join(",", stackTrace.getAtLines()))
                     .build();
         } else if (request.getSubject().startsWith("/graph/call_tree_distance")) {
-            return getCallTreeDistance(request);
+            return getNormalizedCallTreeDistance(request);
         } else {
             throw new IllegalArgumentException("Message request with subject: "
                     + request.getSubject() + " can't be handled by GraphEndpoint!");
         }
     }
 
-    private Message getCallTreeDistance(Message request) {
+    private Set<String> getVisitedMethods(Message request) {
         String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
 
@@ -126,34 +127,62 @@ public class GraphEndpoint implements Endpoint {
         List<File> tracesFiles = getTraceFiles(tracesDir, chromosome);
 
         // read traces from trace file(s)
-        Set<String> traces = readTraces(tracesFiles).stream().map(this::traceToMethod).collect(Collectors.toSet());
-        List<CallTreeVertex> callTreeVertices = targetVertexes.stream().map(Vertex::getMethod).map(CallTreeVertex::new).collect(Collectors.toList());
-        Collections.reverse(callTreeVertices);
+        return readTraces(tracesFiles).stream().map(this::traceToMethod).collect(Collectors.toSet());
+    }
 
-        int minDistance = Integer.MAX_VALUE;
-        Optional<GraphPath<CallTreeVertex, CallTreeEdge>> minPath = Optional.empty();
-
-        for (String trace : traces) {
-            var path = callTree.getShortestPathWithStops(new CallTreeVertex(trace), callTreeVertices);
-            if (path.isPresent()) {
-                int distance = path.get().getLength();
-
-                if (distance < minDistance) {
-                    minPath = path;
-                    minDistance = distance;
-                }
-            }
-        }
-
+    private Message getNormalizedCallTreeDistance(Message request) {
+        String chromosome = request.getParameter("chromosome");
+        double minDistance = getCallTreeDistance(request);
         double normalizedDistance = minDistance == Integer.MAX_VALUE
                 ? 1
-                : Math.max(0, (((double) minDistance / ((double) minDistance + 1)) - 0.5) * 2);
+                : Math.max(0, ((minDistance / (minDistance + 1)) - 0.5) * 2);
 
         Log.println("CallTree distance for " + chromosome + " is: abs. distance " + minDistance + ", rel. distance " + normalizedDistance);
 
         return new Message.MessageBuilder("/graph/call_tree_distance")
                 .withParameter("distance", "" + normalizedDistance)
                 .build();
+    }
+
+    private int getCallTreeDistance(Message request) {
+        String chromosome = request.getParameter("chromosome");
+        Log.println("Computing the branch distance for the chromosome: " + chromosome);
+
+        Set<String> traces = getVisitedMethods(request);
+        List<CallTreeVertex> callTreeVertices = targetVertexes.stream().map(Vertex::getMethod).map(CallTreeVertex::new).collect(Collectors.toList());
+        Collections.reverse(callTreeVertices);
+
+        Optional<CallTreeVertex> lastCoveredVertex = Optional.empty();
+        while (!callTreeVertices.isEmpty() && traces.contains(callTreeVertices.get(0).getMethod())) {
+            // Remove target vertices that we have already covered
+            lastCoveredVertex = Optional.of(callTreeVertices.remove(0));
+        }
+
+        if (callTreeVertices.isEmpty()) {
+            // We have already reached all targets
+            return 0;
+        } else if (lastCoveredVertex.isPresent()) {
+            // There are some targets left, and we have already covered some
+            // -> we need to find the path between the last target found and the remaining ones
+            return callTree.getShortestPathWithStops(lastCoveredVertex.get(), callTreeVertices).orElseThrow().getLength();
+        } else {
+            // We have not found any targets yet
+            int minDistance = Integer.MAX_VALUE;
+            Optional<GraphPath<CallTreeVertex, CallTreeEdge>> minPath = Optional.empty();
+
+            for (String trace : traces) {
+                var path = callTree.getShortestPathWithStops(new CallTreeVertex(trace), callTreeVertices);
+                if (path.isPresent()) {
+                    int distance = path.get().getLength();
+
+                    if (distance < minDistance) {
+                        minPath = path;
+                        minDistance = distance;
+                    }
+                }
+            }
+            return minDistance;
+        }
     }
 
     private String traceToMethod(String method) {
