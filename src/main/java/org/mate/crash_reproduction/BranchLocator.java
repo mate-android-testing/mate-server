@@ -104,15 +104,21 @@ public class BranchLocator {
 
     public Stream<String> getTokensFromStackTraceLine(String methodName, String sourceFile, int lineInFile) {
         return getInstructionsForStackTraceLine(dexFiles, methodName, sourceFile, lineInFile).stream()
-                .flatMap(this::getTokensFromInstruction);
+                .flatMap(BranchLocator::getTokensFromInstruction);
     }
 
-    private Stream<String> getTokensFromInstruction(Instruction instruction) {
+    private static Stream<String> getTokensFromInstruction(Instruction instruction) {
         if (instruction instanceof ReferenceInstruction) {
             ReferenceInstruction referenceInstruction = (ReferenceInstruction) instruction;
 
             if (referenceInstruction.getReferenceType() == ReferenceType.STRING) {
                 return Arrays.stream(referenceInstruction.getReference().toString().split("[-_\\s]"));
+            } else if (referenceInstruction.getReferenceType() == ReferenceType.METHOD) {
+                Set<String> ignoreMethods = Set.of("<init>", "doInBackground");
+                String methodName = MethodUtils.getMethodName(referenceInstruction.getReference().toString()).split("\\(")[0];
+                return ignoreMethods.contains(methodName) ? Stream.empty() : TokenUtil.splitCamelCase(methodName)
+                        .map(String::toLowerCase)
+                        .filter(method -> !ignoreMethods.contains(method));
             }
         }
         return Stream.empty();
