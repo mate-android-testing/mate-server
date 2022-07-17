@@ -46,15 +46,17 @@ public class GraphEndpoint implements Endpoint {
     private CallTree callTree;
     private ActivityGraph activityGraph;
     private final Path appsDir;
+    private final Path resultsPath;
 
     // a target vertex (a random branch)
     private List<Vertex> targetVertexes;
     private StackTrace stackTrace;
     private BranchLocator branchLocator;
 
-    public GraphEndpoint(AndroidEnvironment androidEnvironment, Path appsDir) {
+    public GraphEndpoint(AndroidEnvironment androidEnvironment, Path appsDir, Path resultsPath) {
         this.androidEnvironment = androidEnvironment;
         this.appsDir = appsDir;
+        this.resultsPath = resultsPath;
     }
 
     @Override
@@ -69,6 +71,8 @@ public class GraphEndpoint implements Endpoint {
             return getBranchDistance(request);
         } else if (request.getSubject().startsWith("/graph/draw")) {
             return drawGraph(request);
+        } else if (request.getSubject().startsWith("/graph/callTree/draw")) {
+            return drawCallTree(request);
         } else if (request.getSubject().startsWith("/graph/get_target_activities")) {
             String packageName = request.getParameter("package");
             return new Message.MessageBuilder("/graph/get_target_activities")
@@ -227,6 +231,20 @@ public class GraphEndpoint implements Endpoint {
         }
 
         return new Message("/graph/draw");
+    }
+
+    private Message drawCallTree(Message message) {
+        Set<String> visitedMethods = getVisitedMethods(message);
+        Map<String, String> highlightMethods = visitedMethods.stream()
+                .collect(Collectors.toMap(Function.identity(), a -> "red"));
+        targetVertexes.stream().map(Vertex::getMethod).forEach(target -> highlightMethods.put(target, "blue"));
+
+        String id = message.getParameter("id");
+
+        File file = resultsPath.resolve(id + ".dot").toFile();
+        callTree.toDot(file, highlightMethods);
+
+        return new Message("/graph/callTree/draw");
     }
 
     private Set<Vertex> getVisitedVertices(File appDir, String chromosomes) {
