@@ -323,6 +323,9 @@ public class AllCoverageManager {
             // an entry looks as follows: class name -> method name -> block id -> block size -> isBranch
             String line;
             while ((line = blocksReader.readLine()) != null) {
+                if (line.isBlank()) {
+                    continue;
+                }
 
                 final String[] tokens = line.split("->");
                 final String clazz = tokens[0];
