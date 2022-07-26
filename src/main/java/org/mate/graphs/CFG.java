@@ -83,8 +83,7 @@ public abstract class CFG implements Graph {
             // hopefully this preserves the order (remove blank line at end)
             branches.addAll(stream.filter(line -> line.length() > 0).collect(Collectors.toList()));
         } catch (IOException e) {
-            Log.printError("Reading branches.txt failed!");
-            throw new IllegalStateException(e);
+            Log.printWarning("Reading branches.txt failed!");
         }
 
         return mapBranchesToVertices(branches);
