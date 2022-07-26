@@ -111,6 +111,8 @@ public class GraphEndpoint implements Endpoint {
                     .build();
         } else if (request.getSubject().startsWith("/graph/call_tree_distance")) {
             return getNormalizedCallTreeDistance(request);
+        } else if (request.getSubject().startsWith("/graph/basic_block_distance")) {
+            return getMergedNormalizedBasicBlockDistance(request);
         } else {
             throw new IllegalArgumentException("Message request with subject: "
                     + request.getSubject() + " can't be handled by GraphEndpoint!");
@@ -138,6 +140,56 @@ public class GraphEndpoint implements Endpoint {
 
     private Set<String> getVisitedMethods(Message request) {
         return getTraces(request).stream().map(this::traceToMethod).collect(Collectors.toSet());
+    }
+
+    private Message getMergedNormalizedBasicBlockDistance(Message request) {
+        Map<AtStackTraceLine, Double> basicBlockDistances = getNormalizedBasicBlockDistances(request);
+
+        double sum = basicBlockDistances.values().stream().mapToDouble(d -> d).sum();
+        double mergedNormalizedBasicBlockDistance = sum / basicBlockDistances.size();
+
+        return new Message.MessageBuilder(request.getSubject())
+                .withParameter("mergedNormalizedDistance", String.valueOf(mergedNormalizedBasicBlockDistance))
+                .build();
+    }
+
+    private Map<AtStackTraceLine, Double> getNormalizedBasicBlockDistances(Message request) {
+        Set<String> traces = getTraces(request);
+
+        return reachedTargetMethods(traces).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> {
+                    int distance = e.getValue()
+                            ? getBasicBlockDistance(traces, e.getKey()) // only need to compute distance if we reached the method
+                            : Integer.MAX_VALUE;
+
+                    return distance == Integer.MAX_VALUE
+                            ? 1D
+                            : (double) distance / ((double) distance + 1);
+                }));
+    }
+
+    private int getBasicBlockDistance(Set<String> traces, AtStackTraceLine stackTraceLine) {
+        var res = targetMethodGraphs.get(stackTraceLine);
+        IntraCFG intraCFG = res.getX();
+        String targetMethod = res.getY().stream().findAny().orElseThrow().getMethod();
+
+        int minDistance = Integer.MAX_VALUE;
+
+        for (String trace : traces) {
+            if (traceToMethod(trace).equals(targetMethod)) {
+                int distance = res.getY().stream()
+                        .map(targetVertex -> intraCFG.getDistance(intraCFG.lookupVertex(trace), targetVertex))
+                        .map(d -> d < 0 ? Integer.MAX_VALUE : d)
+                        .min(Integer::compare)
+                        .orElseThrow();
+
+                if (distance < minDistance) {
+                    minDistance = distance;
+                }
+            }
+        }
+
+        return minDistance;
     }
 
     private Message getNormalizedCallTreeDistance(Message request) {
