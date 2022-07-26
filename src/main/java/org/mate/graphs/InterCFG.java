@@ -5,13 +5,20 @@ import de.uni_passau.fim.auermich.android_graphs.core.app.components.Component;
 import de.uni_passau.fim.auermich.android_graphs.core.app.components.ComponentType;
 import de.uni_passau.fim.auermich.android_graphs.core.calltrees.CallTree;
 import de.uni_passau.fim.auermich.android_graphs.core.calltrees.CallTreeVertex;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.ClassHierarchy;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.ClassUtils;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.GraphUtils;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.Utility;
 import org.jf.dexlib2.DexFileFactory;
+import org.jf.dexlib2.analysis.AnalyzedInstruction;
+import org.jf.dexlib2.builder.BuilderInstruction;
 import org.jf.dexlib2.dexbacked.DexBackedDexFile;
 import org.jf.dexlib2.iface.DexFile;
+import org.jf.dexlib2.iface.Method;
 import org.jf.dexlib2.iface.MultiDexContainer;
 import org.mate.crash_reproduction.AtStackTraceLine;
 import org.mate.crash_reproduction.BranchLocator;
@@ -28,6 +35,7 @@ import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class InterCFG extends CFG {
     private final CallTree callTree;
@@ -201,18 +209,59 @@ public class InterCFG extends CFG {
     }
 
     public Set<CallTreeVertex> getTargetsByClassUsage(AtStackTraceLine line, Predicate<CallTreeVertex> methodSatisfies) {
-        if (line.getFileName().isPresent() && line.getLineNumber().isPresent()) {
-            String startMethod = BranchLocator.getInstructionsInMethod(apk.getDexFiles(), line.getMethodName(), line.getFileName().get(), line.getLineNumber().get()).first.toString();
+        String startMethod = BranchLocator.getInstructionsForLine(apk.getDexFiles(), line).orElseThrow().getX().toString();
 
-            return callTree.getMethodCallers(new CallTreeVertex(startMethod), methodSatisfies);
-        } else {
-            throw new IllegalStateException();
-        }
+        return callTree.getMethodCallers(new CallTreeVertex(startMethod), methodSatisfies);
     }
 
     public Optional<Component> getComponentOfClass(String clazz, ComponentType componentType) {
         return components.stream().filter(c -> c.getName().equals(clazz))
                 .filter(c -> c.getComponentType() == componentType)
                 .findAny();
+    }
+
+    public Optional<Vertex> findClosestBranch(Method method, BuilderInstruction builderInstruction) {
+//        AnalyzedInstruction analyzedInstruction = getAnalyzedInstruction(method, builderInstruction);
+
+
+
+        return findClosestBranch(findVertexByInstruction(method, builderInstruction));
+    }
+
+    public Optional<Vertex> findClosestBranch(Vertex vertex) {
+        return baseCFG.getVertices().stream()
+                .filter(v -> v.getMethod().equals(vertex.getMethod())
+                        && (v.isIfVertex() || v.isEntryVertex()))
+                .min(Comparator.comparingInt(branch -> baseCFG.getShortestDistance(branch, vertex)));
+    }
+
+    private AnalyzedInstruction getAnalyzedInstruction(Method method, BuilderInstruction builderInstruction) {
+        return statementToAnalyzedInstructions(findVertexByInstruction(method, builderInstruction).getStatement())
+                .filter(a -> a.getInstructionIndex() == builderInstruction.getLocation().getIndex())
+                .findAny()
+                .orElseThrow();
+    }
+
+    private Stream<AnalyzedInstruction> statementToAnalyzedInstructions(Statement statement) {
+        if (statement instanceof BlockStatement) {
+            return ((BlockStatement) statement).getStatements().stream()
+                    .flatMap(this::statementToAnalyzedInstructions);
+        } else if (statement instanceof BasicStatement) {
+            return Stream.of(((BasicStatement) statement).getInstruction());
+        } else {
+            return Stream.empty();
+        }
+    }
+
+    public Vertex findVertexByInstruction(Method method, BuilderInstruction builderInstruction) {
+        Set<Vertex> vertices = getVertices().stream()
+                .filter(vertex -> vertex.containsInstruction(method.toString(), builderInstruction.getLocation().getIndex()))
+                .collect(Collectors.toSet());
+
+        if (vertices.size() == 1) {
+            return vertices.stream().findAny().orElseThrow();
+        } else {
+            throw new NoSuchElementException();
+        }
     }
 }
