@@ -85,6 +85,8 @@ public class GraphEndpoint implements Endpoint {
             return new Message.MessageBuilder("/graph/get_target_activities")
                     .withParameter("target_activities", String.join(",", targetComponents))
                     .build();
+        } else if (request.getSubject().startsWith("/graph/reached_targets")) {
+            return reachedTargets(request);
         } else if (request.getSubject().startsWith("/graph/get_activity_distance")) {
             return getActivityDistance(request);
         }  else if (request.getSubject().startsWith("/graph/get_all_activity_distances")) {
@@ -115,7 +117,7 @@ public class GraphEndpoint implements Endpoint {
         }
     }
 
-    private Set<String> getVisitedMethods(Message request) {
+    private Set<String> getTraces(Message request) {
         String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
 
@@ -130,10 +132,12 @@ public class GraphEndpoint implements Endpoint {
         File tracesDir = appDir.resolve("traces").toFile();
 
         // collect the relevant traces files
-        List<File> tracesFiles = getTraceFiles(tracesDir, chromosome);
-
         // read traces from trace file(s)
-        return readTraces(tracesFiles).stream().map(this::traceToMethod).collect(Collectors.toSet());
+        return readTraces(getTraceFiles(tracesDir, chromosome));
+    }
+
+    private Set<String> getVisitedMethods(Message request) {
+        return getTraces(request).stream().map(this::traceToMethod).collect(Collectors.toSet());
     }
 
     private Message getNormalizedCallTreeDistance(Message request) {
@@ -191,9 +195,162 @@ public class GraphEndpoint implements Endpoint {
         }
     }
 
+    private Message reachedTargets(Message request) {
+        Set<String> traces = getTraces(request);
+        // If an exception is thrown then there is no trace of the line that threw the exception
+        // Since (at least one of) the target lines will throw an exception we need to manually add these traces
+        // in order to decide whether we have reached all target lines/methods
+        traces.addAll(deduceTracesFromStackTrace(request.getParameter("stackTrace"), request.getParameter("packageName")));
+
+        Message response = new Message(request.getSubject());
+
+        appendMap(response, "reachedTargetComponents", reachedTargetComponents(traces), Function.identity(), Object::toString);
+        appendMap(response, "reachedTargetMethods", reachedTargetMethods(traces), AtStackTraceLine::toString, Object::toString);
+        appendMap(response, "reachedTargetLines", reachedTargetLines(traces), AtStackTraceLine::toString, Object::toString);
+
+        return response;
+    }
+
+    private Set<String> deduceTracesFromStackTrace(String stackTrace, String packageName) {
+        if (stackTrace == null) {
+            return Set.of();
+        } else {
+            StackTrace stackTraceObj = StackTraceParser.parse(Arrays.asList(stackTrace.split("\n")));
+            return branchLocator.getTargetTracesForStackTrace(stackTraceObj.getStackTraceAtLines().collect(Collectors.toList()), (InterCFG) graph, packageName)
+                    .values().stream().flatMap(Collection::stream)
+                    // TODO This is an over approximation, since it will add traces that came potentially after the crash
+                    // (e.g. if the exception is thrown at the beginning of a block statement we will still pretend like the remaining statements
+                    // from the block statement were reached as well)
+                    .flatMap(v -> tracesForStatement(v.getStatement()))
+                    .collect(Collectors.toSet());
+        }
+    }
+
+    private static <K, V> void appendMap(Message request, String mapName, Map<K, V> map, Function<K, String> keyToString, Function<V, String> valueToString) {
+        request.addParameter(mapName + ".size", String.valueOf(map.size()));
+
+        int pos = 0;
+        for (var entry : map.entrySet()) {
+            request.addParameter(mapName + ".k" + pos, keyToString.apply(entry.getKey()));
+            request.addParameter(mapName + ".v" + pos, valueToString.apply(entry.getValue()));
+            pos++;
+        }
+    }
+
+    private Map<String, Boolean> reachedTargetComponents(Set<String> traces) {
+        Set<String> reachedClasses = traces.stream().map(this::traceToClass).collect(Collectors.toSet());
+        return targetComponents.stream()
+                .map(ClassUtils::convertDottedClassName)
+                .collect(Collectors.toMap(Function.identity(), reachedClasses::contains));
+    }
+
+    private Map<AtStackTraceLine, Boolean> reachedTargetMethods(Set<String> traces) {
+        Set<String> reachedMethods = traces.stream().map(this::traceToMethod).collect(Collectors.toSet());
+        Map<AtStackTraceLine, Boolean> map = targetVertices.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> {
+                    String method = expectOne(e.getValue().stream().map(Vertex::getMethod).collect(Collectors.toSet()));
+
+                    return reachedMethods.contains(method);
+                }));
+        onlyAllowCoveredIfPredecessorCoveredAsWell(map);
+        return map;
+    }
+
+    private Map<AtStackTraceLine, Boolean> reachedTargetLines(Set<String> traces) {
+        Set<String> tracesWithoutCoverageInfo = traces.stream()
+                .map(trace -> {
+                    String[] parts = trace.split("->");
+
+                    return parts[0] + "->" + parts[1] + "->" + parts[2];
+                }).collect(Collectors.toSet());
+        Map<AtStackTraceLine, Boolean> map = targetVertices.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> {
+                    long matches = e.getValue().stream()
+                            .filter(v -> tracesForStatement(v.getStatement()).anyMatch(tracesWithoutCoverageInfo::contains))
+                            .count();
+
+                    if (matches == 0) {
+                        return false;
+                    } else if (matches == e.getValue().size()) {
+                        return true;
+                    } else {
+                        Log.printWarning("Reached only some parts of line?");
+                        return true;
+                    }
+                }));
+        onlyAllowCoveredIfPredecessorCoveredAsWell(map);
+        return map;
+    }
+
+    private void onlyAllowCoveredIfPredecessorCoveredAsWell(Map<AtStackTraceLine, Boolean> map) {
+        // We are only interested in a covered method if its predecessor from the stack trace was reached as well
+        // TODO Does not consider the following case:
+        // Stack trace from crash we are trying to reproduce:
+        // at com.example.Class2.method2()
+        // at com.example.Class1.method1()
+        //
+        // Traces
+        // - com.example.Class2.method2() covered
+        // - com.example.Class1.method1() covered
+        //
+        // Result
+        // - com.example.Class1.method1() will be marked as reached -> fine
+        // - com.example.Class2.method2() will be marked as reached
+        //      -> Case: method2 is called by method3
+        //      -> should ideally not be marked as reached (since it was not called by method1)
+
+        var orderedEntries = stackTrace.getStackTraceAtLines()
+                .filter(map::containsKey)
+                .map(line -> map.entrySet().stream().filter(e -> e.getKey().equals(line)).findAny())
+                .map(Optional::orElseThrow)
+                .collect(Collectors.toList());
+        Collections.reverse(orderedEntries);
+
+        Iterator<Map.Entry<AtStackTraceLine, Boolean>> coveredStackTraceLineIterator = orderedEntries.listIterator();
+
+        while (coveredStackTraceLineIterator.hasNext() && coveredStackTraceLineIterator.next().getValue()) {
+            // Run from bottom to top of stack trace lines until an uncovered line is reached
+        }
+
+        // Set remaining lines to not covered, since predecessor is also not covered
+        while (coveredStackTraceLineIterator.hasNext()) {
+            coveredStackTraceLineIterator.next().setValue(false);
+        }
+    }
+
+    private static <T> T expectOne(Collection<T> collection) {
+        if (collection.isEmpty()) {
+            throw new NoSuchElementException();
+        } else if (collection.size() > 1) {
+            throw new UnsupportedOperationException();
+        } else {
+            return collection.stream().findAny().orElseThrow();
+        }
+    }
+
+    private Stream<String> tracesForStatement(Statement statement) {
+        return getInstructions(statement)
+                .map(i -> statement.getMethod() + "->" + i.getInstructionIndex());
+    }
+
+    private static Stream<AnalyzedInstruction> getInstructions(Statement statement) {
+        if (statement instanceof BasicStatement) {
+            return Stream.of(((BasicStatement) statement).getInstruction());
+        } else if (statement instanceof BlockStatement) {
+            return ((BlockStatement) statement).getStatements()
+                    .stream().flatMap(GraphEndpoint::getInstructions);
+        } else {
+            return Stream.empty();
+        }
+    }
+
     private String traceToMethod(String method) {
         String[] parts = method.split("->");
         return parts[0] + "->" + parts[1];
+    }
+
+    private String traceToClass(String trace) {
+        return trace.split("->")[0];
     }
 
     private Set<String> getTargetComponents(String packageName, ComponentType... componentType) {
