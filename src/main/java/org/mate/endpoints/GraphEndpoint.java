@@ -145,7 +145,11 @@ public class GraphEndpoint implements Endpoint {
         double minDistance = getCallTreeDistance(request);
         double normalizedDistance = minDistance == Integer.MAX_VALUE
                 ? 1
-                : Math.max(0, ((minDistance / (minDistance + 1)) - 0.5) * 2);
+                : minDistance / (minDistance + 1);
+
+        if (normalizedDistance < 0 || normalizedDistance > 1) {
+            throw new IllegalStateException();
+        }
 
         Log.println("CallTree distance for " + chromosome + " is: abs. distance " + minDistance + ", rel. distance " + normalizedDistance);
 
