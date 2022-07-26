@@ -21,7 +21,7 @@ public class StackTrace {
                 .filter(stackTraceLine -> stackTraceLine.isFromPackage(packageName))
                 .filter(stackTraceLine -> stackTraceLine instanceof AtStackTraceLine)
                 .flatMap(StackTraceLine::getFuzzyTokens)
-                .filter(token -> !packageName.contains(token) && token.length() > 1 && !IGNORE_TOKENS.contains(token))
+                .filter(token -> !packageName.contains(token) && token.length() > 2 && !IGNORE_TOKENS.contains(token))
                 .collect(Collectors.toSet());
     }
 
