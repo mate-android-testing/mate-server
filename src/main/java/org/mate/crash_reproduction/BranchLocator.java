@@ -1,14 +1,14 @@
 package org.mate.crash_reproduction;
 
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.MethodUtils;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.Tuple;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.Utility;
 import org.jf.dexlib2.DexFileFactory;
 import org.jf.dexlib2.ReferenceType;
 import org.jf.dexlib2.builder.BuilderDebugItem;
 import org.jf.dexlib2.builder.BuilderInstruction;
 import org.jf.dexlib2.builder.MutableMethodImplementation;
-import org.jf.dexlib2.builder.instruction.BuilderInstruction21t;
-import org.jf.dexlib2.builder.instruction.BuilderInstruction22t;
 import org.jf.dexlib2.iface.ClassDef;
 import org.jf.dexlib2.iface.DexFile;
 import org.jf.dexlib2.iface.Method;
@@ -16,12 +16,12 @@ import org.jf.dexlib2.iface.MultiDexContainer;
 import org.jf.dexlib2.iface.debug.LineNumber;
 import org.jf.dexlib2.iface.instruction.Instruction;
 import org.jf.dexlib2.iface.instruction.ReferenceInstruction;
+import org.mate.graphs.InterCFG;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -50,20 +50,26 @@ public class BranchLocator {
         return dexFiles;
     }
 
-    public List<String> getInstructionForStackTrace(List<String> stackTrace, String packageName) {
+    public Map<AtStackTraceLine, Set<Vertex>> getTargetTracesForStackTrace(List<AtStackTraceLine> stackTrace,
+                                                                           InterCFG interCFG,
+                                                                           String packageName) {
         return getLastConsecutiveLines(stackTrace, packageName).stream()
-                .map(this::getInstructionForStackTraceLine)
-                .flatMap(Collection::stream)
-                .collect(Collectors.toList());
+                .collect(Collectors.toMap(Function.identity(), line -> {
+                    var result = getInstructionsForLine(line).orElseThrow();
+
+                    return result.getY().stream()
+                            .map(instruction -> interCFG.findVertexByInstruction(result.getX(), instruction))
+                            .collect(Collectors.toSet());
+                }));
     }
 
-    private List<String> getLastConsecutiveLines(List<String> stackTrace, String packageName) {
-        List<String> instructions = new LinkedList<>();
+    private List<AtStackTraceLine> getLastConsecutiveLines(List<AtStackTraceLine> stackTrace, String packageName) {
+        List<AtStackTraceLine> instructions = new LinkedList<>();
         boolean reachedPackage = false;
 
         for (int i = stackTrace.size() - 1; i >= 0; i--) {
-            String line = stackTrace.get(i);
-            if (line.contains(packageName)) {
+            var line = stackTrace.get(i);
+            if (line.isFromPackage(packageName)) {
                 reachedPackage = true;
                 instructions.add(0, line);
             } else if (reachedPackage) {
@@ -78,37 +84,38 @@ public class BranchLocator {
         return stackTrace.getStackTraceAtLines()
                 .filter(l -> l.isFromPackage(packageName))
                 .filter(line -> line.getFileName().isPresent() && line.getLineNumber().isPresent())
-                .flatMap(line -> getTokensFromStackTraceLine(line.getMethodName(), line.getFileName().get(), line.getLineNumber().get()));
+                .flatMap(this::getTokensFromStackTraceLine);
     }
 
-    public Set<String> getInstructionForStackTraceLine(String stackTraceLine) {
-        Pattern pattern = Pattern.compile("at (.+)\\.(.+)\\((.+):(.+)\\)");
-        Matcher matcher = pattern.matcher(stackTraceLine.trim());
+    public Optional<Tuple<Method, Set<BuilderInstruction>>> getInstructionsForLine(AtStackTraceLine stackTraceLine) {
+        return BranchLocator.getInstructionsForLine(dexFiles, stackTraceLine);
+    }
 
-        if (matcher.matches()) {
-            String methodName = matcher.group(2);
-            String sourceFile = matcher.group(3);
-            int lineInFile = Integer.parseInt(matcher.group(4));
-            return getInstructionForStackTraceLine(methodName, sourceFile, lineInFile);
-        } else {
-            throw new IllegalArgumentException("Invalid stack trace line syntax! Expecting 'at the.class.Name.methodName(File:LineNumber)'");
+    public static Optional<Tuple<Method, Set<BuilderInstruction>>> getInstructionsForLine(Collection<DexFile> dexFiles, AtStackTraceLine stackTraceLine) {
+        if (stackTraceLine.getFileName().isEmpty() || stackTraceLine.getLineNumber().isEmpty()) {
+            return Optional.empty();
         }
-    }
 
-    public Set<String> getInstructionForStackTraceLine(String methodName, String sourceFile, int lineInFile) {
-        Set<String> targets = new HashSet<>();
         for (DexFile dexFile : dexFiles) {
             for (ClassDef classDef : dexFile.getClasses()) {
-                if (sourceFile.equals(classDef.getSourceFile())) {
+                if (stackTraceLine.getFileName().get().equals(classDef.getSourceFile())) {
                     for (Method method : classDef.getMethods()) {
-                        if (method.toString().contains(methodName) && method.getImplementation() != null) {
+                        if (method.toString().contains(stackTraceLine.getMethodName()) && method.getImplementation() != null) {
+                            Set<BuilderInstruction> instructionsAtLine = new HashSet<>();
+
                             MutableMethodImplementation mutableMethodImplementation = new MutableMethodImplementation(method.getImplementation());
                             List<BuilderInstruction> instructions = mutableMethodImplementation.getInstructions();
-                            for (int i = 0; i < instructions.size(); i++) {
-                                BuilderInstruction instruction = instructions.get(i);
-                                if (getLineNumber(instruction.getLocation().getDebugItems()).map(line -> lineInFile == line).orElse(false)) {
-                                    targets.add(closestBranch(instructions, i).map(instr -> map(method, instr)).orElseGet(() -> map(method)));
+                            Integer lineNumber = null;
+                            for (BuilderInstruction instruction : instructions) {
+                                lineNumber = getLineNumber(instruction.getLocation().getDebugItems()).orElse(lineNumber);
+
+                                if (lineNumber != null && lineNumber.equals(stackTraceLine.getLineNumber().get())) {
+                                    instructionsAtLine.add(instruction);
                                 }
+                            }
+
+                            if (!instructionsAtLine.isEmpty()) {
+                                return Optional.of(new Tuple<>(method, instructionsAtLine));
                             }
                         }
                     }
@@ -116,11 +123,11 @@ public class BranchLocator {
             }
         }
 
-        return targets;
+        return Optional.empty();
     }
 
-    public Stream<String> getTokensFromStackTraceLine(String methodName, String sourceFile, int lineInFile) {
-        return getInstructionsForStackTraceLine(dexFiles, methodName, sourceFile, lineInFile).stream()
+    public Stream<String> getTokensFromStackTraceLine(AtStackTraceLine stackTraceLine) {
+        return getInstructionsForLine(stackTraceLine).orElseThrow().getY().stream()
                 .flatMap(BranchLocator::getTokensFromInstruction);
     }
 
@@ -141,39 +148,6 @@ public class BranchLocator {
         return Stream.empty();
     }
 
-    public static Set<Instruction> getInstructionsForStackTraceLine(List<DexFile> dexFiles, String methodName, String sourceFile, int lineInFile) {
-        return getInstructionsInMethod(dexFiles, methodName, sourceFile, lineInFile).second;
-    }
-
-    public static Pair<Method, Set<Instruction>> getInstructionsInMethod(List<DexFile> dexFiles, String methodName, String sourceFile, int lineInFile) {
-        Method stackTraceMethod = null;
-
-        Set<Instruction> result = new HashSet<>();
-        for (DexFile dexFile : dexFiles) {
-            for (ClassDef classDef : dexFile.getClasses()) {
-                if (sourceFile.equals(classDef.getSourceFile())) {
-                    for (Method method : classDef.getMethods()) {
-                        if (method.toString().contains(methodName) && method.getImplementation() != null) {
-                            MutableMethodImplementation mutableMethodImplementation = new MutableMethodImplementation(method.getImplementation());
-                            List<BuilderInstruction> instructions = mutableMethodImplementation.getInstructions();
-                            Integer lineNumber = null;
-                            for (BuilderInstruction instruction : instructions) {
-                                lineNumber = getLineNumber(instruction.getLocation().getDebugItems()).orElse(lineNumber);
-
-                                if (lineNumber != null && lineNumber == lineInFile) {
-                                    result.add(instruction);
-                                    stackTraceMethod = method;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        return new Pair<>(stackTraceMethod, result);
-    }
-
     private static Optional<Integer> getLineNumber(Set<BuilderDebugItem> debugItemSet) {
         return debugItemSet.stream().map(a -> {
             if (a instanceof LineNumber) {
@@ -183,48 +157,5 @@ public class BranchLocator {
             }
         }).flatMap(Optional::stream)
                 .findAny().map(LineNumber::getLineNumber);
-    }
-
-    private Optional<BuilderInstruction> closestBranch(List<BuilderInstruction> mutableMethodImplementation, int index) {
-        for (int i = index; i >= 0; i--) {
-            BuilderInstruction instruction = mutableMethodImplementation.get(i);
-            if (instruction instanceof BuilderInstruction21t
-                    || instruction instanceof BuilderInstruction22t) {
-                return Optional.of(instruction);
-            }
-        }
-
-        return Optional.empty();
-    }
-
-    private String map(Method method, BuilderInstruction instruction) {
-        return method.toString() + "->" + instruction.getLocation().getIndex();
-    }
-
-    private String map(Method method) {
-        return method.toString() + "->exit";
-    }
-
-    public static class Pair<F, S> {
-        public final F first;
-        public final S second;
-
-        private Pair(F first, S second) {
-            this.first = first;
-            this.second = second;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            Pair<?, ?> pair = (Pair<?, ?>) o;
-            return Objects.equals(first, pair.first) && Objects.equals(second, pair.second);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(first, second);
-        }
     }
 }

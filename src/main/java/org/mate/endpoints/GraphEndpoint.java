@@ -8,8 +8,12 @@ import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.ClassUtils;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.Tuple;
 import org.apache.commons.io.FileUtils;
+import org.jf.dexlib2.analysis.AnalyzedInstruction;
 import org.jgrapht.GraphPath;
+import org.mate.crash_reproduction.AtStackTraceLine;
 import org.mate.crash_reproduction.BranchLocator;
 import org.mate.crash_reproduction.StackTrace;
 import org.mate.crash_reproduction.StackTraceParser;
@@ -51,6 +55,9 @@ public class GraphEndpoint implements Endpoint {
 
     // a target vertex (a random branch)
     private List<Vertex> targetVertexes;
+    private Map<AtStackTraceLine, Set<Vertex>> targetVertices;
+    private Map<AtStackTraceLine, Tuple<IntraCFG, Set<Vertex>>> targetMethodGraphs;
+    private Set<String> targetComponents;
     private StackTrace stackTrace;
     private BranchLocator branchLocator;
 
@@ -75,9 +82,8 @@ public class GraphEndpoint implements Endpoint {
         } else if (request.getSubject().startsWith("/graph/callTree/draw")) {
             return drawCallTree(request);
         } else if (request.getSubject().startsWith("/graph/get_target_activities")) {
-            String packageName = request.getParameter("package");
             return new Message.MessageBuilder("/graph/get_target_activities")
-                    .withParameter("target_activities", String.join(",", getTargetComponents(packageName, ComponentType.ACTIVITY, ComponentType.FRAGMENT)))
+                    .withParameter("target_activities", String.join(",", targetComponents))
                     .build();
         } else if (request.getSubject().startsWith("/graph/get_activity_distance")) {
             return getActivityDistance(request);
@@ -323,12 +329,27 @@ public class GraphEndpoint implements Endpoint {
                 File stackTraceFile = new File(appDir, "stack_trace.txt");
 
                 try {
-                    stackTrace = StackTraceParser.parse(Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()));
-
-                    Log.println("Branchlocator init");
                     branchLocator = new BranchLocator(apkPath);
-                    Log.println("Get instruc");
-                    List<Vertex> targetVertex = branchLocator.getInstructionForStackTrace(stackTrace.getAtLines(), packageName).stream().map(graph::lookupVertex).collect(Collectors.toList());
+
+                    stackTrace = StackTraceParser.parse(Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()));
+                    targetVertices = branchLocator.getTargetTracesForStackTrace(stackTrace.getStackTraceAtLines().collect(Collectors.toList()), (InterCFG) graph, packageName);
+                    targetComponents = getTargetComponents(packageName, ComponentType.ACTIVITY, ComponentType.FRAGMENT);
+                    targetMethodGraphs = targetVertices.entrySet().stream()
+                            .collect(Collectors.toMap(Map.Entry::getKey, e -> {
+                                String method = expectOne(e.getValue().stream().map(Vertex::getMethod).collect(Collectors.toSet()));
+                                var intra = new IntraCFG(apkPath, method, true, appsDir, packageName);
+                                Set<Vertex> intraVertices = targetVertices.get(e.getKey()).stream()
+                                        .flatMap(interVertex -> tracesForStatement(interVertex.getStatement()))
+                                        .map(intra::lookupVertex)
+                                        .collect(Collectors.toSet());
+                                return new Tuple<>(intra, intraVertices);
+                            }));
+
+                    List<Vertex> targetVertex = stackTrace.getStackTraceAtLines()
+                            .filter(targetVertices::containsKey)
+                            .map(targetVertices::get)
+                            .flatMap(Collection::stream)
+                            .collect(Collectors.toList());
 
                     if (targetVertex.isEmpty()) {
                         throw new UnsupportedOperationException("To targets found for stack trace: " + target);
