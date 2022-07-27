@@ -88,21 +88,24 @@ public final class BranchCoverageManager {
             throw new IllegalStateException("Couldn't grant runtime permissions!");
         }
 
-        // send broadcast in order to write out traces
-        var broadcastOperation = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(),
-                "-s",
-                deviceID,
-                "shell",
-                "am",
-                "broadcast",
-                "-a",
-                "STORE_TRACES",
-                "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
+        if (!device.doTracesOrInfoFileExist()) { // only send broadcast if both files doesn't exist
 
-        if (broadcastOperation.isErr()) {
-            throw new IllegalStateException("Couldn't send broadcast!");
+            // send broadcast in order to write out traces
+            var broadcastOperation = ProcessRunner.runProcess(
+                    androidEnvironment.getAdbExecutable(),
+                    "-s",
+                    deviceID,
+                    "shell",
+                    "am",
+                    "broadcast",
+                    "-a",
+                    "STORE_TRACES",
+                    "-n",
+                    packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
+
+            if (broadcastOperation.isErr()) {
+                throw new IllegalStateException("Couldn't send broadcast!");
+            }
         }
 
         device.pullTraceFile(chromosome, entity);
