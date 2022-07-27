@@ -93,7 +93,7 @@ public class Device {
      * @param testCaseDir The test case directory on the emulator.
      * @param testCase The name of the test case file.
      * @return Returns {@code true} if the test case file could be fetched,
-     *          otherwise {@code false} is returned.
+     *         otherwise {@code false} is returned.
      */
     public boolean fetchTestCase(String testCaseDir, String testCase) {
 
@@ -138,7 +138,7 @@ public class Device {
      *
      * @param packageName The package name of the app.
      * @return Returns {@code true} if the permissions could be granted,
-     * otherwise {@code false}.
+     *         otherwise {@code false}.
      */
     public boolean grantPermissions(String packageName) {
 
@@ -152,12 +152,12 @@ public class Device {
     /**
      * Broadcasts the notification of a system event to a given receiver.
      *
-     * @param packageName     The package name of the AUT.
-     * @param receiver        The broadcast receiver listening for the system event notification.
-     * @param action          The actual system event.
+     * @param packageName The package name of the AUT.
+     * @param receiver The broadcast receiver listening for the system event notification.
+     * @param action The actual system event.
      * @param dynamicReceiver Whether the receiver is a dynamic one.
      * @return Returns {@code true} if the system event notification could be successfully
-     * broad-casted, otherwise {@code false}.
+     *         broad-casted, otherwise {@code false}.
      */
     public boolean executeSystemEvent(String packageName, String receiver, String action, boolean dynamicReceiver) {
 
@@ -218,7 +218,7 @@ public class Device {
         var f11 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestCsv.csv", "sdcard/mateTestCsv.csv");
         var f12 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestXml.xml", "sdcard/mateTestXml.xml");
         var f13 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestOgg.ogg", "sdcard/mateTestOgg.ogg");
-        var f14 =ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestMp3.mp3", "sdcard/mateTestMp3.mp3");
+        var f14 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestMp3.mp3", "sdcard/mateTestMp3.mp3");
 
         if (f1.isErr() || f2.isErr() || f3.isErr() || f4.isErr() || f5.isErr() || f6.isErr()
                 || f7.isErr() || f8.isErr() || f9.isErr() || f10.isErr() || f11.isErr() || f12.isErr()
@@ -252,6 +252,29 @@ public class Device {
     }
 
     /**
+     * Checks whether traces.txt file or info.txt file exists.
+     *
+     * @return Returns {@code true} if one of both files exists, otherwise {@code false} is returned.
+     */
+    public boolean doTracesOrInfoFileExist() {
+
+        final String tracesDir = "storage/emulated/0";
+        final var query =
+                ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", tracesDir);
+
+        if (query.isOk()) {
+            final var files = query.getOk();
+            final var tracesFileExists = files.stream()
+                    .anyMatch(str -> str.trim().equals("traces.txt"));
+            final var infoFileExists = files.stream()
+                    .anyMatch(str -> str.trim().equals("info.txt"));
+            return tracesFileExists || infoFileExists;
+        } else {
+            throw new IllegalStateException("Cannot get status of traces/info.txt file: " + query.getErr());
+        }
+    }
+
+    /**
      * Pulls the traces.txt file from the external storage (sd card) if present.
      *
      * @param chromosome Identifies either a test case or test suite.
@@ -266,7 +289,7 @@ public class Device {
         String tracesDir = "storage/emulated/0";
 
         // check whether writing traces has been completed yet
-        while(!completedWritingTraces(tracesDir)) {
+        while (!completedWritingTraces(tracesDir)) {
             try {
                 Thread.sleep(300);
             } catch (InterruptedException e) {
@@ -342,12 +365,12 @@ public class Device {
             Log.println("Number of traces according to info.txt: " + numberOfTraces);
 
             /*
-            * The problem here is that the AUT can still produce traces, e.g. a background thread
-            * running an endless-loop and checking an if condition, while we try to retrieve the traces.txt
-            * file. In particular, it can happen that the write method of the tracer class is invoked while
-            * the current thread is waiting (sleeping) for the completion of writing the info.txt file. This
-            * would at least explain why there are sometimes more traces retrieved than specified by the
-            * info.txt file.
+             * The problem here is that the AUT can still produce traces, e.g. a background thread
+             * running an endless-loop and checking an if condition, while we try to retrieve the traces.txt
+             * file. In particular, it can happen that the write method of the tracer class is invoked while
+             * the current thread is waiting (sleeping) for the completion of writing the info.txt file. This
+             * would at least explain why there are sometimes more traces retrieved than specified by the
+             * info.txt file.
              */
 
             // compare traces.txt with info.txt
@@ -596,7 +619,7 @@ public class Device {
      * @param packageName The package name of the AUT.
      * @param androidEnvironment A reference to the android environment, e.g. access to adb.
      * @return Returns the name of the emulator running the given app. If no such emulator is
-     *          found, the emtpy string is returned.
+     *         found, the emtpy string is returned.
      */
     public static String getDeviceRunningPackage(String packageName, AndroidEnvironment androidEnvironment) {
         // FIXME: if multiple emulators are running the same app, we always return the first emulator match
@@ -618,7 +641,7 @@ public class Device {
      * Marks the emulator as released.
      *
      * @return Returns the string 'released' if the operation succeeded,
-     *          otherwise an empty string is returned.
+     *         otherwise an empty string is returned.
      */
     public String releaseDevice() {
         setPackageName("");
