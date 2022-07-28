@@ -105,11 +105,11 @@ public class BranchLocator {
 
                             MutableMethodImplementation mutableMethodImplementation = new MutableMethodImplementation(method.getImplementation());
                             List<BuilderInstruction> instructions = mutableMethodImplementation.getInstructions();
-                            Integer lineNumber = null;
-                            for (BuilderInstruction instruction : instructions) {
-                                lineNumber = getLineNumber(instruction.getLocation().getDebugItems()).orElse(lineNumber);
 
-                                if (lineNumber != null && lineNumber.equals(stackTraceLine.getLineNumber().get())) {
+                            for (BuilderInstruction instruction : instructions) {
+                                // TODO figure out how to get liner number of all instructions...
+                                // Currently only some instructions hold their line number as a debug item
+                                if (getLineNumber(instruction.getLocation().getDebugItems()).map(lineNumber -> lineNumber.equals(stackTraceLine.getLineNumber().get())).orElse(false)) {
                                     instructionsAtLine.add(instruction);
                                 }
                             }
