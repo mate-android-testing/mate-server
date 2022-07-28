@@ -11,6 +11,9 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Handles requests that can't be directly assigned a dedicated end point.
@@ -36,6 +39,8 @@ public class UtilityEndpoint implements Endpoint {
             return writeFile(request);
         } else if (request.getSubject().startsWith("/utility/let_user_pick")) {
             return letUserPickOption(request);
+        } else if (request.getSubject().startsWith("/utility/write_traces_diff_file")) {
+            return writeTraceDiffFile(request);
         }
         throw new IllegalArgumentException("Message request with subject: "
                 + request.getSubject() + " can't be handled by UtilityEndpoint!");
@@ -52,6 +57,48 @@ public class UtilityEndpoint implements Endpoint {
         }
 
         return new Message.MessageBuilder("/utility/write_file").build();
+    }
+
+    private Message writeTraceDiffFile(Message request) {
+        String fileName = request.getParameter("fileName");
+        Path tracesDir = appsDir.resolve(request.getParameter("packageName"))
+                .resolve("traces");
+        List<Set<String>> chromosomeTraces = Arrays.stream(request.getParameter("chromosomes").split("\\+"))
+                .map(tracesDir::resolve)
+                .map(f -> {
+                    try {
+                        return Files.readAllLines(f);
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                })
+                .map(HashSet::new)
+                .collect(Collectors.toList());
+
+        Set<String> seen = new HashSet<>();
+
+        for (Set<String> traces : chromosomeTraces) {
+            traces.removeAll(seen);
+            seen.addAll(traces);
+        }
+
+        StringJoiner stringJoiner = new StringJoiner("\n");
+
+        int pos = 0;
+        for (Set<String> traces : chromosomeTraces) {
+            stringJoiner.add("Chromosome " + pos);
+            traces.forEach(stringJoiner::add);
+            stringJoiner.add("");
+            pos++;
+        }
+
+        try {
+            Files.writeString(Path.of("./results/").resolve(fileName), stringJoiner.toString());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+
+        return new Message.MessageBuilder(request.getSubject()).build();
     }
 
     /**
