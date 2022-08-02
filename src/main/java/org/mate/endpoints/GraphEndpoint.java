@@ -9,14 +9,10 @@ import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.ClassUtils;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.Tuple;
 import org.apache.commons.io.FileUtils;
 import org.jf.dexlib2.analysis.AnalyzedInstruction;
 import org.jgrapht.GraphPath;
-import org.mate.crash_reproduction.AtStackTraceLine;
-import org.mate.crash_reproduction.BranchLocator;
-import org.mate.crash_reproduction.StackTrace;
-import org.mate.crash_reproduction.StackTraceParser;
+import org.mate.crash_reproduction.*;
 import org.mate.graphs.*;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
@@ -55,8 +51,7 @@ public class GraphEndpoint implements Endpoint {
 
     // a target vertex (a random branch)
     private List<Vertex> targetVertexes;
-    private Map<AtStackTraceLine, Set<Vertex>> targetVertices;
-    private Map<AtStackTraceLine, Tuple<IntraCFG, Set<Vertex>>> targetMethodGraphs;
+    private Map<AtStackTraceLine, AnalyzedStackTraceLine> analyzedStackTraceLines;
     private Set<String> targetComponents;
     private StackTrace stackTrace;
     private BranchLocator branchLocator;
@@ -169,15 +164,15 @@ public class GraphEndpoint implements Endpoint {
     }
 
     private int getBasicBlockDistance(Set<String> traces, AtStackTraceLine stackTraceLine) {
-        var res = targetMethodGraphs.get(stackTraceLine);
-        IntraCFG intraCFG = res.getX();
-        String targetMethod = res.getY().stream().findAny().orElseThrow().getMethod();
+        var res = analyzedStackTraceLines.get(stackTraceLine);
+        IntraCFG intraCFG = res.getIntraCFG();
+        String targetMethod = res.getTargetMethodVertices().stream().findAny().orElseThrow().getMethod();
 
         int minDistance = Integer.MAX_VALUE;
 
         for (String trace : traces) {
             if (traceToMethod(trace).equals(targetMethod)) {
-                int distance = res.getY().stream()
+                int distance = res.getTargetMethodVertices().stream()
                         .map(targetVertex -> intraCFG.getDistance(intraCFG.lookupVertex(trace), targetVertex))
                         .map(d -> d < 0 ? Integer.MAX_VALUE : d)
                         .min(Integer::compare)
@@ -302,9 +297,9 @@ public class GraphEndpoint implements Endpoint {
 
     private Map<AtStackTraceLine, Boolean> reachedTargetMethods(Set<String> traces) {
         Set<String> reachedMethods = traces.stream().map(this::traceToMethod).collect(Collectors.toSet());
-        Map<AtStackTraceLine, Boolean> map = targetVertices.entrySet().stream()
+        Map<AtStackTraceLine, Boolean> map = analyzedStackTraceLines.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> {
-                    String method = expectOne(e.getValue().stream().map(Vertex::getMethod).collect(Collectors.toSet()));
+                    String method = expectOne(e.getValue().getTargetInterVertices().stream().map(Vertex::getMethod).collect(Collectors.toSet()));
 
                     return reachedMethods.contains(method);
                 }));
@@ -319,15 +314,15 @@ public class GraphEndpoint implements Endpoint {
 
                     return parts[0] + "->" + parts[1] + "->" + parts[2];
                 }).collect(Collectors.toSet());
-        Map<AtStackTraceLine, Boolean> map = targetVertices.entrySet().stream()
+        Map<AtStackTraceLine, Boolean> map = analyzedStackTraceLines.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> {
-                    long matches = e.getValue().stream()
+                    long matches = e.getValue().getTargetInterVertices().stream()
                             .filter(v -> tracesForStatement(v.getStatement()).anyMatch(tracesWithoutCoverageInfo::contains))
                             .count();
 
                     if (matches == 0) {
                         return false;
-                    } else if (matches == e.getValue().size()) {
+                    } else if (matches == e.getValue().getTargetInterVertices().size()) {
                         return true;
                     } else {
                         Log.printWarning("Reached only some parts of line?");
@@ -545,22 +540,27 @@ public class GraphEndpoint implements Endpoint {
                     branchLocator = new BranchLocator(apkPath);
 
                     stackTrace = StackTraceParser.parse(Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()));
-                    targetVertices = branchLocator.getTargetTracesForStackTrace(stackTrace.getStackTraceAtLines().collect(Collectors.toList()), (InterCFG) graph, packageName);
-                    targetComponents = getTargetComponents(packageName, ComponentType.ACTIVITY, ComponentType.FRAGMENT);
-                    targetMethodGraphs = targetVertices.entrySet().stream()
-                            .collect(Collectors.toMap(Map.Entry::getKey, e -> {
-                                String method = expectOne(e.getValue().stream().map(Vertex::getMethod).collect(Collectors.toSet()));
+                    InterCFG interCFG = (InterCFG) graph;
+                    analyzedStackTraceLines = branchLocator.getLastConsecutiveLines(stackTrace.getStackTraceAtLines().collect(Collectors.toList()), packageName).stream()
+                            .collect(Collectors.toMap(Function.identity(), line -> {
+                                var interVertices = branchLocator.getTargetTracesForStackTraceLine(line, interCFG);
+
+                                String method = expectOne(interVertices.stream().map(Vertex::getMethod).collect(Collectors.toSet()));
                                 var intra = new IntraCFG(apkPath, method, true, appsDir, packageName);
-                                Set<Vertex> intraVertices = targetVertices.get(e.getKey()).stream()
+                                Set<Vertex> intraVertices = interVertices.stream()
                                         .flatMap(interVertex -> tracesForStatement(interVertex.getStatement()))
                                         .map(intra::lookupVertex)
                                         .collect(Collectors.toSet());
-                                return new Tuple<>(intra, intraVertices);
+
+                                return new AnalyzedStackTraceLine(interVertices, intra, intraVertices);
                             }));
 
+                    targetComponents = getTargetComponents(packageName, ComponentType.ACTIVITY, ComponentType.FRAGMENT);
+
                     List<Vertex> targetVertex = stackTrace.getStackTraceAtLines()
-                            .filter(targetVertices::containsKey)
-                            .map(targetVertices::get)
+                            .filter(analyzedStackTraceLines::containsKey)
+                            .map(analyzedStackTraceLines::get)
+                            .map(AnalyzedStackTraceLine::getTargetInterVertices)
                             .flatMap(Collection::stream)
                             .collect(Collectors.toList());
 

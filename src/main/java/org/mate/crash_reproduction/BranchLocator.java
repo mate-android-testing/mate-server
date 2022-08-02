@@ -55,16 +55,18 @@ public class BranchLocator {
                                                                            InterCFG interCFG,
                                                                            String packageName) {
         return getLastConsecutiveLines(stackTrace, packageName).stream()
-                .collect(Collectors.toMap(Function.identity(), line -> {
-                    var result = getInstructionsForLine(line).orElseThrow();
-
-                    return result.getY().stream()
-                            .map(instruction -> interCFG.findVertexByInstruction(result.getX(), instruction))
-                            .collect(Collectors.toSet());
-                }));
+                .collect(Collectors.toMap(Function.identity(), line -> getTargetTracesForStackTraceLine(line, interCFG)));
     }
 
-    private List<AtStackTraceLine> getLastConsecutiveLines(List<AtStackTraceLine> stackTrace, String packageName) {
+    public Set<Vertex> getTargetTracesForStackTraceLine(AtStackTraceLine line, InterCFG interCFG) {
+        var result = getInstructionsForLine(line).orElseThrow();
+
+        return result.getY().stream()
+                .map(instruction -> interCFG.findVertexByInstruction(result.getX(), instruction))
+                .collect(Collectors.toSet());
+    }
+
+    public List<AtStackTraceLine> getLastConsecutiveLines(List<AtStackTraceLine> stackTrace, String packageName) {
         List<AtStackTraceLine> instructions = new LinkedList<>();
         boolean reachedPackage = false;
 
