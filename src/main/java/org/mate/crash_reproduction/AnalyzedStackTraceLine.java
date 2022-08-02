@@ -9,11 +9,16 @@ public class AnalyzedStackTraceLine {
     private final Set<Vertex> targetInterVertices;
     private final IntraCFG intraCFG;
     private final Set<Vertex> targetMethodVertices;
+    private final Set<String> requiredConstructorCalls;
 
-    public AnalyzedStackTraceLine(Set<Vertex> targetInterVertices, IntraCFG intraCFG, Set<Vertex> targetMethodVertices) {
+    public AnalyzedStackTraceLine(Set<Vertex> targetInterVertices,
+                                  IntraCFG intraCFG,
+                                  Set<Vertex> targetMethodVertices,
+                                  Set<String> requiredConstructorCalls) {
         this.targetInterVertices = targetInterVertices;
         this.intraCFG = intraCFG;
         this.targetMethodVertices = targetMethodVertices;
+        this.requiredConstructorCalls = requiredConstructorCalls;
     }
 
     public Set<Vertex> getTargetInterVertices() {
@@ -26,5 +31,9 @@ public class AnalyzedStackTraceLine {
 
     public Set<Vertex> getTargetMethodVertices() {
         return targetMethodVertices;
+    }
+
+    public Set<String> getRequiredConstructorCalls() {
+        return requiredConstructorCalls;
     }
 }

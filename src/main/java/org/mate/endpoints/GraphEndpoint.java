@@ -106,6 +106,8 @@ public class GraphEndpoint implements Endpoint {
                     .build();
         } else if (request.getSubject().startsWith("/graph/call_tree_distance")) {
             return getNormalizedCallTreeDistance(request);
+        } else if (request.getSubject().startsWith("/graph/reached_required_constructors")) {
+            return getNormalizedReachedRequiredConstructors(request);
         } else if (request.getSubject().startsWith("/graph/basic_block_distance")) {
             return getMergedNormalizedBasicBlockDistance(request);
         } else {
@@ -185,6 +187,24 @@ public class GraphEndpoint implements Endpoint {
         }
 
         return minDistance;
+    }
+
+    private Message getNormalizedReachedRequiredConstructors(Message request) {
+        Set<String> reachedMethods = getTraces(request).stream().map(this::traceToMethod).collect(Collectors.toSet());
+        Set<String> requiredConstructors = analyzedStackTraceLines.values().stream()
+                .map(AnalyzedStackTraceLine::getRequiredConstructorCalls)
+                .flatMap(Collection::stream)
+                .collect(Collectors.toSet());
+
+        double reachedTraces = requiredConstructors.stream().filter(reachedMethods::contains).count();
+
+        double reached = requiredConstructors.size() == 0
+                ? 1
+                : reachedTraces / requiredConstructors.size();
+
+        return new Message.MessageBuilder(request.getSubject())
+                .withParameter("reached", String.valueOf(reached))
+                .build();
     }
 
     private Message getNormalizedCallTreeDistance(Message request) {
@@ -552,7 +572,9 @@ public class GraphEndpoint implements Endpoint {
                                         .map(intra::lookupVertex)
                                         .collect(Collectors.toSet());
 
-                                return new AnalyzedStackTraceLine(interVertices, intra, intraVertices);
+                                var requiredConstructorCalls = branchLocator.getRequiredConstructorCalls(line);
+
+                                return new AnalyzedStackTraceLine(interVertices, intra, intraVertices, requiredConstructorCalls);
                             }));
 
                     targetComponents = getTargetComponents(packageName, ComponentType.ACTIVITY, ComponentType.FRAGMENT);
