@@ -1,6 +1,7 @@
 package org.mate.crash_reproduction;
 
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.MenuUtils;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.MethodUtils;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.Tuple;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.Utility;
@@ -127,8 +128,13 @@ public class BranchLocator {
     }
 
     public Stream<String> getTokensFromStackTraceLine(AtStackTraceLine stackTraceLine) {
-        return getInstructionsForLine(stackTraceLine).orElseThrow().getY().stream()
-                .flatMap(BranchLocator::getTokensFromInstruction);
+        var result = getInstructionsForLine(stackTraceLine).orElseThrow();
+        return result.getY().stream()
+                .flatMap(instruction -> Stream.concat(
+                        BranchLocator.getTokensFromInstruction(instruction),
+                        MenuUtils.getMenuItemStringId(instruction, result.getX(), dexFiles).stream()
+                                .flatMap(id -> Arrays.stream(id.split("_"))) // TODO resolve string resource id to actual translation
+                ));
     }
 
     private static Stream<String> getTokensFromInstruction(Instruction instruction) {
