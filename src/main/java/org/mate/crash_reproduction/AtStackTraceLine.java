@@ -2,9 +2,13 @@ package org.mate.crash_reproduction;
 
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Stream;
 
 public class AtStackTraceLine implements StackTraceLine {
+    private final static Set<String> IGNORE_METHODS = Set.of(
+            "onOptionsItemSelected"
+    );
     private final String line;
     private final String packageName;
     private final String className;
@@ -59,7 +63,7 @@ public class AtStackTraceLine implements StackTraceLine {
         return Stream.concat(
                 Arrays.stream(packageName.split("\\.")),
                 Stream.concat(
-                        Stream.of(methodName),
+                        IGNORE_METHODS.contains(methodName) ? Stream.empty() : Stream.of(methodName),
                         Arrays.stream(className.split("\\$"))
                 ))
                 .flatMap(TokenUtil::splitCamelCase)
