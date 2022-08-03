@@ -98,6 +98,10 @@ public class InterCFG extends CFG {
         System.out.println("");
     }
 
+    public APK getApk() {
+        return apk;
+    }
+
     private static List<DexFile> dexFiles(File apkPath) {
         MultiDexContainer<? extends DexBackedDexFile> apk = null;
 

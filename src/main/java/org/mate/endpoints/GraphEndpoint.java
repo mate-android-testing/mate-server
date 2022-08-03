@@ -562,12 +562,12 @@ public class GraphEndpoint implements Endpoint {
 
                 // the stack_trace.txt should be located within the app directory
                 File stackTraceFile = new File(appDir, "stack_trace.txt");
+                InterCFG interCFG = (InterCFG) graph;
 
                 try {
-                    branchLocator = new BranchLocator(apkPath);
+                    branchLocator = new BranchLocator(interCFG.getApk().getDexFiles(), interCFG);
 
                     stackTrace = StackTraceParser.parse(Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()));
-                    InterCFG interCFG = (InterCFG) graph;
                     analyzedStackTraceLines = branchLocator.getLastConsecutiveLines(stackTrace.getStackTraceAtLines().collect(Collectors.toList()), packageName).stream()
                             .collect(Collectors.toMap(Function.identity(), line -> {
                                 var interVertices = branchLocator.getTargetTracesForStackTraceLine(line, interCFG);

@@ -1,11 +1,12 @@
 package org.mate.crash_reproduction;
 
+import de.uni_passau.fim.auermich.android_graphs.core.app.components.Activity;
+import de.uni_passau.fim.auermich.android_graphs.core.app.components.ComponentType;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.MenuUtils;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.MethodUtils;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.TranslatedMenuItem;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.Tuple;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.Utility;
-import org.jf.dexlib2.DexFileFactory;
 import org.jf.dexlib2.ReferenceType;
 import org.jf.dexlib2.builder.BuilderDebugItem;
 import org.jf.dexlib2.builder.BuilderInstruction;
@@ -13,7 +14,6 @@ import org.jf.dexlib2.builder.MutableMethodImplementation;
 import org.jf.dexlib2.iface.ClassDef;
 import org.jf.dexlib2.iface.DexFile;
 import org.jf.dexlib2.iface.Method;
-import org.jf.dexlib2.iface.MultiDexContainer;
 import org.jf.dexlib2.iface.debug.LineNumber;
 import org.jf.dexlib2.iface.instruction.Instruction;
 import org.jf.dexlib2.iface.instruction.ReferenceInstruction;
@@ -21,7 +21,6 @@ import org.jf.dexlib2.util.MethodUtil;
 import org.mate.graphs.InterCFG;
 import org.mate.util.Log;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.function.Function;
@@ -31,27 +30,11 @@ import java.util.stream.StreamSupport;
 
 public class BranchLocator {
     private final List<DexFile> dexFiles;
+    private final InterCFG interCFG;
 
-    public BranchLocator(File apkPath) throws IOException {
-        this(BranchLocator.fromAPK(apkPath));
-    }
-
-    public BranchLocator(List<DexFile> dexFiles) {
+    public BranchLocator(List<DexFile> dexFiles, InterCFG interCFG) throws IOException {
         this.dexFiles = dexFiles;
-    }
-
-    public static List<DexFile> fromAPK(File apkPath) throws IOException {
-        MultiDexContainer<? extends DexFile> apk = DexFileFactory.loadDexContainer(apkPath, Utility.API_OPCODE);
-
-        List<DexFile> dexFiles = new ArrayList<>();
-
-        List<String> dexEntries = apk.getDexEntryNames();
-
-        for (String dexEntry : dexEntries) {
-            dexFiles.add(apk.getEntry(dexEntry).getDexFile());
-        }
-
-        return dexFiles;
+        this.interCFG = interCFG;
     }
 
     public Map<AtStackTraceLine, Set<Vertex>> getTargetTracesForStackTrace(List<AtStackTraceLine> stackTrace,
@@ -209,9 +192,30 @@ public class BranchLocator {
         return result.getY().stream()
                 .flatMap(instruction -> Stream.concat(
                         BranchLocator.getTokensFromInstruction(instruction),
-                        MenuUtils.getMenuItemStringId(instruction, result.getX(), dexFiles).stream()
-                                .flatMap(id -> Arrays.stream(id.split("_"))) // TODO resolve string resource id to actual translation
+                        getMenuItemFromLine(result.getX(), instruction).stream()
+                                .map(TranslatedMenuItem::getTitle)
                 ));
+    }
+
+    private Optional<TranslatedMenuItem> getMenuItemFromLine(Method method, BuilderInstruction instruction) {
+        return interCFG.getComponentOfClass(MethodUtils.getClassName(method.toString()), ComponentType.ACTIVITY)
+                .flatMap(c -> {
+                    if (c instanceof Activity) {
+                        Map<Method, List<TranslatedMenuItem>> menus = ((Activity) c).getMenus();
+
+                        // need to resolve on create menu method
+                        return Optional.ofNullable(MenuUtils.ITEM_SELECT_METHOD_TO_ON_CREATE_MENU.get(MethodUtils.getMethodName(method)))
+                                .map(onCreateMenuMethod -> MethodUtils.getClassName(method.toString()) + "->" + onCreateMenuMethod)
+                                .flatMap(fullyQualifiedOnCreateMenuMethod -> menus.entrySet().stream().filter(e -> e.getKey().toString().equals(fullyQualifiedOnCreateMenuMethod)).findAny())
+                                .map(Map.Entry::getValue);
+                    }
+                    return Optional.empty();
+                })
+                .flatMap(menuItems -> {
+                    Optional<String> menuItemId = MenuUtils.getMenuItemStringId(instruction, method, dexFiles);
+
+                    return menuItemId.flatMap(id -> menuItems.stream().filter(item -> item.getId().equals(id)).findAny());
+                });
     }
 
     private static Stream<String> getTokensFromInstruction(Instruction instruction) {
