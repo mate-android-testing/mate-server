@@ -92,10 +92,17 @@ public class GraphEndpoint implements Endpoint {
             String packageName = request.getParameter("package");
             Set<String> stackTraceTokens = stackTrace.getFuzzyTokens(packageName);
             Stream<String> instructionTokens = branchLocator.getTokensForStackTrace(stackTrace, packageName);
-            Stream<String> tokens = Stream.concat(stackTraceTokens.stream(), instructionTokens);
-            return new Message.MessageBuilder("/graph/stack_trace_tokens")
-                    .withParameter("tokens", String.join(",", tokens.collect(Collectors.toSet())))
-                    .build();
+            Set<String> tokens = Stream.concat(stackTraceTokens.stream(), instructionTokens).collect(Collectors.toSet());
+            var builder = new Message.MessageBuilder("/graph/stack_trace_tokens")
+                    .withParameter("tokens", String.valueOf(tokens.size()));
+
+            int pos = 0;
+            for (String token : tokens) {
+                builder.withParameter("token_" + pos, token);
+                pos++;
+            }
+
+            return builder.build();
         } else if(request.getSubject().startsWith("/graph/stack_trace_user_tokens")) {
             return new Message.MessageBuilder("/graph/stack_trace_user_tokens")
                     .withParameter("tokens", String.join(",", stackTrace.getUserTokens()))
