@@ -9,6 +9,7 @@ import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.ClassUtils;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.Tuple;
 import org.apache.commons.io.FileUtils;
 import org.jf.dexlib2.analysis.AnalyzedInstruction;
 import org.jgrapht.GraphPath;
@@ -124,6 +125,16 @@ public class GraphEndpoint implements Endpoint {
     }
 
     private Set<String> getTraces(Message request) {
+        return readTraces(getTraceFiles(request));
+    }
+
+    private List<Set<String>> getTracesPerFile(Message request) {
+        return getTraceFiles(request).stream()
+                .map(f -> readTraces(List.of(f)))
+                .collect(Collectors.toList());
+    }
+
+    private List<File> getTraceFiles(Message request) {
         String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
 
@@ -131,15 +142,12 @@ public class GraphEndpoint implements Endpoint {
             throw new IllegalStateException("Graph hasn't been initialised!");
         }
 
-        Log.println("Computing the branch distance for the chromosome: " + chromosome);
-
         // get list of traces file
         Path appDir = appsDir.resolve(packageName);
         File tracesDir = appDir.resolve("traces").toFile();
 
         // collect the relevant traces files
-        // read traces from trace file(s)
-        return readTraces(getTraceFiles(tracesDir, chromosome));
+        return getTraceFiles(tracesDir, chromosome);
     }
 
     private Set<String> getVisitedMethods(Message request) {
@@ -158,12 +166,16 @@ public class GraphEndpoint implements Endpoint {
     }
 
     private Map<AtStackTraceLine, Double> getNormalizedBasicBlockDistances(Message request) {
-        Set<String> traces = getTraces(request);
+        // Look for traces that reached most methods
+        var bestTraces = getTracesPerFile(request).stream()
+                .map(traces -> new Tuple<>(traces, reachedTargetMethods(traces)))
+                .max(Comparator.comparingLong(tuple -> tuple.getY().values().stream().filter(b -> b).count()))
+                .orElseThrow();
 
-        return reachedTargetMethods(traces).entrySet().stream()
+        return bestTraces.getY().entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> {
                     int distance = e.getValue()
-                            ? getBasicBlockDistance(traces, e.getKey()) // only need to compute distance if we reached the method
+                            ? getBasicBlockDistance(bestTraces.getX(), e.getKey()) // only need to compute distance if we reached the method
                             : Integer.MAX_VALUE;
 
                     return distance == Integer.MAX_VALUE
@@ -236,7 +248,16 @@ public class GraphEndpoint implements Endpoint {
         String chromosome = request.getParameter("chromosome");
         Log.println("Computing the branch distance for the chromosome: " + chromosome);
 
-        Set<String> traces = getVisitedMethods(request);
+        // We don't want to mix the traces of different actions, since our target action should produce all traces necessary to cover the stack trace methods.
+        // If we mix the traces then it's possible that we get a call tree distance of zero even if the target methods are called from different actions
+        // (and never just by one action). Then we have technically reached all target methods, but not in the right sequence
+        return getTracesPerFile(request).stream()
+                .map(traces -> traces.stream().map(this::traceToMethod).collect(Collectors.toSet()))
+                .mapToInt(this::getCallTreeDistance)
+                .min().orElseThrow();
+    }
+
+    private int getCallTreeDistance(Set<String> traces) {
         List<CallTreeVertex> callTreeVertices = targetVertexes.stream().map(Vertex::getMethod).map(CallTreeVertex::new).collect(Collectors.toList());
         Collections.reverse(callTreeVertices);
 
