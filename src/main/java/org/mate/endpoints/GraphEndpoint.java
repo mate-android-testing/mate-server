@@ -295,17 +295,17 @@ public class GraphEndpoint implements Endpoint {
     }
 
     private Message reachedTargets(Message request) {
-        Set<String> traces = getTraces(request);
+        var tracesPerFile = getTracesPerFile(request);
         // If an exception is thrown then there is no trace of the line that threw the exception
         // Since (at least one of) the target lines will throw an exception we need to manually add these traces
         // in order to decide whether we have reached all target lines/methods
-        traces.addAll(deduceTracesFromStackTrace(request.getParameter("stackTrace"), request.getParameter("packageName")));
+        tracesPerFile.forEach(traces -> traces.addAll(deduceTracesFromStackTrace(request.getParameter("stackTrace"), request.getParameter("packageName"))));
 
         Message response = new Message(request.getSubject());
 
-        appendMap(response, "reachedTargetComponents", reachedTargetComponents(traces), Function.identity(), Object::toString);
-        appendMap(response, "reachedTargetMethods", reachedTargetMethods(traces), AtStackTraceLine::toString, Object::toString);
-        appendMap(response, "reachedTargetLines", reachedTargetLines(traces), AtStackTraceLine::toString, Object::toString);
+        appendMap(response, "reachedTargetComponents", getMapWithMostTrue(tracesPerFile, this::reachedTargetComponents), Function.identity(), Object::toString);
+        appendMap(response, "reachedTargetMethods", getMapWithMostTrue(tracesPerFile, this::reachedTargetMethods), AtStackTraceLine::toString, Object::toString);
+        appendMap(response, "reachedTargetLines", getMapWithMostTrue(tracesPerFile, this::reachedTargetLines), AtStackTraceLine::toString, Object::toString);
 
         return response;
     }
@@ -334,6 +334,13 @@ public class GraphEndpoint implements Endpoint {
             request.addParameter(mapName + ".v" + pos, valueToString.apply(entry.getValue()));
             pos++;
         }
+    }
+
+    private <T> Map<T, Boolean> getMapWithMostTrue(List<Set<String>> tracesPerFile, Function<Set<String>, Map<T, Boolean>> tracesToMap) {
+        return tracesPerFile.stream()
+                .map(tracesToMap)
+                .max(Comparator.comparingLong(map -> map.values().stream().filter(b -> b).count()))
+                .orElseThrow();
     }
 
     private Map<String, Boolean> reachedTargetComponents(Set<String> traces) {
