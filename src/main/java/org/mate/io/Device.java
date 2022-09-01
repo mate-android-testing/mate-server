@@ -134,6 +134,50 @@ public class Device {
     }
 
     /**
+     * Fetches a graph dot file from the emulator. Afterwards it's deleted.
+     *
+     * @param graphDir The directory on the emulator where the dot files for graphs are saved
+     * @param graphFile The name of the file that is going to be fetched and removed.
+     * @return {@code true}, if the graph was successfully fetched and removed. Otherwise, {@code false}.
+     */
+    public boolean fetchDotGraph(String graphDir, String graphFile) {
+        File appDir = new File(appsDir.toFile(), packageName);
+        File graphDirApk = new File(appDir, "graphs");
+        File graphFileApk = new File(graphDirApk, graphFile);
+
+        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", graphDir).getOk();
+
+        if (files.stream().noneMatch(str -> str.trim().equals(graphFile))) {
+            return false;
+        }
+
+        // Create directory if it doesn't exist
+        if (!graphDirApk.exists()) {
+            boolean success = graphDirApk.mkdirs();
+            Log.println("Creating graphs directory: " + success);
+        }
+
+        // fetch the dot file
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull",
+                graphDir + "/" + graphFile, String.valueOf(graphFileApk));
+
+        if (!graphFileApk.exists()) {
+            Log.println("Fetching graph file " + graphFileApk + " has failed!");
+
+            return false;
+        } else {
+            // remove test case file from emulator
+            boolean removeSuccess = ProcessRunner.runProcess(
+                    androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                    "rm", "-f", graphDir + "/" + graphFile).isOk();
+
+            Log.println("Removal of graph file succeeded: " + removeSuccess);
+
+            return removeSuccess;
+        }
+    }
+
+    /**
      * Grants read and write permission for external storage to the given app.
      *
      * @param packageName The package name of the app.
