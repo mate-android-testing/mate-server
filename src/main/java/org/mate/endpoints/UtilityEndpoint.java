@@ -5,6 +5,7 @@ import org.mate.io.Device;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
+import org.mate.util.Log;
 
 import java.nio.file.Path;
 
@@ -73,6 +74,7 @@ public class UtilityEndpoint implements Endpoint {
         String targetDir = request.getParameter("targetDir");
 
         boolean response = imageHandler.fetchScreenshots(deviceID, sourceDir, targetDir);
+        Log.println("Fetching of screenshots succeeded: " + response);
 
         return new Message.MessageBuilder("/graph/fetch_screenshots")
                 .withParameter("response", String.valueOf(response))

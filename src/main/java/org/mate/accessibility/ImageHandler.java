@@ -82,24 +82,32 @@ public class ImageHandler {
      *         Else, it returns {@code false}.
      */
     public boolean fetchScreenshots(String deviceID, String source, String target) {
-        File sourceDir = screenshotDir.resolve(source).toFile();
+        if (screenshotDir.toFile().exists()) {
+            File sourceDir = screenshotDir.resolve(source).toFile();
 
-        if (!sourceDir.exists()) {
+            if (!sourceDir.exists()) {
+                Log.println(sourceDir + " not found!");
+
+                return false;
+            }
+
+            boolean copyingSuccess = ProcessRunner.runProcess(
+                    androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                    "cp", "-c", sourceDir.getPath(), target).isOk();
+
+            boolean removeSuccess = ProcessRunner.runProcess(
+                    androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                    "rm", "-c", sourceDir.getPath()).isOk();
+
+            Log.println("Copying of screenshots succeeded: " + copyingSuccess);
+            Log.println("Removing of screenshots succeeded: " + removeSuccess);
+
+            return removeSuccess && copyingSuccess;
+        } else {
+            Log.println(screenshotDir + " not found!");
+
             return false;
         }
-
-        boolean copyingSuccess = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
-                "cp", "-c", sourceDir.getPath(), target).isOk();
-
-        boolean removeSuccess = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
-                "rm", "-c", sourceDir.getPath()).isOk();
-
-        Log.println("Copying of screenshots succeeded: " + copyingSuccess);
-        Log.println("Removing of screenshots succeeded: " + removeSuccess);
-
-        return removeSuccess && copyingSuccess;
     }
 
     /**
