@@ -73,6 +73,36 @@ public class ImageHandler {
     }
 
     /**
+     * Moves the screenshots from the device to a certain target.
+     *
+     * @param deviceID The device on which the screenshots are saved.
+     * @param source The directory, where the screenshots are initially saved.
+     * @param target The directory, to which the screenshots are moved.
+     * @return {@code true}, if the copying and removing of the screenshots were successful.
+     *         Else, it returns {@code false}.
+     */
+    public boolean fetchScreenshots(String deviceID, String source, String target) {
+        File sourceDir = screenshotDir.resolve(source).toFile();
+
+        if (!sourceDir.exists()) {
+            return false;
+        }
+
+        boolean copyingSuccess = ProcessRunner.runProcess(
+                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                "cp", "-c", sourceDir.getPath(), target).isOk();
+
+        boolean removeSuccess = ProcessRunner.runProcess(
+                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                "rm", "-c", sourceDir.getPath()).isOk();
+
+        Log.println("Copying of screenshots succeeded: " + copyingSuccess);
+        Log.println("Removing of screenshots succeeded: " + removeSuccess);
+
+        return removeSuccess && copyingSuccess;
+    }
+
+    /**
      * Checks whether there is a flickering observable between the given screenshot
      * and multiple samples of it.
      *
