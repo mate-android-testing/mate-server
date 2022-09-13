@@ -413,8 +413,13 @@ public class Device {
         var pullOperation = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
                 "-s", deviceID, "pull", tracesDir + "/traces.txt", String.valueOf(tracesFile));
 
-        if (pullOperation.isErr()) {
-            Log.println("Couldn't pull traces.txt from emulator " + pullOperation.getErr());
+        var pullError = pullOperation.isErr()
+                || (pullOperation.getOk().stream().anyMatch(s -> s.contains("adb"))
+                && pullOperation.getOk().stream().anyMatch(s -> s.contains("error")));
+
+        if (pullError) {
+            String errorMsg = pullOperation.isErr() ? pullOperation.getErr() : pullOperation.getOk().toString();
+            Log.println("Couldn't pull traces.txt from emulator " + errorMsg);
             throw new IllegalStateException("Couldn't pull traces.txt file from emulator's external storage!");
         } else {
             Log.println("Pull Operation: " + pullOperation.getOk());
