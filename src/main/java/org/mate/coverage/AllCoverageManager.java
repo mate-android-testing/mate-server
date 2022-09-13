@@ -3,7 +3,6 @@ package org.mate.coverage;
 import com.google.common.collect.Lists;
 import org.apache.commons.io.FileUtils;
 import org.mate.io.Device;
-import org.mate.io.ProcessRunner;
 import org.mate.network.message.Message;
 import org.mate.network.message.Messages;
 import org.mate.util.AndroidEnvironment;
@@ -45,23 +44,7 @@ public class AllCoverageManager {
             throw new IllegalStateException("Couldn't grant runtime permissions!");
         }
 
-        // send broadcast in order to write out traces
-        var broadcastOperation = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(),
-                "-s",
-                deviceID,
-                "shell",
-                "am",
-                "broadcast",
-                "-a",
-                "STORE_TRACES",
-                "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
-
-        if (broadcastOperation.isErr()) {
-            throw new IllegalStateException("Couldn't send broadcast!");
-        }
-
+        device.getTracesFromTracer();
         device.pullTraceFile(chromosome, entity);
         return new Message("/coverage/store");
     }

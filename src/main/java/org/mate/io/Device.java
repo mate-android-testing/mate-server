@@ -1,9 +1,7 @@
 package org.mate.io;
 
 import org.mate.pdf.Report;
-import org.mate.util.AndroidEnvironment;
-import org.mate.util.Log;
-import org.mate.util.Result;
+import org.mate.util.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -252,11 +250,11 @@ public class Device {
     }
 
     /**
-     * Checks whether traces.txt file or info.txt file exists.
+     * Checks whether the traces.txt and info.txt files exist on the external storage of the emulator.
      *
-     * @return Returns {@code true} if one of both files exists, otherwise {@code false} is returned.
+     * @return Returns a pair indicating whether the traces.txt and info.txt file exists.
      */
-    public boolean doTracesOrInfoFileExist() {
+    private Pair<Boolean, Boolean> doTracesAndInfoFileExist() {
 
         final String tracesDir = "storage/emulated/0";
         final var query =
@@ -268,9 +266,78 @@ public class Device {
                     .anyMatch(str -> str.trim().equals("traces.txt"));
             final var infoFileExists = files.stream()
                     .anyMatch(str -> str.trim().equals("info.txt"));
-            return tracesFileExists || infoFileExists;
+            return new Pair<>(tracesFileExists, infoFileExists);
         } else {
-            throw new IllegalStateException("Cannot get status of traces/info.txt file: " + query.getErr());
+            throw new RuntimeException("Cannot get status of traces file: '" + query.getErr() + "'");
+        }
+    }
+
+    /**
+     * Requests the tracer to dump its traces to the external storage of the emulator.
+     */
+    public void getTracesFromTracer() {
+
+        var traceFilesExists = doTracesAndInfoFileExist();
+        var traceFileExists = traceFilesExists.fst();
+        var infoFileExists = traceFilesExists.snd();
+
+        if (infoFileExists && !traceFileExists) {
+            Log.printError("info.txt exists, but not traces.txt, this should not happen.");
+            return;
+        }
+
+        if (traceFileExists && !infoFileExists) {
+
+            /*
+             * There are two possible states here:
+             *
+             *     1) The tracer is currently dumping its traces, and we just need to wait for it to finish.
+             *     2) The tracer dumped the traces because its cache got full. In that case we need to call the tracer
+             *        to get the remaining traces.
+             *
+             * We have no clear method of determining in which state we are in, so we have to wait for a while to have
+             * the tracer potentially finish dumping its traces and re-check for the info.txt.
+             */
+            final int maxWaitTimeInSeconds = 30;
+            for (int i = 1; i < maxWaitTimeInSeconds; ++i) {
+                Util.sleep(1);
+                traceFilesExists = doTracesAndInfoFileExist();
+                traceFileExists = traceFilesExists.fst();
+                infoFileExists = traceFilesExists.snd();
+                if (traceFileExists && infoFileExists) {
+                    // We were in case 1), now the tracer has finished dumping the traces, so we can continue.
+                    break;
+                }
+            }
+
+            if (infoFileExists && !traceFileExists) {
+                Log.printError("info.txt exists, but not traces.txt, this should not happen.");
+                return;
+            }
+        }
+
+        if (!infoFileExists) {
+            /*
+             * We assume that the tracer is not writing traces here. So either the traces.txt exists (because of a dump
+             * of the tracer when it has hit its cache limit) or it does not. In either case we need to call the tracer
+             * to dump its remaining traces.
+             */
+            var broadcastOperation =
+                    ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                            "-s",
+                            deviceID,
+                            "shell",
+                            "am",
+                            "broadcast",
+                            "-a",
+                            "STORE_TRACES",
+                            "-n",
+                            packageName + "/de.uni_passau.fim.auermich.tracer.Tracer"
+                    );
+
+            if (broadcastOperation.isErr()) {
+                throw new IllegalStateException("Couldn't send broadcast!");
+            }
         }
     }
 
