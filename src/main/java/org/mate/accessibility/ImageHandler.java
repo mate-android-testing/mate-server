@@ -43,11 +43,10 @@ public class ImageHandler {
      * @param nodeId Identifies the screen state.
      */
     public void takeScreenshot(Device device, String packageName, String nodeId) {
+        File targetDir = new File(screenshotDir.toFile(), packageName);
 
-        Path targetDir = screenshotDir.resolve(packageName);
-
-        if (!targetDir.toFile().exists()) {
-            if (!targetDir.toFile().mkdirs()) {
+        if (!targetDir.exists()) {
+            if (!targetDir.mkdirs()) {
                 Log.printError("Unable to create screenshot directory!");
                 return;
             }
@@ -64,7 +63,7 @@ public class ImageHandler {
         } else {
             // only pull if taking screenshot succeeded
             var pullSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", device.getDeviceID(),
-                    "pull", "/sdcard/" + screenshotName, String.valueOf(targetDir.resolve(screenshotName)));
+                    "pull", "/sdcard/" + screenshotName, String.valueOf(targetDir) + "/" + screenshotName);
             if (pullSS.isErr()) {
                 Log.printWarning("Pulling screenshot failed: " + pullSS.getErr());
             }
@@ -83,7 +82,10 @@ public class ImageHandler {
      */
     public boolean fetchScreenshots(String deviceID, String source, String target) {
         if (screenshotDir.toFile().exists()) {
-            File sourceDir = screenshotDir.resolve(source).toFile();
+            Device device = Device.devices.get(deviceID);
+            File sourceDir = new File(screenshotDir.toFile(), source);
+            File targetDir = new File(Device.appsDir.toFile(), device.getPackageName());
+            targetDir = new File(targetDir, target);
 
             if (!sourceDir.exists()) {
                 Log.println(sourceDir + " not found!");
@@ -91,13 +93,15 @@ public class ImageHandler {
                 return false;
             }
 
-            boolean copyingSuccess = ProcessRunner.runProcess(
-                    androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
-                    "cp", "-c", sourceDir.getPath(), target).isOk();
+            // Create directory if it doesn't exist
+            if (!targetDir.exists()) {
+                boolean success = targetDir.mkdirs();
+                Log.println("Creating screenshot directory: " + success);
+            }
 
-            boolean removeSuccess = ProcessRunner.runProcess(
-                    androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
-                    "rm", "-c", sourceDir.getPath()).isOk();
+            boolean copyingSuccess = ProcessRunner.runProcess("cp", "-r", String.valueOf(sourceDir), String.valueOf(targetDir)).isOk();
+
+            boolean removeSuccess = ProcessRunner.runProcess("rm", "-r", String.valueOf(sourceDir)).isOk();
 
             Log.println("Copying of screenshots succeeded: " + copyingSuccess);
             Log.println("Removing of screenshots succeeded: " + removeSuccess);
