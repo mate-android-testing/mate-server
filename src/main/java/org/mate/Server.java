@@ -128,7 +128,7 @@ public class Server {
     }
 
     /**
-     * Start listening on configured {@code port} and pass incoming messages to router
+     * Start listening on configured {@code port} for incoming requests.
      */
     public void run() {
 
@@ -145,7 +145,6 @@ public class Server {
             Device.appsDir = appsDir;
 
             while (true) {
-                closeEndpoint.reset();
                 Device.listActiveDevices();
                 Log.println("waiting for connection");
                 final var client = server.accept();
@@ -169,12 +168,12 @@ public class Server {
         Log.println("accepted connection");
 
         try (final var in = Channels.newInputStream(Channels.newChannel(client.getInputStream()));
+             // Closing the output stream inherently closes the associated socket, see the docs.
              final var out = client.getOutputStream()) {
 
             final Parser messageParser = new Parser(in);
 
-            // Should check CloseEndpoint, but that is broken for now.
-            while (true) {
+            while (!closeEndpoint.isClosed()) {
                 var request = messageParser.nextMessage();
                 Messages.verifyMetadata(request);
                 Messages.stripMetadata(request);
@@ -199,10 +198,8 @@ public class Server {
                     Device.listDevices(androidEnvironment);
                     e.printStackTrace();
                 }
-
-                // Ugly hack, the close endpoint does not work per connection.
-                if (request.getSubject().startsWith("/close")) break;
             }
+
             Log.println("connection closed");
 
         } catch (final IOException e) {
