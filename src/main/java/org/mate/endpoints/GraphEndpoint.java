@@ -565,7 +565,7 @@ public class GraphEndpoint implements Endpoint {
      * @param target Describes how a target should be selected.
      * @return Returns the selected target vertex.
      */
-    private List<Vertex> selectTargetVertex(String target, String packageName, File apkPath) {
+    private List<Vertex> selectTargetVertex(String target, String packageName, File apkPath, Message request) {
 
         Log.println("Target vertex selection strategy: " + target);
 
@@ -589,7 +589,12 @@ public class GraphEndpoint implements Endpoint {
                 File appDir = new File(appsDir.toFile(), packageName);
 
                 // the stack_trace.txt should be located within the app directory
-                File stackTraceFile = new File(appDir, "stack_trace.txt");
+                File stackTraceFile = new File(appDir, request.getParameter("stack_trace_path"));
+
+                if (!stackTraceFile.exists()) {
+                    throw new IllegalArgumentException("Stack trace file does not exist at: " + stackTraceFile.getAbsolutePath());
+                }
+
                 InterCFG interCFG = (InterCFG) graph;
 
                 try {
@@ -668,31 +673,31 @@ public class GraphEndpoint implements Endpoint {
         switch (graphType) {
             case INTRA_CFG:
                 String methodName = request.getParameter("method");
-                return initIntraCFG(apkPath, methodName, useBasicBlocks, packageName, target);
+                return initIntraCFG(apkPath, methodName, useBasicBlocks, packageName, target, request);
             case INTER_CFG:
                 boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
                 boolean resolveOnlyAUTClasses
                         = Boolean.parseBoolean(request.getParameter("resolve_only_aut_classes"));
                 return initInterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses,
-                        packageName, target);
+                        packageName, target, request);
             default:
                 throw new UnsupportedOperationException("Graph type not yet supported!");
         }
     }
 
     private Message initIntraCFG(File apkPath, String methodName, boolean useBasicBlocks,
-                                 String packageName, String target) {
+                                 String packageName, String target, Message request) {
         graph = new IntraCFG(apkPath, methodName, useBasicBlocks, appsDir, packageName);
-        targetVertexes = selectTargetVertex(target, packageName, apkPath);
+        targetVertexes = selectTargetVertex(target, packageName, apkPath, request);
         return new Message("/graph/init");
     }
 
     private Message initInterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
-                                 boolean resolveOnlyAUTClasses, String packageName, String target) {
+                                 boolean resolveOnlyAUTClasses, String packageName, String target, Message request) {
         var g = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
         callTree = g.getCallTree();
         graph = g;
-        targetVertexes = selectTargetVertex(target, packageName, apkPath);
+        targetVertexes = selectTargetVertex(target, packageName, apkPath, request);
         return new Message("/graph/init");
     }
 
