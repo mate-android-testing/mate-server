@@ -22,4 +22,9 @@ public class MoreStackTraceLine implements StackTraceLine {
     public Stream<String> getFuzzyTokens() {
         return Stream.empty();
     }
+
+    @Override
+    public String toString() {
+        return "... " + numberOfLinesMissing + " more";
+    }
 }

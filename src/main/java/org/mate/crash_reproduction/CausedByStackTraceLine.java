@@ -9,6 +9,10 @@ public class CausedByStackTraceLine implements StackTraceLine {
     private final String exception;
     private final String message;
 
+    public CausedByStackTraceLine(String line, String exception) {
+        this(line, exception, null);
+    }
+
     public CausedByStackTraceLine(String line, String exception, String message) {
         this.line = line;
         this.exception = exception;
@@ -22,6 +26,10 @@ public class CausedByStackTraceLine implements StackTraceLine {
 
     @Override
     public Stream<String> getFuzzyTokens() {
+        if (message == null) {
+            return Stream.empty();
+        }
+
         if (exception.equals("java.lang.NumberFormatException")) {
             Pattern messagePattern = Pattern.compile(".*\"(\\d*)\".*");
             Matcher matcher = messagePattern.matcher(message);
