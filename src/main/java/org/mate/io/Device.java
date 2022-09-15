@@ -132,6 +132,51 @@ public class Device {
     }
 
     /**
+     * Fetches an espresso test from the internal storage. Afterwards, the espresso test is erased from the emulator.
+     *
+     * @param espressoDir The espresso tests directory on the emulator.
+     * @param testCase The name of the espresso test.
+     * @return Returns {@code true} if the test case file could be fetched,
+     *          otherwise {@code false} is returned.
+     */
+    public boolean fetchEspressoTest(String espressoDir, String testCase) {
+
+        // look up the existing espresso tests in the espresso dir
+        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID,
+                "shell", "ls", espressoDir).getOk();
+
+        // check whether the specified espresso test exists
+        if (!files.stream().anyMatch(str -> str.trim().equals(testCase))) {
+            return false;
+        }
+
+        File appDir = new File(appsDir.toFile(), packageName);
+        File espressoTestsDir = new File(appDir, "espresso-tests");
+        File testCaseFile = new File(espressoTestsDir, testCase);
+
+        // create local test-cases directory if not present
+        if (!espressoTestsDir.exists()) {
+            Log.println("Creating espresso-tests directory: " + espressoTestsDir.mkdirs());
+        }
+
+        // fetch the espresso test
+        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull",
+                espressoDir + "/" + testCase, String.valueOf(testCaseFile));
+
+        if (!testCaseFile.exists()) {
+            Log.println("Pulling espresso test " + testCaseFile + " failed!");
+        }
+
+        // remove espresso test from emulator
+        var removeOp = ProcessRunner.runProcess(
+                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                "rm", "-f", espressoDir + "/" + testCase);
+
+        Log.println("Removal of espresso test succeeded: " + removeOp.isOk());
+        return testCaseFile.exists();
+    }
+
+    /**
      * Grants read and write permission for external storage to the given app.
      *
      * @param packageName The package name of the app.
