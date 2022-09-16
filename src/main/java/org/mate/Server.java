@@ -197,6 +197,12 @@ public class Server {
                 } catch (Exception e) {
                     Device.listDevices(androidEnvironment);
                     e.printStackTrace();
+                    /*
+                    * If we can't send the response, we should close the socket, which in turn should lead to an
+                    * IOException on MATE's side. This in turn will be transformed to a lexing failure, which is caught
+                    * and the request is sent again on a new socket.
+                     */
+                    break;
                 }
             }
 
