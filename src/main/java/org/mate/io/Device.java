@@ -99,12 +99,23 @@ public class Device {
 
         // TODO: check whether on Windows the leading slash needs to be removed (it seems as it is not necessary)
 
-        // retrieve test cases inside test case directory
-        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", testCaseDir).getOk();
-
         // check whether the test case file exists
-        if (!files.stream().anyMatch(str -> str.trim().equals(testCase))) {
-            return false;
+        Result<List<String>, String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "shell", "ls", testCaseDir);
+
+        if (result.isErr() || !result.getOk().stream().anyMatch(str -> str.trim().equals(testCase))) {
+
+            // the test case file couldn't be found, retry once
+            Log.println("Couldn't locate test case file: " + result);
+            Util.sleep(2);
+
+            List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID,
+                    "shell", "ls", testCaseDir).getOk();
+
+            if (!files.stream().anyMatch(str -> str.trim().equals(testCase))) {
+                Log.println("Couldn't locate test case file: " + files);
+                return false;
+            }
         }
 
         File appDir = new File(appsDir.toFile(), packageName);
