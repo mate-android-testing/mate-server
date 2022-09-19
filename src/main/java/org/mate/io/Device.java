@@ -13,7 +13,6 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class Device {
 
@@ -395,6 +394,7 @@ public class Device {
      */
     public File pullTraceFile(String chromosome, String entity) {
 
+        Log.println("Chromosome: " + chromosome);
         Log.println("Entity: " + entity);
 
         // traces are stored on the sd card (external storage)
@@ -474,9 +474,6 @@ public class Device {
         try {
             long numberOfLines = Files.lines(tracesFile.toPath()).count();
             Log.println("Number of traces according to traces.txt: " + numberOfLines);
-
-            Log.println("Chromosome: " + chromosome);
-            Log.println("Traces: " + Files.lines(tracesFile.toPath()).collect(Collectors.toList()));
 
             int numberOfTraces = Integer.parseInt(content.getOk().get(0).trim());
             Log.println("Number of traces according to info.txt: " + numberOfTraces);
