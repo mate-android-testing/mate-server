@@ -8,9 +8,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Hashtable;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -24,6 +22,11 @@ public class Device {
     private boolean busy;
     private final int apiVersion;
     private String currentScreenShotLocation;
+
+    /**
+     * The set of covered test cases, i.e. for which traces have been dumped.
+     */
+    private final Set<String> coveredTestCases = new HashSet<>();
 
     // defines where the apps, in particular the APKs are located
     public static Path appsDir;
@@ -390,12 +393,20 @@ public class Device {
      *
      * @param chromosome Identifies either a test case or test suite.
      * @param entity If chromosome identifies a test suite, entity identifies the test case, otherwise {@code null}.
-     * @return Returns the path to the traces file.
      */
-    public File pullTraceFile(String chromosome, String entity) {
+    public void pullTraceFile(String chromosome, String entity) {
 
         Log.println("Chromosome: " + chromosome);
         Log.println("Entity: " + entity);
+
+        String testCase = entity == null ? chromosome : entity;
+
+        if (coveredTestCases.contains(testCase)) {
+            // We have already dumped the traces for the given test case. We don't want to overwrite (corrupt) them.
+            return;
+        } else {
+            coveredTestCases.add(testCase);
+        }
 
         // traces are stored on the sd card (external storage)
         String tracesDir = "storage/emulated/0";
@@ -512,8 +523,6 @@ public class Device {
                 "rm", "-f", tracesDir + "/info.txt");
 
         Log.println("Removal of info file succeeded: " + removeInfoFileOp.isOk());
-
-        return tracesFile;
     }
 
     /**
