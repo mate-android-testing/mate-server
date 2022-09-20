@@ -2,24 +2,30 @@ package org.mate;
 
 import org.mate.accessibility.ImageHandler;
 import org.mate.endpoints.*;
-import org.mate.util.AndroidEnvironment;
 import org.mate.io.Device;
+import org.mate.network.Endpoint;
+import org.mate.network.Router;
 import org.mate.network.message.Message;
 import org.mate.network.message.Messages;
 import org.mate.network.message.serialization.Parser;
 import org.mate.network.message.serialization.Serializer;
-import org.mate.network.Endpoint;
-import org.mate.network.Router;
 import org.mate.pdf.Report;
+import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.channels.Channels;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.Comparator;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.concurrent.Executors;
 
 public class Server {
     private static final String MATE_SERVER_PROPERTIES_PATH = "mate-server.properties";
@@ -89,7 +95,7 @@ public class Server {
         router.add("/properties", new PropertiesEndpoint());
         router.add("/emulator/interaction", new EmulatorInteractionEndpoint(androidEnvironment, imageHandler));
         router.add("/android", new AndroidEndpoint(androidEnvironment));
-        router.add("/accessibility",new AccessibilityEndpoint(imageHandler));
+        router.add("/accessibility", new AccessibilityEndpoint(imageHandler));
         router.add("/coverage", new CoverageEndpoint(androidEnvironment, resultsPath, appsDir));
         router.add("/fuzzer", new FuzzerEndpoint(androidEnvironment));
         router.add("/utility", new UtilityEndpoint(androidEnvironment, resultsPath, appsDir));
@@ -122,63 +128,89 @@ public class Server {
     }
 
     /**
-     * Start listening on configured {@code port} and pass incoming messages to router
+     * Start listening on configured {@code port} for incoming requests.
      */
     public void run() {
-        try {
-            ServerSocket server = new ServerSocket(port);
+
+        final var executorService = Executors.newCachedThreadPool();
+
+        try (final ServerSocket server = new ServerSocket(port)) {
             if (port == 0) {
                 // Don't remove this log, it is read by mate-commander.
                 System.out.println(server.getLocalPort());
             }
-            logger.doLog();
-            Socket client;
 
+            logger.doLog();
             Device.loadActiveDevices(androidEnvironment);
             Device.appsDir = appsDir;
 
             while (true) {
-                closeEndpoint.reset();
                 Device.listActiveDevices();
                 Log.println("waiting for connection");
-                client = server.accept();
-                Log.println("accepted connection");
-
-                OutputStream out = client.getOutputStream();
-                Parser messageParser = new Parser(client.getInputStream());
-
-                try {
-                    Message request;
-                    while (!closeEndpoint.isClosed()) {
-                        request = messageParser.nextMessage();
-                        Messages.verifyMetadata(request);
-                        Messages.stripMetadata(request);
-                        Log.println("Request: " + request.getSubject());
-                        Endpoint endpoint = router.resolve(request.getSubject());
-                        Message response;
-                        if (endpoint == null) {
-                            response = Messages.unknownEndpoint(request.getSubject());
-                        } else {
-                            response = endpoint.handle(request);
-                        }
-                        if (response == null) {
-                            response = Messages.unhandledMessage(request.getSubject());
-                        }
-                        Messages.addMetadata(response);
-                        out.write(Serializer.serialize(response));
-                        out.flush();
-                    }
-                } catch (Exception e) {
-                    Device.listDevices(androidEnvironment);
-                    e.printStackTrace();
-                }
-                client.close();
-                Log.println("connection closed");
+                final var client = server.accept();
+                executorService.submit(() -> handleConnection(client));
             }
-
         } catch (IOException ioe) {
             Device.listDevices(androidEnvironment);
             ioe.printStackTrace();
+        } finally {
+            executorService.shutdownNow();
+        }
+    }
+
+    /**
+     * Handles an incoming connection.
+     *
+     * @param client The client socket.
+     */
+    private void handleConnection(final Socket client) {
+
+        Log.println("accepted connection");
+
+        try (final var in = Channels.newInputStream(Channels.newChannel(client.getInputStream()));
+             // Closing the output stream inherently closes the associated socket, see the docs.
+             final var out = client.getOutputStream()) {
+
+            final Parser messageParser = new Parser(in);
+
+            while (!closeEndpoint.isClosed()) {
+                var request = messageParser.nextMessage();
+                Messages.verifyMetadata(request);
+                Messages.stripMetadata(request);
+                Log.println("Request: " + request.getSubject());
+
+                Endpoint endpoint = router.resolve(request.getSubject());
+                Message response;
+                if (endpoint == null) {
+                    response = Messages.unknownEndpoint(request.getSubject());
+                } else {
+                    response = endpoint.handle(request);
+                }
+                if (response == null) {
+                    response = Messages.unhandledMessage(request.getSubject());
+                }
+                Messages.addMetadata(response);
+
+                try {
+                    out.write(Serializer.serialize(response));
+                    out.flush();
+                } catch (Exception e) {
+                    Device.listDevices(androidEnvironment);
+                    e.printStackTrace();
+                    /*
+                    * If we can't send the response, we should close the socket, which in turn should lead to an
+                    * IOException on MATE's side. This in turn will be transformed to a lexing failure, which is caught
+                    * and the request is sent again on a new socket.
+                     */
+                    break;
+                }
+            }
+
+            Log.println("connection closed");
+
+        } catch (final IOException e) {
+            Device.listDevices(androidEnvironment);
+            e.printStackTrace();
         }
     }
 

@@ -302,7 +302,6 @@ public abstract class CFG implements Graph {
             return vertexMap.get(trace);
         } else {
             try {
-                Log.println("Non cached vertex lookup for trace: " + trace);
                 return baseCFG.lookUpVertex(trace);
             } catch (Exception e) {
                 Log.printWarning(e.getMessage());

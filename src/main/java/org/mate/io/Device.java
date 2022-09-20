@@ -1,21 +1,16 @@
 package org.mate.io;
 
 import org.mate.pdf.Report;
-import org.mate.util.AndroidEnvironment;
-import org.mate.util.Log;
-import org.mate.util.Result;
+import org.mate.util.*;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Hashtable;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class Device {
 
@@ -27,6 +22,11 @@ public class Device {
     private boolean busy;
     private final int apiVersion;
     private String currentScreenShotLocation;
+
+    /**
+     * The set of covered test cases, i.e. for which traces have been dumped.
+     */
+    private final Set<String> coveredTestCases = new HashSet<>();
 
     // defines where the apps, in particular the APKs are located
     public static Path appsDir;
@@ -93,18 +93,29 @@ public class Device {
      * @param testCaseDir The test case directory on the emulator.
      * @param testCase The name of the test case file.
      * @return Returns {@code true} if the test case file could be fetched,
-     *          otherwise {@code false} is returned.
+     *         otherwise {@code false} is returned.
      */
     public boolean fetchTestCase(String testCaseDir, String testCase) {
 
         // TODO: check whether on Windows the leading slash needs to be removed (it seems as it is not necessary)
 
-        // retrieve test cases inside test case directory
-        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", testCaseDir).getOk();
-
         // check whether the test case file exists
-        if (!files.stream().anyMatch(str -> str.trim().equals(testCase))) {
-            return false;
+        Result<List<String>, String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "shell", "ls", testCaseDir);
+
+        if (result.isErr() || !result.getOk().stream().anyMatch(str -> str.trim().equals(testCase))) {
+
+            // the test case file couldn't be found, retry once
+            Log.println("Couldn't locate test case file: " + result);
+            Util.sleep(2);
+
+            List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID,
+                    "shell", "ls", testCaseDir).getOk();
+
+            if (!files.stream().anyMatch(str -> str.trim().equals(testCase))) {
+                Log.println("Couldn't locate test case file: " + files);
+                return false;
+            }
         }
 
         File appDir = new File(appsDir.toFile(), packageName);
@@ -183,7 +194,7 @@ public class Device {
      *
      * @param packageName The package name of the app.
      * @return Returns {@code true} if the permissions could be granted,
-     * otherwise {@code false}.
+     *         otherwise {@code false}.
      */
     public boolean grantPermissions(String packageName) {
 
@@ -197,12 +208,12 @@ public class Device {
     /**
      * Broadcasts the notification of a system event to a given receiver.
      *
-     * @param packageName     The package name of the AUT.
-     * @param receiver        The broadcast receiver listening for the system event notification.
-     * @param action          The actual system event.
+     * @param packageName The package name of the AUT.
+     * @param receiver The broadcast receiver listening for the system event notification.
+     * @param action The actual system event.
      * @param dynamicReceiver Whether the receiver is a dynamic one.
      * @return Returns {@code true} if the system event notification could be successfully
-     * broad-casted, otherwise {@code false}.
+     *         broad-casted, otherwise {@code false}.
      */
     public boolean executeSystemEvent(String packageName, String receiver, String action, boolean dynamicReceiver) {
 
@@ -263,7 +274,7 @@ public class Device {
         var f11 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestCsv.csv", "sdcard/mateTestCsv.csv");
         var f12 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestXml.xml", "sdcard/mateTestXml.xml");
         var f13 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestOgg.ogg", "sdcard/mateTestOgg.ogg");
-        var f14 =ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestMp3.mp3", "sdcard/mateTestMp3.mp3");
+        var f14 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestMp3.mp3", "sdcard/mateTestMp3.mp3");
 
         if (f1.isErr() || f2.isErr() || f3.isErr() || f4.isErr() || f5.isErr() || f6.isErr()
                 || f7.isErr() || f8.isErr() || f9.isErr() || f10.isErr() || f11.isErr() || f12.isErr()
@@ -297,21 +308,122 @@ public class Device {
     }
 
     /**
+     * Checks whether the traces.txt and info.txt files exist on the external storage of the emulator.
+     *
+     * @return Returns a pair indicating whether the traces.txt and info.txt file exists.
+     */
+    private Pair<Boolean, Boolean> doTracesAndInfoFileExist() {
+
+        final String tracesDir = "storage/emulated/0";
+        final var query =
+                ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", tracesDir);
+
+        if (query.isOk()) {
+            final var files = query.getOk();
+            final var tracesFileExists = files.stream()
+                    .anyMatch(str -> str.trim().equals("traces.txt"));
+            final var infoFileExists = files.stream()
+                    .anyMatch(str -> str.trim().equals("info.txt"));
+            return new Pair<>(tracesFileExists, infoFileExists);
+        } else {
+            throw new RuntimeException("Cannot get status of traces file: '" + query.getErr() + "'");
+        }
+    }
+
+    /**
+     * Requests the tracer to dump its traces to the external storage of the emulator.
+     */
+    public void getTracesFromTracer() {
+
+        var traceFilesExists = doTracesAndInfoFileExist();
+        var traceFileExists = traceFilesExists.fst();
+        var infoFileExists = traceFilesExists.snd();
+
+        if (infoFileExists && !traceFileExists) {
+            Log.printError("info.txt exists, but not traces.txt, this should not happen.");
+            return;
+        }
+
+        if (traceFileExists && !infoFileExists) {
+
+            /*
+             * There are two possible states here:
+             *
+             *     1) The tracer is currently dumping its traces, and we just need to wait for it to finish.
+             *     2) The tracer dumped the traces because its cache got full. In that case we need to call the tracer
+             *        to get the remaining traces.
+             *
+             * We have no clear method of determining in which state we are in, so we have to wait for a while to have
+             * the tracer potentially finish dumping its traces and re-check for the info.txt.
+             */
+            final int maxWaitTimeInSeconds = 30;
+            for (int i = 1; i < maxWaitTimeInSeconds; ++i) {
+                Util.sleep(1);
+                traceFilesExists = doTracesAndInfoFileExist();
+                traceFileExists = traceFilesExists.fst();
+                infoFileExists = traceFilesExists.snd();
+                if (traceFileExists && infoFileExists) {
+                    // We were in case 1), now the tracer has finished dumping the traces, so we can continue.
+                    break;
+                }
+            }
+
+            if (infoFileExists && !traceFileExists) {
+                Log.printError("info.txt exists, but not traces.txt, this should not happen.");
+                return;
+            }
+        }
+
+        if (!infoFileExists) {
+            /*
+             * We assume that the tracer is not writing traces here. So either the traces.txt exists (because of a dump
+             * of the tracer when it has hit its cache limit) or it does not. In either case we need to call the tracer
+             * to dump its remaining traces.
+             */
+            var broadcastOperation =
+                    ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                            "-s",
+                            deviceID,
+                            "shell",
+                            "am",
+                            "broadcast",
+                            "-a",
+                            "STORE_TRACES",
+                            "-n",
+                            packageName + "/de.uni_passau.fim.auermich.tracer.Tracer"
+                    );
+
+            if (broadcastOperation.isErr()) {
+                throw new IllegalStateException("Couldn't send broadcast!");
+            }
+        }
+    }
+
+    /**
      * Pulls the traces.txt file from the external storage (sd card) if present.
      *
      * @param chromosome Identifies either a test case or test suite.
      * @param entity If chromosome identifies a test suite, entity identifies the test case, otherwise {@code null}.
-     * @return Returns the path to the traces file.
      */
-    public File pullTraceFile(String chromosome, String entity) {
+    public void pullTraceFile(String chromosome, String entity) {
 
+        Log.println("Chromosome: " + chromosome);
         Log.println("Entity: " + entity);
+
+        String testCase = entity == null ? chromosome : entity;
+
+        if (coveredTestCases.contains(testCase)) {
+            // We have already dumped the traces for the given test case. We don't want to overwrite (corrupt) them.
+            return;
+        } else {
+            coveredTestCases.add(testCase);
+        }
 
         // traces are stored on the sd card (external storage)
         String tracesDir = "storage/emulated/0";
 
         // check whether writing traces has been completed yet
-        while(!completedWritingTraces(tracesDir)) {
+        while (!completedWritingTraces(tracesDir)) {
             try {
                 Thread.sleep(300);
             } catch (InterruptedException e) {
@@ -368,8 +480,13 @@ public class Device {
         var pullOperation = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
                 "-s", deviceID, "pull", tracesDir + "/traces.txt", String.valueOf(tracesFile));
 
-        if (pullOperation.isErr()) {
-            Log.println("Couldn't pull traces.txt from emulator " + pullOperation.getErr());
+        var pullError = pullOperation.isErr()
+                || (pullOperation.getOk().stream().anyMatch(s -> s.contains("adb"))
+                && pullOperation.getOk().stream().anyMatch(s -> s.contains("error")));
+
+        if (pullError) {
+            String errorMsg = pullOperation.isErr() ? pullOperation.getErr() : pullOperation.getOk().toString();
+            Log.println("Couldn't pull traces.txt from emulator " + errorMsg);
             throw new IllegalStateException("Couldn't pull traces.txt file from emulator's external storage!");
         } else {
             Log.println("Pull Operation: " + pullOperation.getOk());
@@ -380,19 +497,16 @@ public class Device {
             long numberOfLines = Files.lines(tracesFile.toPath()).count();
             Log.println("Number of traces according to traces.txt: " + numberOfLines);
 
-            Log.println("Chromosome: " + chromosome);
-            Log.println("Traces: " + Files.lines(tracesFile.toPath()).collect(Collectors.toList()));
-
             int numberOfTraces = Integer.parseInt(content.getOk().get(0).trim());
             Log.println("Number of traces according to info.txt: " + numberOfTraces);
 
             /*
-            * The problem here is that the AUT can still produce traces, e.g. a background thread
-            * running an endless-loop and checking an if condition, while we try to retrieve the traces.txt
-            * file. In particular, it can happen that the write method of the tracer class is invoked while
-            * the current thread is waiting (sleeping) for the completion of writing the info.txt file. This
-            * would at least explain why there are sometimes more traces retrieved than specified by the
-            * info.txt file.
+             * The problem here is that the AUT can still produce traces, e.g. a background thread
+             * running an endless-loop and checking an if condition, while we try to retrieve the traces.txt
+             * file. In particular, it can happen that the write method of the tracer class is invoked while
+             * the current thread is waiting (sleeping) for the completion of writing the info.txt file. This
+             * would at least explain why there are sometimes more traces retrieved than specified by the
+             * info.txt file.
              */
 
             // compare traces.txt with info.txt
@@ -420,8 +534,6 @@ public class Device {
                 "rm", "-f", tracesDir + "/info.txt");
 
         Log.println("Removal of info file succeeded: " + removeInfoFileOp.isOk());
-
-        return tracesFile;
     }
 
     /**
@@ -641,7 +753,7 @@ public class Device {
      * @param packageName The package name of the AUT.
      * @param androidEnvironment A reference to the android environment, e.g. access to adb.
      * @return Returns the name of the emulator running the given app. If no such emulator is
-     *          found, the emtpy string is returned.
+     *         found, the emtpy string is returned.
      */
     public static String getDeviceRunningPackage(String packageName, AndroidEnvironment androidEnvironment) {
         // FIXME: if multiple emulators are running the same app, we always return the first emulator match
@@ -663,7 +775,7 @@ public class Device {
      * Marks the emulator as released.
      *
      * @return Returns the string 'released' if the operation succeeded,
-     *          otherwise an empty string is returned.
+     *         otherwise an empty string is returned.
      */
     public String releaseDevice() {
         setPackageName("");
