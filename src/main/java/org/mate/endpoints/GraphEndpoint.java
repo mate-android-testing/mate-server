@@ -629,6 +629,11 @@ public class GraphEndpoint implements Endpoint {
                     if (targetVertex.isEmpty()) {
                         throw new UnsupportedOperationException("To targets found for stack trace: " + target);
                     }
+                    var calltreeVertices = targetVertex.stream().map(Vertex::getMethod).map(CallTreeVertex::new).collect(Collectors.toList());
+                    Collections.reverse(calltreeVertices);
+                    if (callTree.getShortestPathWithStops(calltreeVertices).isEmpty()) {
+                        Log.printWarning("No path from root to target vertices");
+                    }
                     return targetVertex;
                 } catch (IOException e) {
                     Log.printError("Could not read stack trace file from '" + stackTraceFile.getAbsolutePath() + "'!");
