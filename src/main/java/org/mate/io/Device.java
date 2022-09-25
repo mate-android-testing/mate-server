@@ -106,7 +106,7 @@ public class Device {
 
             // the test case file couldn't be found, retry once
             Log.println("Couldn't locate test case file: " + result);
-            Util.sleep(2);
+            Util.sleep(3);
 
             List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID,
                     "shell", "ls", testCaseDir).getOk();
