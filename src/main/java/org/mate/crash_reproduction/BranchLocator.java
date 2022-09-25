@@ -3,10 +3,7 @@ package org.mate.crash_reproduction;
 import de.uni_passau.fim.auermich.android_graphs.core.app.components.Activity;
 import de.uni_passau.fim.auermich.android_graphs.core.app.components.ComponentType;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.MenuUtils;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.MethodUtils;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.TranslatedMenuItem;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.Tuple;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.*;
 import org.jf.dexlib2.ReferenceType;
 import org.jf.dexlib2.builder.BuilderDebugItem;
 import org.jf.dexlib2.builder.BuilderInstruction;
@@ -153,13 +150,15 @@ public class BranchLocator {
     }
 
     public static Optional<Tuple<Method, Set<BuilderInstruction>>> getInstructionsForLine(Collection<DexFile> dexFiles, AtStackTraceLine stackTraceLine) {
-        if (stackTraceLine.getFileName().isEmpty() || stackTraceLine.getLineNumber().isEmpty()) {
+        if (stackTraceLine.getLineNumber().isEmpty()) {
             return Optional.empty();
         }
+        String fileName = stackTraceLine.getFileName().orElse(stackTraceLine.getClassName() + ".java");
+        String dottedClassName = stackTraceLine.getPackageName() + "." + stackTraceLine.getClassName();
 
         for (DexFile dexFile : dexFiles) {
             for (ClassDef classDef : dexFile.getClasses()) {
-                if (stackTraceLine.getFileName().get().equals(classDef.getSourceFile())) {
+                if (fileName.equals(classDef.getSourceFile()) || ClassUtils.dottedClassName(classDef.toString()).equals(dottedClassName)) {
                     for (Method method : classDef.getMethods()) {
                         if (method.toString().contains(stackTraceLine.getMethodName()) && method.getImplementation() != null) {
                             Set<BuilderInstruction> instructionsAtLine = new HashSet<>();
