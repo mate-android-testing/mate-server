@@ -339,8 +339,7 @@ public class Device {
         var infoFileExists = traceFilesExists.snd();
 
         if (infoFileExists && !traceFileExists) {
-            Log.printError("info.txt exists, but not traces.txt, this should not happen.");
-            return;
+            throw new IllegalStateException("info.txt exists, but not traces.txt, this should not happen.");
         }
 
         if (traceFileExists && !infoFileExists) {
@@ -368,8 +367,7 @@ public class Device {
             }
 
             if (infoFileExists && !traceFileExists) {
-                Log.printError("info.txt exists, but not traces.txt, this should not happen.");
-                return;
+                throw new IllegalStateException("info.txt exists, but not traces.txt, this should not happen.");
             }
         }
 
@@ -434,8 +432,7 @@ public class Device {
                 "-s", deviceID, "shell", "cat", tracesDir + "/info.txt");
 
         if (content.isErr()) {
-            Log.println("Couldn't read info.txt " + content.getErr());
-            throw new IllegalStateException("Couldn't read info.txt from emulator!");
+            throw new IllegalStateException("Couldn't read info.txt from emulator: " + content);
         }
 
         // request files from external storage (sd card)
@@ -443,7 +440,7 @@ public class Device {
                 "-s", deviceID, "shell", "ls", tracesDir);
 
         if (files.isErr()) {
-            throw new IllegalStateException("Couldn't locate any file on external storage!");
+            throw new IllegalStateException("Couldn't locate any file on external storage: " + files);
         }
 
         // check whether there is some traces file
@@ -482,9 +479,7 @@ public class Device {
                 && pullOperation.getOk().stream().anyMatch(s -> s.contains("error")));
 
         if (pullError) {
-            String errorMsg = pullOperation.isErr() ? pullOperation.getErr() : pullOperation.getOk().toString();
-            Log.println("Couldn't pull traces.txt from emulator: " + errorMsg);
-            throw new IllegalStateException("Couldn't pull traces.txt file from emulator's external storage!");
+            throw new IllegalStateException("Couldn't pull traces.txt from emulator: " + pullOperation);
         } else {
             Log.println("Pull Operation: " + pullOperation.getOk());
         }
@@ -521,9 +516,7 @@ public class Device {
                 && removeTraceFileOp.getOk().stream().anyMatch(s -> s.contains("error")));
 
         if (removeTracesError) {
-            String errorMsg = removeTraceFileOp.isErr() ? removeTraceFileOp.getErr() : removeTraceFileOp.getOk().toString();
-            Log.println("Couldn't remove traces.txt from emulator: " + errorMsg);
-            throw new IllegalStateException("Couldn't remove traces.txt file from emulator's external storage!");
+            throw new IllegalStateException("Couldn't remove traces.txt from emulator: " + removeTraceFileOp);
         } else {
             Log.println("Remove Trace File Operation: " + removeTraceFileOp.getOk());
         }
@@ -533,9 +526,7 @@ public class Device {
                 && removeInfoFileOp.getOk().stream().anyMatch(s -> s.contains("error")));
 
         if (removeInfoError) {
-            String errorMsg = removeInfoFileOp.isErr() ? removeInfoFileOp.getErr() : removeInfoFileOp.getOk().toString();
-            Log.println("Couldn't remove info.txt from emulator: " + errorMsg);
-            throw new IllegalStateException("Couldn't remove info.txt file from emulator's external storage!");
+            throw new IllegalStateException("Couldn't remove info.txt from emulator: " + removeInfoFileOp);
         } else {
             Log.println("Remove Info File Operation: " + removeInfoFileOp.getOk());
         }
