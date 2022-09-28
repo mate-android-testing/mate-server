@@ -91,22 +91,15 @@ public final class BasicBlockCoverageManager {
      *
      * @param androidEnvironment Defines the location of the adb/aapt binary.
      * @param deviceID           The id of the emulator, e.g. emulator-5554.
-     * @param packageName        The package name of the AUT.
      * @param chromosome         Identifies either a test case or a test suite.
      * @param entity             Identifies a test case if chromosome refers to
      *                           a test suite, otherwise {@code null}.
      * @return Returns an empty message.
      */
-    public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID, String packageName,
+    public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID,
                                             String chromosome, String entity) {
-        // grant runtime permissions
+
         Device device = Device.devices.get(deviceID);
-        boolean granted = device.grantPermissions(packageName);
-
-        if (!granted) {
-            throw new IllegalStateException("Couldn't grant runtime permissions!");
-        }
-
         device.getTracesFromTracer();
         device.pullTraceFile(chromosome, entity);
         return new Message("/coverage/store");
