@@ -226,10 +226,10 @@ public class AllCoverageManager {
      */
     private static List<Double> evaluateCoverage(File basicBlocksFile, List<File> tracesFiles) throws IOException {
 
-        Log.println("BasicBlocksFile: " + basicBlocksFile + "[" + basicBlocksFile.exists() + "]");
+        Log.println(String.format("BasicBlocksFile: %s [Exists: %b]", basicBlocksFile, basicBlocksFile.exists()));
 
         for (File tracesFile : tracesFiles) {
-            Log.println("TracesFile: " + tracesFile + "[" + tracesFile.exists() + "]");
+            Log.println(String.format("TracesFile: %s [Exists: %b]", tracesFile, tracesFile.exists()));
         }
 
         if (numberOfInstructions == null) {
