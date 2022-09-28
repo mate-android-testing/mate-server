@@ -30,6 +30,11 @@ public final class BranchCoverageManager {
     private static final String TRACES_DIR = "traces";
 
     /**
+     * The total number of branches.
+     */
+    private static Integer numberOfBranches = null;
+
+    /**
      * Copies the coverage data, i.e. traces of test cases, specified through the list of entities
      * from the source chromosome (test suite) to the target chromosome (test suite).
      *
@@ -181,7 +186,8 @@ public final class BranchCoverageManager {
      * @return Returns the branch coverage for a single test case or the combined coverage.
      * @throws IOException Should never happen.
      */
-    private static double evaluateBranchCoverage(File branchesFile, List<File> tracesFiles) throws IOException {
+    @SuppressWarnings("unused")
+    private static double evaluateBranchCoverageDetailed(File branchesFile, List<File> tracesFiles) throws IOException {
 
         Log.println("BranchesFile: " + branchesFile + "[" + branchesFile.exists() + "]");
 
@@ -295,6 +301,61 @@ public final class BranchCoverageManager {
 
         // total branch coverage
         double branchCoverage = overallCoveredBranches / overallBranches * 100;
+        Log.println("We have a total branch coverage of " + branchCoverage + "%.");
+
+        return branchCoverage;
+    }
+
+    /**
+     * Evaluates the branch coverage for a given set of traces files. Can be used
+     * to evaluate the branch coverage for a single test case as well as the combined coverage.
+     *
+     * @param branchesFile The branches.txt file listing for each class the number of branches.
+     * @param tracesFiles  The set of traces file.
+     * @return Returns the branch coverage for a single test case or the combined coverage.
+     * @throws IOException Should never happen.
+     */
+    private static double evaluateBranchCoverage(File branchesFile, List<File> tracesFiles) throws IOException {
+
+        Log.println("BranchesFile: " + branchesFile + "[" + branchesFile.exists() + "]");
+
+        for (File tracesFile : tracesFiles) {
+            Log.println("TracesFile: " + tracesFile + "[" + tracesFile.exists() + "]");
+        }
+
+        if (numberOfBranches == null) {
+            numberOfBranches = (int) Files.lines(branchesFile.toPath()).count();
+        }
+
+        // the number of branches
+        Log.println("Number of branches: " + numberOfBranches);
+
+        Set<String> coveredTraces = new HashSet<>();
+
+        // second argument refers to traces.txt file(s)
+        for (File tracesFile : tracesFiles) {
+            try (var tracesReader = new BufferedReader(new InputStreamReader(new FileInputStream(tracesFile)))) {
+
+                // read the traces
+                String trace;
+                while ((trace = tracesReader.readLine()) != null) {
+
+                    // each trace consists of className->methodName->branchID
+                    String[] triple = trace.split("->");
+
+                    if (triple.length != 3 || trace.contains(":")
+                            || trace.endsWith("->exit") || trace.endsWith("->entry")) {
+                        // ignore traces related to if statements or branch distance or virtual entry/exit vertices
+                        continue;
+                    }
+
+                    coveredTraces.add(trace);
+                }
+            }
+        }
+
+        int numberOfCoveredBranches = coveredTraces.size();
+        double branchCoverage = (double) numberOfCoveredBranches / numberOfBranches * 100;
         Log.println("We have a total branch coverage of " + branchCoverage + "%.");
 
         return branchCoverage;
