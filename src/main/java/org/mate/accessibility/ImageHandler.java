@@ -72,49 +72,6 @@ public class ImageHandler {
     }
 
     /**
-     * Moves the screenshots from the device to a certain target.
-     *
-     * @param deviceID The device on which the screenshots are saved.
-     * @param source The directory, where the screenshots are initially saved.
-     * @param target The directory, to which the screenshots are moved.
-     * @return {@code true}, if the copying and removing of the screenshots were successful.
-     *         Else, it returns {@code false}.
-     */
-    public boolean fetchScreenshots(String deviceID, String source, String target) {
-        if (screenshotDir.toFile().exists()) {
-            Device device = Device.devices.get(deviceID);
-            File sourceDir = new File(screenshotDir.toFile(), source);
-            File targetDir = new File(Device.appsDir.toFile(), device.getPackageName());
-            targetDir = new File(targetDir, target);
-
-            if (!sourceDir.exists()) {
-                Log.println(sourceDir + " not found!");
-
-                return false;
-            }
-
-            // Create directory if it doesn't exist
-            if (!targetDir.exists()) {
-                boolean success = targetDir.mkdirs();
-                Log.println("Creating screenshot directory: " + success);
-            }
-
-            boolean copyingSuccess = ProcessRunner.runProcess("cp", "-r", String.valueOf(sourceDir), String.valueOf(targetDir)).isOk();
-
-            boolean removeSuccess = ProcessRunner.runProcess("rm", "-r", String.valueOf(sourceDir)).isOk();
-
-            Log.println("Copying of screenshots succeeded: " + copyingSuccess);
-            Log.println("Removing of screenshots succeeded: " + removeSuccess);
-
-            return removeSuccess && copyingSuccess;
-        } else {
-            Log.println(screenshotDir + " not found!");
-
-            return false;
-        }
-    }
-
-    /**
      * Checks whether there is a flickering observable between the given screenshot
      * and multiple samples of it.
      *
