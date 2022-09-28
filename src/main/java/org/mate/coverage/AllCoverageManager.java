@@ -125,7 +125,7 @@ public class AllCoverageManager {
                                            String targetChromosome, String[] entities) {
 
         File appDir = new File(appsDir.toFile(), packageName);
-        File tracesDir = new File(appDir, "traces");
+        File tracesDir = new File(appDir, TRACES_DIR);
 
         File srcDir = new File(tracesDir, sourceChromosome);
         File targetDir = new File(tracesDir, targetChromosome);
