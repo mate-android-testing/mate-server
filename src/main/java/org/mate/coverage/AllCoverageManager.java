@@ -235,6 +235,8 @@ public class AllCoverageManager {
                     if (isBranch) {
                         numberOfBranches++;
                     }
+                } else {
+                    Log.println("Malformed entry in " + basicBlocksFile + ": " + block);
                 }
             }
         } catch (IOException e) {
@@ -297,6 +299,8 @@ public class AllCoverageManager {
                             if (isBranch) {
                                 numberOfCoveredBranches++;
                             }
+                        } else {
+                            Log.println("Malformed trace in " + traceFile + ": " + trace);
                         }
                     }
                 }
