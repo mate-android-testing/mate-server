@@ -430,6 +430,7 @@ public class FitnessEndpoint implements Endpoint {
             case BASIC_BLOCK_LINE_COVERAGE:
             case BASIC_BLOCK_BRANCH_COVERAGE:
             case BASIC_BLOCK_MULTI_OBJECTIVE:
+            case CRASH_DISTANCE:
                 return copyBasicBlockFitnessData(request);
             case METHOD_COVERAGE:
                 return copyMethodFitnessData(request);
@@ -680,6 +681,7 @@ public class FitnessEndpoint implements Endpoint {
             case BASIC_BLOCK_BRANCH_COVERAGE:
             case BASIC_BLOCK_LINE_COVERAGE:
             case BASIC_BLOCK_MULTI_OBJECTIVE:
+            case CRASH_DISTANCE:
                 return storeBasicBlockFitnessData(request);
             case METHOD_COVERAGE:
                 return storeMethodFitnessData(request);
