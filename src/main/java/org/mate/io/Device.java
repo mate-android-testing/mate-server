@@ -356,6 +356,7 @@ public class Device {
              */
             final int maxWaitTimeInSeconds = 30;
             for (int i = 1; i < maxWaitTimeInSeconds; ++i) {
+                Log.println("Waiting for info.txt/traces.txt...");
                 Util.sleep(1);
                 traceFilesExists = doTracesAndInfoFileExist();
                 traceFileExists = traceFilesExists.fst();
@@ -372,6 +373,7 @@ public class Device {
         }
 
         if (!infoFileExists) {
+            Log.println("Sending broadcast to tracer...");
             /*
              * We assume that the tracer is not writing traces here. So either the traces.txt exists (because of a dump
              * of the tracer when it has hit its cache limit) or it does not. In either case we need to call the tracer
@@ -393,6 +395,58 @@ public class Device {
             if (broadcastOperation.isErr()) {
                 throw new IllegalStateException("Couldn't send broadcast!");
             }
+
+            boolean bothFilesExist = false;
+
+            final int maxWaitTimeInSeconds = 30;
+            for (int i = 1; i < maxWaitTimeInSeconds; ++i) {
+                Log.println("Waiting for info.txt/traces.txt...");
+                Util.sleep(1);
+                traceFilesExists = doTracesAndInfoFileExist();
+                traceFileExists = traceFilesExists.fst();
+                infoFileExists = traceFilesExists.snd();
+                if (traceFileExists && infoFileExists) {
+                    bothFilesExist = true;
+                    break;
+                }
+            }
+
+            if (!bothFilesExist) {
+                logRuntimePermissions(packageName);
+                throw new IllegalStateException("The info.txt/traces.txt couldn't be located on the emulator!");
+            }
+        }
+    }
+
+    /**
+     * Logs the runtime permissions of the given app.
+     *
+     * @param packageName The package name of the app for which the runtime permissions should be logged.
+     */
+    @SuppressWarnings("debug")
+    private void logRuntimePermissions(String packageName) {
+
+        Result<List<String>, String> permissions = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "shell", "dumpsys", "package", packageName);
+
+        Log.println("Permissions of app: " + packageName);
+
+        if (permissions.isOk()) {
+
+            boolean foundRuntimePermissions = false;
+
+            for (String line : permissions.getOk()) {
+
+                if (foundRuntimePermissions && line.contains("granted=")) {
+                    Log.println(line);
+                }
+
+                if (line.contains("runtime permissions:")) {
+                    foundRuntimePermissions = true;
+                }
+            }
+        } else {
+            Log.println("Couldn't retrieve runtime permissions: " + permissions);
         }
     }
 
