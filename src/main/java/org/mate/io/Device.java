@@ -471,16 +471,6 @@ public class Device {
         // traces are stored on the sd card (external storage)
         String tracesDir = "storage/emulated/0";
 
-        // check whether writing traces has been completed yet
-        while (!completedWritingTraces(tracesDir)) {
-            try {
-                Thread.sleep(300);
-            } catch (InterruptedException e) {
-                Log.println("Waiting for info.txt failed!");
-                throw new IllegalStateException(e);
-            }
-        }
-
         // get number of traces from info.txt
         Result<List<String>, String> content = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
                 "-s", deviceID, "shell", "cat", tracesDir + "/info.txt");
@@ -499,7 +489,20 @@ public class Device {
 
         // check whether there is some traces file
         if (!files.getOk().stream().anyMatch(str -> str.trim().equals("traces.txt"))) {
-            throw new IllegalStateException("Couldn't locate the traces.txt file!");
+
+            Log.println("Couldn't locate the traces.txt file on the external storage: " + files);
+            Log.println("Re-try listening files on external storage...");
+
+            Util.sleep(3);
+            logRuntimePermissions(packageName);
+
+            // request files from external storage (sd card)
+            files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                    "-s", deviceID, "shell", "ls", tracesDir);
+
+            if (!files.getOk().stream().anyMatch(str -> str.trim().equals("traces.txt"))) {
+                throw new IllegalStateException("Couldn't locate the traces.txt file: " + files);
+            }
         }
 
         File appDir = new File(appsDir.toFile(), packageName);
@@ -533,7 +536,31 @@ public class Device {
                 && pullOperation.getOk().stream().anyMatch(s -> s.contains("error")));
 
         if (pullError) {
-            throw new IllegalStateException("Couldn't pull traces.txt from emulator: " + pullOperation);
+
+            Log.println("Couldn't pull traces.txt from emulator: " + pullOperation);
+            Log.println("Re-try pulling traces.txt from emulator...");
+            Util.sleep(3);
+
+            Log.println("Old Files: " + files);
+
+            // request files from external storage (sd card)
+            files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                    "-s", deviceID, "shell", "ls", tracesDir);
+
+            Log.println("New Files: " + files);
+
+            pullOperation = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                    "-s", deviceID, "pull", tracesDir + "/traces.txt", String.valueOf(tracesFile));
+
+            pullError = pullOperation.isErr()
+                    || (pullOperation.getOk().stream().anyMatch(s -> s.contains("adb"))
+                    && pullOperation.getOk().stream().anyMatch(s -> s.contains("error")));
+
+            if (pullError) {
+                throw new IllegalStateException("Couldn't pull traces.txt from emulator: " + pullOperation);
+            } else {
+                Log.println("Pull Operation: " + pullOperation.getOk());
+            }
         } else {
             Log.println("Pull Operation: " + pullOperation.getOk());
         }
