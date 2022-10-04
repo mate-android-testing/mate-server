@@ -81,7 +81,7 @@ public class Server {
      */
     public void init() {
         androidEnvironment = new AndroidEnvironment();
-        imageHandler = new ImageHandler(androidEnvironment);
+        imageHandler = new ImageHandler(androidEnvironment, appsDir);
         router.add("/legacy", new LegacyEndpoint(androidEnvironment, imageHandler));
         closeEndpoint = new CloseEndpoint();
         router.add("/close", closeEndpoint);
@@ -200,6 +200,5 @@ public class Server {
         }
 
         Report.reportDir = csvsDir.getPath() + File.pathSeparator;
-        imageHandler.setScreenshotDir(picturesDir.toPath());
     }
 }

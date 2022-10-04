@@ -20,19 +20,12 @@ public class ImageHandler {
 
     public static int contImg = 0;
     private final AndroidEnvironment androidEnvironment;
-    private Path screenshotDir;
+    private Path appsDir;
+    private static final String SCREENSHOT_FOLDER = "screenshots";
 
-    public ImageHandler(AndroidEnvironment androidEnvironment) {
+    public ImageHandler(AndroidEnvironment androidEnvironment, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
-    }
-
-    /**
-     * Sets the screenshot directory.
-     *
-     * @param screenshotDir The new screenshot directory.
-     */
-    public void setScreenshotDir(Path screenshotDir) {
-        this.screenshotDir = screenshotDir;
+        this.appsDir = appsDir;
     }
 
     /**
@@ -43,7 +36,7 @@ public class ImageHandler {
      * @param nodeId Identifies the screen state.
      */
     public void takeScreenshot(Device device, String packageName, String nodeId) {
-        File targetDir = new File(screenshotDir.toFile(), packageName);
+        File targetDir = appsDir.resolve(packageName).resolve(SCREENSHOT_FOLDER).toFile();
 
         if (!targetDir.exists()) {
             if (!targetDir.mkdirs()) {
@@ -83,7 +76,7 @@ public class ImageHandler {
      */
     public boolean checkForFlickering(Device device, String packageName, String stateId) {
 
-        Path targetDir = screenshotDir.resolve(packageName);
+        Path targetDir = appsDir.resolve(packageName).resolve(SCREENSHOT_FOLDER);
         String screenshotName = stateId + ".png";
 
         // check whether original screenshot is present (the one we check for flickering)
@@ -189,7 +182,7 @@ public class ImageHandler {
      */
     public String calculateLuminance(String packageName, String stateId, int x1, int x2, int y1, int y2) {
 
-        Path targetDir = screenshotDir.resolve(packageName);
+        Path targetDir = appsDir.resolve(packageName).resolve(SCREENSHOT_FOLDER);
         File screenshot = new File(targetDir.toFile(), stateId + ".png");
 
         if (!screenshot.exists()) {
@@ -213,7 +206,7 @@ public class ImageHandler {
      */
     public double matchSurroundingColor(String packageName, String stateId, int x1, int x2, int y1, int y2) {
 
-        Path targetDir = screenshotDir.resolve(packageName);
+        Path targetDir = appsDir.resolve(packageName).resolve(SCREENSHOT_FOLDER);
         File screenshot = new File(targetDir.toFile(), stateId + ".png");
 
         if (!screenshot.exists()) {
@@ -236,7 +229,7 @@ public class ImageHandler {
      */
     public double calculateContrastRatio(String packageName, String stateId, int x1, int x2, int y1, int y2) {
 
-        Path targetDir = screenshotDir.resolve(packageName);
+        Path targetDir = appsDir.resolve(packageName).resolve(SCREENSHOT_FOLDER);
         File screenshot = new File(targetDir.toFile(), stateId + ".png");
 
         if (!screenshot.exists()) {
