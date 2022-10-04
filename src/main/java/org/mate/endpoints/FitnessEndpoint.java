@@ -769,8 +769,7 @@ public class FitnessEndpoint implements Endpoint {
         String entity = request.getParameter("entity");
 
         Device device = Device.getDevice(deviceID);
-        device.getTracesFromTracer();
-        device.pullTraceFile(chromosome, entity);
+        device.pullTraces(chromosome, entity);
         return new Message("/fitness/store_fitness_data");
     }
 
@@ -810,8 +809,7 @@ public class FitnessEndpoint implements Endpoint {
         String entity = request.getParameter("entity");
 
         Device device = Device.getDevice(deviceID);
-        device.getTracesFromTracer();
-        device.pullTraceFile(chromosome, entity);
+        device.pullTraces(chromosome, entity);
         return new Message("/fitness/store_fitness_data");
     }
 
@@ -828,8 +826,7 @@ public class FitnessEndpoint implements Endpoint {
         String entity = request.getParameter("entity");
 
         Device device = Device.getDevice(deviceID);
-        device.getTracesFromTracer();
-        device.pullTraceFile(chromosome, entity);
+        device.pullTraces(chromosome, entity);
         return new Message("/fitness/store_fitness_data");
     }
 
@@ -910,8 +907,7 @@ public class FitnessEndpoint implements Endpoint {
         String entity = request.getParameter("entity");
 
         Device device = Device.getDevice(deviceID);
-        device.getTracesFromTracer();
-        device.pullTraceFile(chromosome, entity);
+        device.pullTraces(chromosome, entity);
         return new Message("/fitness/store_fitness_data");
     }
 }

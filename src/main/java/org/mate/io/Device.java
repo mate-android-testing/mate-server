@@ -335,7 +335,7 @@ public class Device {
     /**
      * Requests the tracer to dump its traces to the external storage of the emulator.
      */
-    public void getTracesFromTracer() {
+    private void getTracesFromTracer() {
 
         var traceFilesExists = doTracesAndInfoFileExist();
         var traceFileExists = traceFilesExists.fst();
@@ -454,12 +454,25 @@ public class Device {
     }
 
     /**
+     * Waits for the tracer and afterwards pulls the traces.txt file from the external storage.
+     *
+     * @param chromosome Identifies either a test case or test suite.
+     * @param entity If chromosome identifies a test suite, entity identifies the test case, otherwise {@code null}.
+     */
+    public void pullTraces(String chromosome, String entity) {
+        synchronized (Device.class) {
+            getTracesFromTracer();
+            pullTraceFile(chromosome, entity);
+        }
+    }
+
+    /**
      * Pulls the traces.txt file from the external storage (sd card) if present.
      *
      * @param chromosome Identifies either a test case or test suite.
      * @param entity If chromosome identifies a test suite, entity identifies the test case, otherwise {@code null}.
      */
-    public void pullTraceFile(String chromosome, String entity) {
+    private void pullTraceFile(String chromosome, String entity) {
 
         Log.println("Chromosome: " + chromosome);
         Log.println("Entity: " + entity);

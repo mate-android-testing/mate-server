@@ -60,8 +60,7 @@ public class AllCoverageManager {
                                             String chromosome, String entity) {
 
         Device device = Device.devices.get(deviceID);
-        device.getTracesFromTracer();
-        device.pullTraceFile(chromosome, entity);
+        device.pullTraces(chromosome, entity);
         return new Message("/coverage/store");
     }
 
