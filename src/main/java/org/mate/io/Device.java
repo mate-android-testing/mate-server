@@ -96,7 +96,8 @@ public class Device {
      */
     public boolean fetchTestCase(String testCaseDir, String testCase) {
 
-        // TODO: check whether on Windows the leading slash needs to be removed (it seems as it is not necessary)
+        Log.println("TestCaseDir: " + testCaseDir);
+        Log.println("TestCase: " + testCase);
 
         // check whether the test case file exists
         Result<List<String>, String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
@@ -127,8 +128,10 @@ public class Device {
         }
 
         // fetch the test case file
-        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull",
-                testCaseDir + "/" + testCase, String.valueOf(testCaseFile));
+        var pullOp = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s",
+                deviceID, "pull", testCaseDir + "/" + testCase, String.valueOf(testCaseFile));
+
+        Log.println("Pull Operation: " + pullOp);
 
         if (!testCaseFile.exists()) {
             Log.println("Pulling test case file " + testCaseFile + " failed!");
