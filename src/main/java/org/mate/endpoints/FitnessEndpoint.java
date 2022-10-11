@@ -777,27 +777,8 @@ public class FitnessEndpoint implements Endpoint {
             throw new IllegalStateException("Couldn't grant runtime permissions!");
         }
 
-        // send broadcast in order to write out traces
-        var broadcastOperation = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(),
-                "-s",
-                deviceID,
-                "shell",
-                "am",
-                "broadcast",
-                "-a",
-                "STORE_TRACES",
-                "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer",
-                "--es",
-                "packageName",
-                packageName);
-
-        if (broadcastOperation.isErr()) {
-            throw new IllegalStateException("Couldn't send broadcast!");
-        }
-
         // fetch the traces from emulator
+        device.getTracesFromTracer();
         device.pullTraceFile(chromosome, entity);
         return new Message("/fitness/store_fitness_data");
     }
@@ -846,24 +827,8 @@ public class FitnessEndpoint implements Endpoint {
             throw new IllegalStateException("Couldn't grant runtime permissions!");
         }
 
-        // send broadcast in order to write out traces
-        var broadcastOperation = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(),
-                "-s",
-                deviceID,
-                "shell",
-                "am",
-                "broadcast",
-                "-a",
-                "STORE_TRACES",
-                "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
-
-        if (broadcastOperation.isErr()) {
-            throw new IllegalStateException("Couldn't send broadcast!");
-        }
-
         // fetch the traces from emulator
+        device.getTracesFromTracer();
         device.pullTraceFile(chromosome, entity);
         return new Message("/fitness/store_fitness_data");
     }
@@ -889,24 +854,8 @@ public class FitnessEndpoint implements Endpoint {
             throw new IllegalStateException("Couldn't grant runtime permissions!");
         }
 
-        // send broadcast in order to write out traces
-        var broadcastOperation = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(),
-                "-s",
-                deviceID,
-                "shell",
-                "am",
-                "broadcast",
-                "-a",
-                "STORE_TRACES",
-                "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
-
-        if (broadcastOperation.isErr()) {
-            throw new IllegalStateException("Couldn't send broadcast!");
-        }
-
         // fetch the traces from emulator
+        device.getTracesFromTracer();
         device.pullTraceFile(chromosome, entity);
         return new Message("/fitness/store_fitness_data");
     }
@@ -996,24 +945,8 @@ public class FitnessEndpoint implements Endpoint {
             throw new IllegalStateException("Couldn't grant runtime permissions!");
         }
 
-        // send broadcast in order to write out traces
-        var broadcastOperation = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(),
-                "-s",
-                deviceID,
-                "shell",
-                "am",
-                "broadcast",
-                "-a",
-                "STORE_TRACES",
-                "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
-
-        if (broadcastOperation.isErr()) {
-            throw new IllegalStateException("Couldn't send broadcast!");
-        }
-
         // fetch the traces from emulator
+        device.getTracesFromTracer();
         device.pullTraceFile(chromosome, entity);
         return new Message("/fitness/store_fitness_data");
     }

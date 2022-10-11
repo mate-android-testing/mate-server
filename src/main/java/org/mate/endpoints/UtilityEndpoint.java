@@ -1,11 +1,9 @@
 package org.mate.endpoints;
 
-import org.mate.accessibility.ImageHandler;
 import org.mate.io.Device;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
-import org.mate.util.Log;
 
 import java.nio.file.Path;
 
@@ -16,25 +14,24 @@ import java.nio.file.Path;
 public class UtilityEndpoint implements Endpoint {
 
     private final AndroidEnvironment androidEnvironment;
-    private final ImageHandler imageHandler;
     private final Path resultsPath;
     private final Path appsDir;
 
-    public UtilityEndpoint(AndroidEnvironment androidEnvironment, ImageHandler handler, Path resultsPath, Path appsDir) {
+    public UtilityEndpoint(AndroidEnvironment androidEnvironment, Path resultsPath, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
         this.resultsPath = resultsPath;
         this.appsDir = appsDir;
-        imageHandler = handler;
     }
 
     @Override
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/utility/fetch_test_case")) {
             return fetchTestCase(request);
-        } else {
-            throw new IllegalArgumentException("Message request with subject: "
-                    + request.getSubject() + " can't be handled by UtilityEndpoint!");
+        } else if (request.getSubject().startsWith("/utility/fetch_espresso_test")) {
+            return fetchEspressoTest(request);
         }
+        throw new IllegalArgumentException("Message request with subject: "
+                + request.getSubject() + " can't be handled by UtilityEndpoint!");
     }
 
     /**
@@ -55,6 +52,26 @@ public class UtilityEndpoint implements Endpoint {
         boolean response = device.fetchTestCase(testCaseDir, testCase);
 
         return new Message.MessageBuilder("/utility/fetch_test_case")
+                .withParameter("response", String.valueOf(response))
+                .build();
+    }
+
+    /**
+     * Fetches and removes an espresso test from the emulator.
+     *
+     * @param request The request message.
+     * @return Returns a message wrapping the outcome of the operation, i.e. success or failure.
+     */
+    private Message fetchEspressoTest(Message request) {
+
+        String deviceID = request.getParameter("deviceId");
+        String espressoDir = request.getParameter("espressoDir");
+        String testCase = request.getParameter("testcase");
+
+        Device device = Device.devices.get(deviceID);
+        boolean response = device.fetchEspressoTest(espressoDir, testCase);
+
+        return new Message.MessageBuilder("/utility/fetch_espresso_test")
                 .withParameter("response", String.valueOf(response))
                 .build();
     }

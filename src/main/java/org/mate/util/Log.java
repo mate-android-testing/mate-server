@@ -87,9 +87,13 @@ public class Log {
         }
 
         if (logger.log) {
-            logger.writeToLog(output.toString());
+            synchronized (Log.class) {
+                logger.writeToLog(output.toString());
+            }
         } else {
-            logger.buffer += output.toString();
+            synchronized (Log.class) {
+                logger.buffer += output.toString();
+            }
         }
     }
 
