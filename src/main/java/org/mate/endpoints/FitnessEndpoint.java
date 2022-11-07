@@ -765,21 +765,11 @@ public class FitnessEndpoint implements Endpoint {
     private Message storeNoveltyFitnessData(Message request) {
 
         String deviceID = request.getParameter("deviceId");
-        String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
 
-        // grant read/write permission on external storage
         Device device = Device.getDevice(deviceID);
-        boolean granted = device.grantPermissions(packageName);
-
-        if (!granted) {
-            throw new IllegalStateException("Couldn't grant runtime permissions!");
-        }
-
-        // fetch the traces from emulator
-        device.getTracesFromTracer();
-        device.pullTraceFile(chromosome, entity);
+        device.pullTraces(chromosome, entity);
         return new Message("/fitness/store_fitness_data");
     }
 
@@ -815,21 +805,11 @@ public class FitnessEndpoint implements Endpoint {
     private Message storeMethodFitnessData(Message request) {
 
         String deviceID = request.getParameter("deviceId");
-        String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
 
-        // grant read/write permission on external storage
         Device device = Device.getDevice(deviceID);
-        boolean granted = device.grantPermissions(packageName);
-
-        if (!granted) {
-            throw new IllegalStateException("Couldn't grant runtime permissions!");
-        }
-
-        // fetch the traces from emulator
-        device.getTracesFromTracer();
-        device.pullTraceFile(chromosome, entity);
+        device.pullTraces(chromosome, entity);
         return new Message("/fitness/store_fitness_data");
     }
 
@@ -842,21 +822,11 @@ public class FitnessEndpoint implements Endpoint {
     private Message storeBasicBlockFitnessData(Message request) {
 
         String deviceID = request.getParameter("deviceId");
-        String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
 
-        // grant read/write permission on external storage
         Device device = Device.getDevice(deviceID);
-        boolean granted = device.grantPermissions(packageName);
-
-        if (!granted) {
-            throw new IllegalStateException("Couldn't grant runtime permissions!");
-        }
-
-        // fetch the traces from emulator
-        device.getTracesFromTracer();
-        device.pullTraceFile(chromosome, entity);
+        device.pullTraces(chromosome, entity);
         return new Message("/fitness/store_fitness_data");
     }
 
@@ -933,21 +903,11 @@ public class FitnessEndpoint implements Endpoint {
     private Message storeBranchFitnessData(Message request) {
 
         String deviceID = request.getParameter("deviceId");
-        String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
 
-        // grant read/write permission on external storage
         Device device = Device.getDevice(deviceID);
-        boolean granted = device.grantPermissions(packageName);
-
-        if (!granted) {
-            throw new IllegalStateException("Couldn't grant runtime permissions!");
-        }
-
-        // fetch the traces from emulator
-        device.getTracesFromTracer();
-        device.pullTraceFile(chromosome, entity);
+        device.pullTraces(chromosome, entity);
         return new Message("/fitness/store_fitness_data");
     }
 }
