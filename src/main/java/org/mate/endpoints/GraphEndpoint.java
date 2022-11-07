@@ -35,7 +35,7 @@ import java.util.stream.Stream;
 public class GraphEndpoint implements Endpoint {
 
     private final AndroidEnvironment androidEnvironment;
-    private Graph graph;
+    private Graph graph = null;
     private final Path appsDir;
 
     // a target vertex (a random branch)
@@ -47,7 +47,7 @@ public class GraphEndpoint implements Endpoint {
     }
 
     @Override
-    public Message handle(Message request) {
+    public Message handle(final Message request) {
         if (request.getSubject().startsWith("/graph/init")) {
             return initGraph(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector")) {
@@ -130,8 +130,8 @@ public class GraphEndpoint implements Endpoint {
             case "random_branch":
                 List<Vertex> targets = target.equals("random_target") ? graph.getVertices() : graph.getBranchVertices();
 
+                final Random rand = new Random();
                 while (true) {
-                    Random rand = new Random();
                     Vertex randomVertex = targets.get(rand.nextInt(targets.size()));
 
                     if (graph.isReachable(randomVertex)) {
@@ -151,42 +151,33 @@ public class GraphEndpoint implements Endpoint {
 
     private Message initGraph(Message request) {
 
-        String packageName = request.getParameter("packageName");
-        GraphType graphType = GraphType.valueOf(request.getParameter("graph_type"));
-        File apkPath = new File(request.getParameter("apk"));
-        String target = request.getParameter("target");
+        final String packageName = request.getParameter("packageName");
+        final GraphType graphType = GraphType.valueOf(request.getParameter("graph_type"));
+        final File apkPath = new File(request.getParameter("apk"));
+        final String target = request.getParameter("target");
 
         if (!apkPath.exists()) {
             throw new IllegalArgumentException("Can't locate APK: " + apkPath.getAbsolutePath() + "!");
         }
 
-        boolean useBasicBlocks = Boolean.parseBoolean(request.getParameter("basic_blocks"));
+        final boolean useBasicBlocks = Boolean.parseBoolean(request.getParameter("basic_blocks"));
 
         switch (graphType) {
             case INTRA_CFG:
-                String methodName = request.getParameter("method");
-                return initIntraCFG(apkPath, methodName, useBasicBlocks, packageName, target);
+                final String methodName = request.getParameter("method");
+                graph = new IntraCFG(apkPath, methodName, useBasicBlocks, appsDir, packageName);
+                break;
             case INTER_CFG:
-                boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
-                boolean resolveOnlyAUTClasses
+                final boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
+                final boolean resolveOnlyAUTClasses
                         = Boolean.parseBoolean(request.getParameter("resolve_only_aut_classes"));
-                return initInterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses,
-                        packageName, target);
+                graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses,
+                        appsDir, packageName);
+                break;
             default:
                 throw new UnsupportedOperationException("Graph type not yet supported!");
         }
-    }
 
-    private Message initIntraCFG(File apkPath, String methodName, boolean useBasicBlocks,
-                                 String packageName, String target) {
-        graph = new IntraCFG(apkPath, methodName, useBasicBlocks, appsDir, packageName);
-        targetVertex = selectTargetVertex(target);
-        return new Message("/graph/init");
-    }
-
-    private Message initInterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
-                                 boolean resolveOnlyAUTClasses, String packageName, String target) {
-        graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
         targetVertex = selectTargetVertex(target);
         return new Message("/graph/init");
     }
