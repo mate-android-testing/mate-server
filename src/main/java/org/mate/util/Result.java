@@ -1,5 +1,6 @@
 package org.mate.util;
 
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -7,12 +8,14 @@ import java.util.Optional;
  * yield a result or fail with a message or an error code, for example.
  */
 public abstract class Result<S, T> {
+
     public abstract boolean isOk();
     public abstract boolean isErr();
     public abstract Optional<S> toOk();
     public abstract Optional<T> toErr();
     public abstract S getOk();
     public abstract T getErr();
+
     public static <S, T> Result<S, T> okOf(S value) {
         return new Ok<>(value);
     }
@@ -22,7 +25,9 @@ public abstract class Result<S, T> {
     }
 
     private static class Ok<U, V> extends Result<U, V> {
+
         private final U value;
+
         public Ok(U value) {
             this.value = value;
         }
@@ -56,10 +61,17 @@ public abstract class Result<S, T> {
         public V getErr() {
             throw new IllegalStateException("this results does not represent an error value");
         }
+
+        @Override
+        public String toString() {
+            return Objects.toString(value);
+        }
     }
 
     private static class Err<U, V> extends Result<U, V> {
+
         private final V value;
+
         public Err(V value) {
             this.value = value;
         }
@@ -92,6 +104,11 @@ public abstract class Result<S, T> {
         @Override
         public V getErr() {
             return value;
+        }
+
+        @Override
+        public String toString() {
+            return Objects.toString(value);
         }
     }
 }

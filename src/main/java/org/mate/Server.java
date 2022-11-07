@@ -150,9 +150,9 @@ public class Server {
                 final var client = server.accept();
                 executorService.submit(() -> handleConnection(client));
             }
-        } catch (IOException ioe) {
+        } catch (Exception e) {
+            Log.println("Unexpected exception:", e);
             Device.listDevices(androidEnvironment);
-            ioe.printStackTrace();
         } finally {
             executorService.shutdownNow();
         }
@@ -184,7 +184,18 @@ public class Server {
                 if (endpoint == null) {
                     response = Messages.unknownEndpoint(request.getSubject());
                 } else {
-                    response = endpoint.handle(request);
+                    try {
+                        response = endpoint.handle(request);
+                    } catch (Exception e) {
+                        Log.println("Unexpected exception during handling request: ", e);
+                        Device.listDevices(androidEnvironment);
+                        /*
+                         * If MATE-Server fails to process the request, the only viable option is to send back an error
+                         * message, which in turn should quit MATE's execution. It doesn't make sense to close the
+                         * socket and ask MATE to re-send the request.
+                         */
+                        response = Messages.errorMessage(e.getMessage());
+                    }
                 }
                 if (response == null) {
                     response = Messages.unhandledMessage(request.getSubject());
@@ -195,22 +206,26 @@ public class Server {
                     out.write(Serializer.serialize(response));
                     out.flush();
                 } catch (Exception e) {
+                    Log.println("Can't send response:" + e);
                     Device.listDevices(androidEnvironment);
-                    e.printStackTrace();
                     /*
-                    * If we can't send the response, we should close the socket, which in turn should lead to an
-                    * IOException on MATE's side. This in turn will be transformed to a lexing failure, which is caught
-                    * and the request is sent again on a new socket.
+                     * If we can't send the response, we should close the socket, which in turn should lead to an
+                     * IOException/EOF on MATE's side. This in turn will be transformed to a lexing failure, which is
+                     * caught and the request is sent again on a new socket.
                      */
                     break;
                 }
             }
-
-            Log.println("connection closed");
-
         } catch (final IOException e) {
+            /*
+             * If we encounter an IOException the socket is broken. We close the connection, which in turn should lead
+             * to an IOException/EOF on MATE's side. This in turn will be transformed to a lexing failure, which is
+             * caught and the request is sent again on a new socket.
+             */
+            Log.println("IOException during handling request:" + e);
             Device.listDevices(androidEnvironment);
-            e.printStackTrace();
+        } finally {
+            Log.println("connection closed");
         }
     }
 

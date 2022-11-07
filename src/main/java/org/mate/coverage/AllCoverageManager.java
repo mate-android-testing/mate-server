@@ -304,10 +304,10 @@ public class AllCoverageManager {
         try (var blocksReader = new BufferedReader(new InputStreamReader(new FileInputStream(blocksFile)))) {
 
             // an entry looks as follows: class name -> method name -> block id -> block size -> isBranch
-            String line;
-            while ((line = blocksReader.readLine()) != null) {
+            String block;
+            while ((block = blocksReader.readLine()) != null) {
 
-                final String[] tokens = line.split("->");
+                final String[] tokens = block.split("->");
                 final String clazz = tokens[0];
                 final String method = tokens[1];
                 final String methodSignature = clazz + "->" + method;
@@ -337,13 +337,13 @@ public class AllCoverageManager {
         final Set<String> coveredMethods = new HashSet<>();
 
         for (var traceFile : tracesFiles) {
-            try (var branchesReader = new BufferedReader(new InputStreamReader(new FileInputStream(traceFile)))) {
+            try (var tracesReader = new BufferedReader(new InputStreamReader(new FileInputStream(traceFile)))) {
 
                 // a trace looks as follows: class name -> method name -> basic block id (instruction index)
                 // -> number of instructions of block -> isBranch
-                String line;
-                while ((line = branchesReader.readLine()) != null) {
-                    final String[] tuple = line.split("->");
+                String trace;
+                while ((trace = tracesReader.readLine()) != null) {
+                    final String[] tuple = trace.split("->");
                     if (tuple.length == 5) {
 
                         final String clazz = tuple[0].trim();
@@ -358,7 +358,7 @@ public class AllCoverageManager {
                             coveredMethodsPerClass.merge(clazz, 1, Integer::sum);
                         }
                     } else {
-                        Log.printWarning("Found incomplete line \"" + line + "\" in traces file \""
+                        Log.printWarning("Found incomplete line \"" + trace + "\" in traces file \""
                                 + traceFile + "\"");
                     }
                 }
@@ -381,10 +381,10 @@ public class AllCoverageManager {
         try (var blocksReader = new BufferedReader(new InputStreamReader(new FileInputStream(blocksFile)))) {
 
             // an entry looks as follows: class name -> method name -> block id -> block size -> isBranch
-            String line;
-            while ((line = blocksReader.readLine()) != null) {
+            String block;
+            while ((block = blocksReader.readLine()) != null) {
 
-                final String[] tokens = line.split("->");
+                final String[] tokens = block.split("->");
                 final String clazz = tokens[0];
                 boolean isBranch = tokens[4].equals("isBranch");
 
@@ -410,13 +410,13 @@ public class AllCoverageManager {
         // stores a mapping of class -> (method -> basic block id) where a basic block can only contain a single branch!
         final Map<String, Map<String, Set<Integer>>> coveredBranches = new HashMap<>();
         for (var traceFile : tracesFiles) {
-            try (var branchesReader = new BufferedReader(new InputStreamReader(new FileInputStream(traceFile)))) {
+            try (var tracesReader = new BufferedReader(new InputStreamReader(new FileInputStream(traceFile)))) {
 
                 // a trace looks as follows: class name -> method name -> basic block id (instruction index)
                 // -> number of instructions of block -> isBranch
-                String line;
-                while ((line = branchesReader.readLine()) != null) {
-                    final String[] tuple = line.split("->");
+                String trace;
+                while ((trace = tracesReader.readLine()) != null) {
+                    final String[] tuple = trace.split("->");
                     if (tuple.length == 5) {
 
                         final String clazz = tuple[0].trim();
@@ -431,7 +431,7 @@ public class AllCoverageManager {
                             coveredBranches.get(clazz).get(method).add(blockId);
                         }
                     } else {
-                        Log.printWarning("Found incomplete line \"" + line + "\" in traces file \""
+                        Log.printWarning("Found incomplete line \"" + trace + "\" in traces file \""
                                 + traceFile + "\"");
                     }
                 }
@@ -458,14 +458,14 @@ public class AllCoverageManager {
         // stores a mapping of class -> (method -> (basic block -> number of instructions of block))
         final Map<String, Map<String, Map<Integer, Integer>>> coveredInstructions = new HashMap<>();
 
-        for (final var path : tracesFiles) {
-            try (var traceReader = new BufferedReader(new InputStreamReader(new FileInputStream(path)))) {
+        for (final var traceFile : tracesFiles) {
+            try (var tracesReader = new BufferedReader(new InputStreamReader(new FileInputStream(traceFile)))) {
 
                 // a trace looks as follows: class name -> method name -> basic block id (instruction index)
                 // -> number of instructions of block -> isBranch
-                String line;
-                while ((line = traceReader.readLine()) != null) {
-                    final String[] tuple = line.split("->");
+                String trace;
+                while ((trace = tracesReader.readLine()) != null) {
+                    final String[] tuple = trace.split("->");
                     if (tuple.length == 5) {
 
                         final String clazz = tuple[0].trim();
@@ -478,7 +478,7 @@ public class AllCoverageManager {
                         coveredInstructions.get(clazz).putIfAbsent(method, new HashMap<>());
                         coveredInstructions.get(clazz).get(method).putIfAbsent(blockId, count);
                     } else {
-                        Log.printWarning("Found incomplete line \"" + line + "\" in traces file \"" + path.toString() + "\"");
+                        Log.printWarning("Found incomplete line \"" + trace + "\" in traces file \"" + traceFile.toString() + "\"");
                     }
                 }
             }
@@ -509,10 +509,10 @@ public class AllCoverageManager {
         try (var blocksReader = new BufferedReader(new InputStreamReader(new FileInputStream(blocksFile)))) {
 
             // an entry looks as follows: class name -> method name -> block id -> block size -> isBranch
-            String line;
-            while ((line = blocksReader.readLine()) != null) {
+            String block;
+            while ((block = blocksReader.readLine()) != null) {
 
-                final String[] tokens = line.split("->");
+                final String[] tokens = block.split("->");
                 final String clazz = tokens[0];
                 final int instructionCount = Integer.parseInt(tokens[3]);
 

@@ -375,9 +375,6 @@ public class GraphEndpoint implements Endpoint {
 
         for (Vertex branch : graph.getBranchVertices()) {
 
-            Log.println("Target branch vertex: " + branch.getMethod() + "->["
-                        + branch.getStatement() + "]");
-
             // find the shortest distance (approach level) to the given branch
             AtomicInteger minDistance = new AtomicInteger(Integer.MAX_VALUE);
 
@@ -413,14 +410,6 @@ public class GraphEndpoint implements Endpoint {
                 }
             });
 
-            Log.println("Shortest path length: " + minDistance.get());
-            Log.println("Shortest path length (global): " + minDistanceGlobal.get());
-
-            if (minDistanceVertexGlobal.get() != null) {
-                Log.println("Closest global vertex: " + minDistanceVertexGlobal.get().getMethod()
-                        + "->[ " + minDistanceVertexGlobal.get().getStatement() + "]");
-            }
-
             if (minDistance.get() == Integer.MAX_VALUE) {
                 // branch not reachable by execution path
                 branchDistanceVector.add(String.valueOf(1));
@@ -439,8 +428,6 @@ public class GraphEndpoint implements Endpoint {
                 Vertex ifVertex = minDistanceVertex.get();
                 Statement stmt = ifVertex.getStatement();
 
-                Log.println("Closest if vertex: " + ifVertex.getMethod() + "[" + ifVertex.getStatement() + "]");
-
                 // we only support basic blocks right now
                 assert stmt.getType() == Statement.StatementType.BLOCK_STATEMENT;
 
@@ -449,8 +436,6 @@ public class GraphEndpoint implements Endpoint {
 
                 // find the branch distance trace(s) that describes the if stmt
                 String prefix = ifVertex.getMethod() + "->" + ifStmt.getInstructionIndex() + ":";
-
-                Log.println("Trace describing closest if stmt: " + prefix);
 
                 int minBranchDistance = Integer.MAX_VALUE;
 
@@ -475,9 +460,6 @@ public class GraphEndpoint implements Endpoint {
                     }
                 }
 
-                Log.println("Approach level: " + approachLevel);
-                Log.println("Minimal branch distance: " + minBranchDistance);
-
                 // combine and normalise
                 float normalisedBranchDistance = (float) minBranchDistance / (minBranchDistance + 1);
                 float combined = approachLevel + normalisedBranchDistance;
@@ -485,8 +467,6 @@ public class GraphEndpoint implements Endpoint {
                 branchDistanceVector.add(String.valueOf(combined));
             }
         }
-
-        Log.println("Branch Distance Vector: " + branchDistanceVector);
 
         return new Message.MessageBuilder("/graph/get_branch_distance_vector")
                 .withParameter("branch_distance_vector", String.join("+", branchDistanceVector))
