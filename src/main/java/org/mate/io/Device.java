@@ -147,44 +147,43 @@ public class Device {
     /**
      * Fetches a graph dot file from the emulator. Afterwards it's deleted.
      *
-     * @param graphDir The directory on the emulator where the dot files for graphs are saved
-     * @param graphFile The name of the file that is going to be fetched and removed.
-     * @return {@code true}, if the graph was successfully fetched and removed. Otherwise, {@code false}.
+     * @param graphDirName The directory name where the dot files for graphs are saved.
+     * @param graphFileName The name of the file that is going to be fetched and removed.
+     * @return Returns {@code true} if the graph was successfully fetched and removed, otherwise {@code false} is returned.
      */
-    public boolean fetchDotGraph(String graphDir, String graphFile) {
+    public boolean fetchDotGraph(String graphDirName, String graphFileName) {
+
         File appDir = new File(appsDir.toFile(), packageName);
-        File graphDirApk = new File(appDir, "graphs");
-        File graphFileApk = new File(graphDirApk, graphFile);
+        File graphDir = new File(appDir, "model");
+        File graphFile = new File(graphDir, graphFileName);
 
-        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", graphDir).getOk();
+        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", graphDirName).getOk();
 
-        if (files.stream().noneMatch(str -> str.trim().equals(graphFile))) {
+        if (files.stream().noneMatch(str -> str.trim().equals(graphFileName))) {
+            // we couldn't find the dot file on the emulator
             return false;
         }
 
         // Create directory if it doesn't exist
-        if (!graphDirApk.exists()) {
-            boolean success = graphDirApk.mkdirs();
-            Log.println("Creating graphs directory: " + success);
+        if (!graphDir.exists()) {
+            boolean success = graphDir.mkdirs();
+            Log.println("Creating model graph directory: " + success);
         }
 
         // fetch the dot file
         ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull",
-                graphDir + "/" + graphFile, String.valueOf(graphFileApk));
+                graphDirName + "/" + graphFileName, String.valueOf(graphFile));
 
-        if (!graphFileApk.exists()) {
-            Log.println("Fetching graph file " + graphFileApk + " has failed!");
-
+        if (!graphFile.exists()) {
+            Log.println("Fetching graph file " + graphFile + " from emulator has failed!");
             return false;
         } else {
-            // remove test case file from emulator
-            boolean removeSuccess = ProcessRunner.runProcess(
+            // remove dot file from emulator
+            boolean removalSucceeded = ProcessRunner.runProcess(
                     androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
-                    "rm", "-f", graphDir + "/" + graphFile).isOk();
-
-            Log.println("Removal of graph file succeeded: " + removeSuccess);
-
-            return removeSuccess;
+                    "rm", "-f", graphDirName + "/" + graphFileName).isOk();
+            Log.println("Removal of graph file succeeded: " + removalSucceeded);
+            return removalSucceeded;
         }
     }
 
