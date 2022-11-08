@@ -9,7 +9,6 @@ import org.mate.graphs.Graph;
 import org.mate.graphs.GraphType;
 import org.mate.graphs.InterCFG;
 import org.mate.graphs.IntraCFG;
-import org.mate.io.Device;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
@@ -57,8 +56,6 @@ public class GraphEndpoint implements Endpoint {
             return getBranchDistance(request);
         } else if (request.getSubject().startsWith("/graph/draw")) {
             return drawGraph(request);
-        } else if (request.getSubject().startsWith("/graph/fetch_dot_graph")) {
-            return fetchDotGraph(request);
         } else {
             throw new IllegalArgumentException("Message request with subject: "
                     + request.getSubject() + " can't be handled by GraphEndpoint!");
@@ -620,24 +617,5 @@ public class GraphEndpoint implements Endpoint {
 
         Log.println("Number of visited vertices: " + visitedVertices.size());
         return visitedVertices;
-    }
-
-    /**
-     * Calls the operation to fetch a certain dot file and remove it from the emulator.
-     *
-     * @param request The request message.
-     * @return A response message, with content about the success of the operation.
-     */
-    private Message fetchDotGraph(Message request) {
-        String deviceID = request.getParameter("deviceId");
-        String dirName = request.getParameter("dirName");
-        String fileName = request.getParameter("fileName");
-
-        Device device = Device.devices.get(deviceID);
-        boolean response = device.fetchDotGraph(dirName, fileName);
-
-        return new Message.MessageBuilder("/graph/fetch_dot_graph")
-                .withParameter("response", String.valueOf(response))
-                .build();
     }
 }
