@@ -56,7 +56,7 @@ public class ImageHandler {
         } else {
             // only pull if taking screenshot succeeded
             var pullSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", device.getDeviceID(),
-                    "pull", "/sdcard/" + screenshotName, String.valueOf(targetDir) + "/" + screenshotName);
+                    "pull", "/sdcard/" + screenshotName, targetDir + File.separator + screenshotName);
             if (pullSS.isErr()) {
                 Log.printWarning("Pulling screenshot failed: " + pullSS.getErr());
             }
