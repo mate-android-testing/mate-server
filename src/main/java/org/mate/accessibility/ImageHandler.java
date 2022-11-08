@@ -20,7 +20,7 @@ public class ImageHandler {
 
     public static int contImg = 0;
     private final AndroidEnvironment androidEnvironment;
-    private Path appsDir;
+    private final Path appsDir;
     private static final String SCREENSHOT_FOLDER = "screenshots";
 
     public ImageHandler(AndroidEnvironment androidEnvironment, Path appsDir) {
