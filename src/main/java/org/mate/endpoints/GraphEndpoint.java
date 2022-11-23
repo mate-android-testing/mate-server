@@ -23,7 +23,9 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 /**
@@ -39,7 +41,31 @@ public class GraphEndpoint implements Endpoint {
     private final Path appsDir;
 
     // a target vertex (a random branch)
-    private Vertex targetVertex;
+    private Vertex targetVertex = null;
+
+    /**
+     * Determines whether we deal with a relevant vertex, i.e. a vertex that represents a covered branch or refers to
+     * an if-statement that is reachable.
+     */
+    private final static Predicate<Map.Entry<Vertex, Integer>> isRelevantVertex = entry -> {
+        final var vertex = entry.getKey();
+        final int distance = entry.getValue();
+        return (vertex.isBranchVertex() && distance == 0) || (vertex.isIfVertex() && distance != -1);
+    };
+
+    /*
+     * We know because of the preceding predicate that both vertices are
+     *     1) A branch-vertex with distance 0, or
+     *     2) An If-vertex.
+     * The rule for determining the better vertex is:
+     *     1) If either vertex is a branch-branch with distance 0, that
+     *           vertex is better,
+     *     2) Else, the if-vertex with smaller distance is better.
+     * Because an If-vertex is a branch-vertex and distances are >= 0, these
+     * rules can be simplified to just comparing the distances.
+     */
+    private final static Comparator<Map.Entry<Vertex, Integer>> minEntryComparator =
+            Comparator.comparingInt(Map.Entry::getValue);
 
     public GraphEndpoint(AndroidEnvironment androidEnvironment, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
@@ -62,6 +88,12 @@ public class GraphEndpoint implements Endpoint {
         }
     }
 
+    /**
+     * Draws the graph and saves it inside the app directory.
+     *
+     * @param request The request message.
+     * @return Returns a message indicating that the graph could be drawn.
+     */
     private Message drawGraph(Message request) {
 
         if (graph == null) {
@@ -99,6 +131,12 @@ public class GraphEndpoint implements Endpoint {
         return new Message("/graph/draw");
     }
 
+    /**
+     * Retrieves the set of visited vertices by traversing over all traces contained in the app directory.
+     *
+     * @param appDir The app directory.
+     * @return Returns the visited vertices.
+     */
     private Set<Vertex> getVisitedVertices(File appDir) {
 
         // get list of traces file
@@ -149,6 +187,12 @@ public class GraphEndpoint implements Endpoint {
         }
     }
 
+    /**
+     * Initialises the graph.
+     *
+     * @param request The request message.
+     * @return Returns a message indicating that the graph could be constructed.
+     */
     private Message initGraph(Message request) {
 
         final String packageName = request.getParameter("packageName");
@@ -183,12 +227,196 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
+     * Computes the fitness value vector for a given chromosome combining approach level + branch distance.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the branch distance fitness vector.
+     */
+    private Message getBranchDistanceVector(final Message request) {
+
+        final String packageName = request.getParameter("packageName");
+        final String chromosome = request.getParameter("chromosome");
+
+        Log.println("Computing the branch distance vector for the chromosome: " + chromosome);
+
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
+        long start = System.currentTimeMillis();
+        final Set<String> traces = getTraces(packageName, chromosome);
+        final Set<Vertex> visitedVertices = mapTracesToVertices(traces);
+        final var branchVertices = graph.getBranchVertices();
+        final List<String> branchDistanceVector = computeBranchDistanceVector(traces, visitedVertices, branchVertices);
+        long end = System.currentTimeMillis();
+        Log.println("Computing branch distance vector took: " + ((end-start)/1000) + "s");
+        return new Message.MessageBuilder("/graph/get_branch_distance_vector")
+                .withParameter("branch_distance_vector", String.join("+", branchDistanceVector))
+                .build();
+    }
+
+    /**
+     * Computes the branch distance vector combining approach level + branch distance.
+     *
+     * @param traces The set of traces.
+     * @param visitedVertices The visited vertices.
+     * @param branchVertices The branch vertices.
+     * @return Returns the branch distance vector.
+     */
+    private List<String> computeBranchDistanceVector(final Set<String> traces, final Set<Vertex> visitedVertices,
+                                                     final List<Vertex> branchVertices) {
+        final var vector = new String[branchVertices.size()];
+        IntStream.range(0, branchVertices.size())
+                .parallel()
+                .forEach(index -> {
+                    final var vertex = branchVertices.get(index);
+                    final var distance = computeBranchDistance(traces, visitedVertices, vertex);
+                    vector[index] = distance;
+                });
+        final var branchDistanceVector = Arrays.asList(vector);
+        return Collections.unmodifiableList(branchDistanceVector);
+    }
+
+    /**
+     * Computes the branch distance (approach level + branch distance) for the given branch.
+     *
+     * @param traces The set of vertices.
+     * @param visitedVertices The visited vertices.
+     * @param branch The given branch.
+     * @return Returns the branch distance for the given branch.
+     */
+    private String computeBranchDistance(final Set<String> traces, final Set<Vertex> visitedVertices, Vertex branch) {
+
+        Log.println("Target branch vertex: " + branch.getMethod() + "->[" + branch.getStatement() + "]");
+
+        /*
+         * We are only interested in a direct hit (covered branch) or the distance to an if statement.
+         * This equals distances of either if statements or branches and excludes distances to visited entry or
+         * exit vertices.
+         */
+        final var minEntry = visitedVertices.parallelStream()
+                .map(visitedVertex -> Map.entry(visitedVertex, graph.getDistance(visitedVertex, branch)))
+                .filter(isRelevantVertex)
+                .min(minEntryComparator);
+
+        if (minEntry.isEmpty()) {
+            // branch not reachable by execution path
+            Log.println("Shortest path length: " + Integer.MAX_VALUE);
+            return String.valueOf(1);
+        } else {
+            final int minDistance = minEntry.get().getValue();
+            Log.println("Shortest path length: " + minDistance);
+
+            if (minDistance == 0) {
+                // covered target branch
+                return String.valueOf(0);
+            } else {
+                final Vertex minDistanceVertex = minEntry.get().getKey();
+                return combineApproachLevelAndBranchDistance(traces, minDistance, minDistanceVertex);
+            }
+        }
+    }
+
+    /**
+     * Computes the combined approach level + branch distance for the given vertex (if vertex).
+     *
+     * @param traces The set of traces.
+     * @param minDistance The minimal distance (approach level) from the target branch to the if statement.
+     * @param minDistanceVertex The closest if statement.
+     * @return Returns the combined approach level + branch distance metric.
+     */
+    private static String combineApproachLevelAndBranchDistance(final Set<String> traces, final int minDistance,
+                                                                final Vertex minDistanceVertex) {
+        /*
+         * The vertex with the closest distance represents an if stmt, at which the execution path took the wrong
+         * direction. We need to find the shortest branch distance value for the given if stmt. Note that the
+         * if stmt could have been visited multiple times.
+         */
+        final Statement stmt = minDistanceVertex.getStatement();
+        Log.println("Closest if vertex: " + minDistanceVertex.getMethod() + "[" + minDistanceVertex.getStatement() + "]");
+
+        // we only support basic blocks right now
+        assert stmt.getType() == Statement.StatementType.BLOCK_STATEMENT;
+
+        // the if stmt is located the last position of the block
+        final BasicStatement ifStmt = (BasicStatement) ((BlockStatement) stmt).getLastStatement();
+
+        // find the branch distance trace(s) that describes the if stmt
+        final String prefix = minDistanceVertex.getMethod() + "->" + ifStmt.getInstructionIndex() + ":";
+
+        Log.println("Trace describing closest if stmt: " + prefix);
+
+        /*
+         * We need to look for branch distance traces that refer to the if statement. A branch distance trace is
+         * produced for both branches, but we only need to consider those traces that describe the branch that
+         * couldn't be covered, otherwise we would have actually taken the right branch. Thus, the relevant
+         * distance traces (we may have visited the if statement multiple times) must contain a distance > 0,
+         * since a branch with a distance of 0 would have be taken. We simply need to pick the minimum of those
+         * distance traces.
+         */
+        final int minBranchDistance = traces.stream()
+                .filter(trace -> trace.startsWith(prefix))
+                .map(trace -> Integer.parseInt(trace.split(":")[1]))
+                .filter(distance -> distance > 0)
+                .min(Comparator.naturalOrder())
+                .orElse(Integer.MAX_VALUE);
+
+        Log.println("Approach level: " + minDistance);
+        Log.println("Minimal branch distance: " + minBranchDistance);
+
+        // combine and normalise
+        final float normalisedBranchDistance = minBranchDistance != Integer.MAX_VALUE
+                ? (float) minBranchDistance / (minBranchDistance + 1) : 1.0f;
+        final float combined = minDistance + normalisedBranchDistance;
+        final float combinedNormalized =  combined / (combined + 1);
+        return String.valueOf(combinedNormalized);
+    }
+
+    /**
+     * Retrieves the traces for the given chromosome.
+     *
+     * @param packageName The package name of the AUT.
+     * @param chromosome The chromosome for which the traces should be retrieved.
+     * @return Returns the traces for the given chromosome.
+     */
+    private Set<String> getTraces(final String packageName, final String chromosome) {
+        final Path appDir = appsDir.resolve(packageName);
+        final File tracesDir = appDir.resolve("traces").toFile();
+        final List<File> tracesFiles = getTraceFiles(tracesDir, chromosome);
+        return readTraces(tracesFiles);
+    }
+
+    /**
      * Computes the fitness value for a given chromosome combining approach level + branch distance.
      *
      * @param request The request message.
      * @return Returns a message containing the branch distance information.
      */
-    private Message getBranchDistance(Message request) {
+    private Message getBranchDistance(final Message request) {
+
+        final String packageName = request.getParameter("packageName");
+        final String chromosome = request.getParameter("chromosome");
+        Log.println("Computing the branch distance for the chromosome: " + chromosome);
+
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
+        final Set<String> traces = getTraces(packageName, chromosome);
+        final Set<Vertex> visitedVertices = mapTracesToVertices(traces);
+        final var branchDistance = computeBranchDistance(traces, visitedVertices, targetVertex);
+        return new Message.MessageBuilder("/graph/get_branch_distance")
+                .withParameter("branch_distance", branchDistance)
+                .build();
+    }
+
+    /**
+     * Computes the fitness value for a given chromosome combining approach level + branch distance.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the branch distance information.
+     */
+    private Message getBranchDistance2(Message request) {
 
         String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
@@ -337,7 +565,9 @@ public class GraphEndpoint implements Endpoint {
      * @param request The request message.
      * @return Returns a message containing the branch distance fitness vector.
      */
-    private Message getBranchDistanceVector(Message request) {
+    private Message getBranchDistanceVector2(Message request) {
+
+        long start = System.currentTimeMillis();
 
         String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
@@ -478,6 +708,8 @@ public class GraphEndpoint implements Endpoint {
         }
 
         Log.println("Branch Distance Vector: " + branchDistanceVector);
+        long end = System.currentTimeMillis();
+        Log.println("Computing branch distance vector took: " + ((end-start)/1000) + "s");
 
         return new Message.MessageBuilder("/graph/get_branch_distance_vector")
                 .withParameter("branch_distance_vector", String.join("+", branchDistanceVector))
