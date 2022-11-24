@@ -20,6 +20,8 @@ public class Device {
     private String packageName;
     private boolean busy;
     private final int apiVersion;
+
+    @Deprecated
     private String currentScreenShotLocation;
 
     /**
@@ -38,10 +40,12 @@ public class Device {
         this.apiVersion = getAPIVersionFromADB();
     }
 
+    @Deprecated
     public String getCurrentScreenShotLocation() {
         return currentScreenShotLocation;
     }
 
+    @Deprecated
     public void setCurrentScreenShotLocation(String currentScreenShotLocation) {
         this.currentScreenShotLocation = currentScreenShotLocation;
     }
