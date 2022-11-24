@@ -71,7 +71,7 @@ public class Server {
     public void loadConfig() {
         Properties properties = new Properties();
         try {
-            properties.load(new FileReader(new File(MATE_SERVER_PROPERTIES_PATH)));
+            properties.load(new FileReader(MATE_SERVER_PROPERTIES_PATH));
         } catch (IOException e) {
             Log.printWarning("failed to load " + MATE_SERVER_PROPERTIES_PATH + " file: " + e.getLocalizedMessage());
         }
@@ -87,7 +87,7 @@ public class Server {
      */
     public void init() {
         androidEnvironment = new AndroidEnvironment();
-        imageHandler = new ImageHandler(androidEnvironment);
+        imageHandler = new ImageHandler(androidEnvironment, appsDir);
         router.add("/legacy", new LegacyEndpoint(androidEnvironment, imageHandler));
         closeEndpoint = new CloseEndpoint();
         router.add("/close", closeEndpoint);
@@ -247,6 +247,5 @@ public class Server {
         }
 
         Report.reportDir = csvsDir.getPath() + File.pathSeparator;
-        imageHandler.setScreenshotDir(picturesDir.toPath());
     }
 }
