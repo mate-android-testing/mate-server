@@ -5,7 +5,6 @@ import org.mate.util.*;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -97,7 +96,8 @@ public class Device {
      */
     public boolean fetchTestCase(String testCaseDir, String testCase) {
 
-        // TODO: check whether on Windows the leading slash needs to be removed (it seems as it is not necessary)
+        Log.println("TestCaseDir: " + testCaseDir);
+        Log.println("TestCase: " + testCase);
 
         // check whether the test case file exists
         Result<List<String>, String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
@@ -107,7 +107,7 @@ public class Device {
 
             // the test case file couldn't be found, retry once
             Log.println("Couldn't locate test case file: " + result);
-            Util.sleep(2);
+            Util.sleep(3);
 
             List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID,
                     "shell", "ls", testCaseDir).getOk();
@@ -128,8 +128,10 @@ public class Device {
         }
 
         // fetch the test case file
-        ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "pull",
-                testCaseDir + "/" + testCase, String.valueOf(testCaseFile));
+        var pullOp = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s",
+                deviceID, "pull", testCaseDir + "/" + testCase, String.valueOf(testCaseFile));
+
+        Log.println("Pull Operation: " + pullOp);
 
         if (!testCaseFile.exists()) {
             Log.println("Pulling test case file " + testCaseFile + " failed!");
@@ -376,15 +378,14 @@ public class Device {
     /**
      * Requests the tracer to dump its traces to the external storage of the emulator.
      */
-    public void getTracesFromTracer() {
+    private void getTracesFromTracer() {
 
         var traceFilesExists = doTracesAndInfoFileExist();
         var traceFileExists = traceFilesExists.fst();
         var infoFileExists = traceFilesExists.snd();
 
         if (infoFileExists && !traceFileExists) {
-            Log.printError("info.txt exists, but not traces.txt, this should not happen.");
-            return;
+            throw new IllegalStateException("info.txt exists, but not traces.txt, this should not happen.");
         }
 
         if (traceFileExists && !infoFileExists) {
@@ -401,6 +402,7 @@ public class Device {
              */
             final int maxWaitTimeInSeconds = 30;
             for (int i = 1; i < maxWaitTimeInSeconds; ++i) {
+                Log.println("Waiting for info.txt/traces.txt...");
                 Util.sleep(1);
                 traceFilesExists = doTracesAndInfoFileExist();
                 traceFileExists = traceFilesExists.fst();
@@ -412,12 +414,12 @@ public class Device {
             }
 
             if (infoFileExists && !traceFileExists) {
-                Log.printError("info.txt exists, but not traces.txt, this should not happen.");
-                return;
+                throw new IllegalStateException("info.txt exists, but not traces.txt, this should not happen.");
             }
         }
 
         if (!infoFileExists) {
+            Log.println("Sending broadcast to tracer...");
             /*
              * We assume that the tracer is not writing traces here. So either the traces.txt exists (because of a dump
              * of the tracer when it has hit its cache limit) or it does not. In either case we need to call the tracer
@@ -439,6 +441,71 @@ public class Device {
             if (broadcastOperation.isErr()) {
                 throw new IllegalStateException("Couldn't send broadcast!");
             }
+
+            boolean bothFilesExist = false;
+
+            final int maxWaitTimeInSeconds = 30;
+            for (int i = 1; i < maxWaitTimeInSeconds; ++i) {
+                Log.println("Waiting for info.txt/traces.txt...");
+                Util.sleep(1);
+                traceFilesExists = doTracesAndInfoFileExist();
+                traceFileExists = traceFilesExists.fst();
+                infoFileExists = traceFilesExists.snd();
+                if (traceFileExists && infoFileExists) {
+                    bothFilesExist = true;
+                    break;
+                }
+            }
+
+            if (!bothFilesExist) {
+                logRuntimePermissions(packageName);
+                throw new IllegalStateException("The info.txt/traces.txt couldn't be located on the emulator!");
+            }
+        }
+    }
+
+    /**
+     * Logs the runtime permissions of the given app.
+     *
+     * @param packageName The package name of the app for which the runtime permissions should be logged.
+     */
+    @SuppressWarnings("debug")
+    private void logRuntimePermissions(String packageName) {
+
+        Result<List<String>, String> permissions = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "shell", "dumpsys", "package", packageName);
+
+        Log.println("Permissions of app: " + packageName);
+
+        if (permissions.isOk()) {
+
+            boolean foundRuntimePermissions = false;
+
+            for (String line : permissions.getOk()) {
+
+                if (foundRuntimePermissions && line.contains("granted=")) {
+                    Log.println(line);
+                }
+
+                if (line.contains("runtime permissions:")) {
+                    foundRuntimePermissions = true;
+                }
+            }
+        } else {
+            Log.println("Couldn't retrieve runtime permissions: " + permissions);
+        }
+    }
+
+    /**
+     * Waits for the tracer and afterwards pulls the traces.txt file from the external storage.
+     *
+     * @param chromosome Identifies either a test case or test suite.
+     * @param entity If chromosome identifies a test suite, entity identifies the test case, otherwise {@code null}.
+     */
+    public void pullTraces(String chromosome, String entity) {
+        synchronized (Device.class) {
+            getTracesFromTracer();
+            pullTraceFile(chromosome, entity);
         }
     }
 
@@ -448,7 +515,7 @@ public class Device {
      * @param chromosome Identifies either a test case or test suite.
      * @param entity If chromosome identifies a test suite, entity identifies the test case, otherwise {@code null}.
      */
-    public void pullTraceFile(String chromosome, String entity) {
+    private void pullTraceFile(String chromosome, String entity) {
 
         Log.println("Chromosome: " + chromosome);
         Log.println("Entity: " + entity);
@@ -458,30 +525,17 @@ public class Device {
         if (coveredTestCases.contains(testCase)) {
             // We have already dumped the traces for the given test case. We don't want to overwrite (corrupt) them.
             return;
-        } else {
-            coveredTestCases.add(testCase);
         }
 
         // traces are stored on the sd card (external storage)
         String tracesDir = "storage/emulated/0";
-
-        // check whether writing traces has been completed yet
-        while (!completedWritingTraces(tracesDir)) {
-            try {
-                Thread.sleep(300);
-            } catch (InterruptedException e) {
-                Log.println("Waiting for info.txt failed!");
-                throw new IllegalStateException(e);
-            }
-        }
 
         // get number of traces from info.txt
         Result<List<String>, String> content = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
                 "-s", deviceID, "shell", "cat", tracesDir + "/info.txt");
 
         if (content.isErr()) {
-            Log.println("Couldn't read info.txt " + content.getErr());
-            throw new IllegalStateException("Couldn't read info.txt from emulator!");
+            throw new IllegalStateException("Couldn't read info.txt from emulator: " + content);
         }
 
         // request files from external storage (sd card)
@@ -489,12 +543,25 @@ public class Device {
                 "-s", deviceID, "shell", "ls", tracesDir);
 
         if (files.isErr()) {
-            throw new IllegalStateException("Couldn't locate any file on external storage!");
+            throw new IllegalStateException("Couldn't locate any file on external storage: " + files);
         }
 
         // check whether there is some traces file
         if (!files.getOk().stream().anyMatch(str -> str.trim().equals("traces.txt"))) {
-            throw new IllegalStateException("Couldn't locate the traces.txt file!");
+
+            Log.println("Couldn't locate the traces.txt file on the external storage: " + files);
+            Log.println("Re-try listening files on external storage...");
+
+            Util.sleep(3);
+            logRuntimePermissions(packageName);
+
+            // request files from external storage (sd card)
+            files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                    "-s", deviceID, "shell", "ls", tracesDir);
+
+            if (!files.getOk().stream().anyMatch(str -> str.trim().equals("traces.txt"))) {
+                throw new IllegalStateException("Couldn't locate the traces.txt file: " + files);
+            }
         }
 
         File appDir = new File(appsDir.toFile(), packageName);
@@ -528,12 +595,37 @@ public class Device {
                 && pullOperation.getOk().stream().anyMatch(s -> s.contains("error")));
 
         if (pullError) {
-            String errorMsg = pullOperation.isErr() ? pullOperation.getErr() : pullOperation.getOk().toString();
-            Log.println("Couldn't pull traces.txt from emulator " + errorMsg);
-            throw new IllegalStateException("Couldn't pull traces.txt file from emulator's external storage!");
+
+            Log.println("Couldn't pull traces.txt from emulator: " + pullOperation);
+            Log.println("Re-try pulling traces.txt from emulator...");
+            Util.sleep(3);
+
+            Log.println("Old Files: " + files);
+
+            // request files from external storage (sd card)
+            files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                    "-s", deviceID, "shell", "ls", tracesDir);
+
+            Log.println("New Files: " + files);
+
+            pullOperation = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                    "-s", deviceID, "pull", tracesDir + "/traces.txt", String.valueOf(tracesFile));
+
+            pullError = pullOperation.isErr()
+                    || (pullOperation.getOk().stream().anyMatch(s -> s.contains("adb"))
+                    && pullOperation.getOk().stream().anyMatch(s -> s.contains("error")));
+
+            if (pullError) {
+                throw new IllegalStateException("Couldn't pull traces.txt from emulator: " + pullOperation);
+            } else {
+                Log.println("Pull Operation: " + pullOperation.getOk());
+            }
         } else {
             Log.println("Pull Operation: " + pullOperation.getOk());
         }
+
+        // We successfully pulled the traces, no need to pull them again if the same request is sent again.
+        coveredTestCases.add(testCase);
 
         // check whether there is a mismatch between info.txt and traces.txt
         try {
@@ -542,26 +634,11 @@ public class Device {
 
             int numberOfTraces = Integer.parseInt(content.getOk().get(0).trim());
             Log.println("Number of traces according to info.txt: " + numberOfTraces);
-
-            /*
-             * The problem here is that the AUT can still produce traces, e.g. a background thread
-             * running an endless-loop and checking an if condition, while we try to retrieve the traces.txt
-             * file. In particular, it can happen that the write method of the tracer class is invoked while
-             * the current thread is waiting (sleeping) for the completion of writing the info.txt file. This
-             * would at least explain why there are sometimes more traces retrieved than specified by the
-             * info.txt file.
-             */
-
-            // compare traces.txt with info.txt
-            if (numberOfTraces > numberOfLines) {
-                throw new IllegalStateException("Corrupted traces.txt file!");
-            }
         } catch (IOException e) {
-            Log.println("Couldn't count lines in traces.txt");
-            throw new UncheckedIOException(e);
+            Log.println("Couldn't count lines in traces.txt:", e);
         } catch (NumberFormatException e) {
             // in very rare cases, the info.txt seems to be corrupted
-            Log.printWarning("Couldn't read number of traces from info.txt: " + e.getMessage());
+            Log.println("Couldn't read number of traces from info.txt:", e);
         }
 
         // remove trace file from emulator
@@ -569,14 +646,30 @@ public class Device {
                 androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
                 "rm", "-f", tracesDir + "/traces.txt");
 
-        Log.println("Removal of trace file succeeded: " + removeTraceFileOp.isOk());
-
         // remove info file from emulator
         var removeInfoFileOp = ProcessRunner.runProcess(
                 androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
                 "rm", "-f", tracesDir + "/info.txt");
 
-        Log.println("Removal of info file succeeded: " + removeInfoFileOp.isOk());
+        var removeTracesError = removeTraceFileOp.isErr()
+                || (removeTraceFileOp.getOk().stream().anyMatch(s -> s.contains("adb"))
+                && removeTraceFileOp.getOk().stream().anyMatch(s -> s.contains("error")));
+
+        if (removeTracesError) {
+            throw new IllegalStateException("Couldn't remove traces.txt from emulator: " + removeTraceFileOp);
+        } else {
+            Log.println("Remove Trace File Operation: " + removeTraceFileOp.getOk());
+        }
+
+        var removeInfoError = removeInfoFileOp.isErr()
+                || (removeInfoFileOp.getOk().stream().anyMatch(s -> s.contains("adb"))
+                && removeInfoFileOp.getOk().stream().anyMatch(s -> s.contains("error")));
+
+        if (removeInfoError) {
+            throw new IllegalStateException("Couldn't remove info.txt from emulator: " + removeInfoFileOp);
+        } else {
+            Log.println("Remove Info File Operation: " + removeInfoFileOp.getOk());
+        }
     }
 
     /**

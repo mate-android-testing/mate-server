@@ -20,6 +20,21 @@ import java.util.stream.Collectors;
 public final class BranchCoverageManager {
 
     /**
+     * The name of the file that contains all the instrumented branches.
+     */
+    private static final String BRANCHES_FILE = "branches.txt";
+
+    /**
+     * The name of the directory where the traces have been stored.
+     */
+    private static final String TRACES_DIR = "traces";
+
+    /**
+     * The total number of branches.
+     */
+    private static Integer numberOfBranches = null;
+
+    /**
      * Copies the coverage data, i.e. traces of test cases, specified through the list of entities
      * from the source chromosome (test suite) to the target chromosome (test suite).
      *
@@ -34,7 +49,7 @@ public final class BranchCoverageManager {
                                            String targetChromosome, String[] entities) {
 
         File appDir = new File(appsDir.toFile(), packageName);
-        File tracesDir = new File(appDir, "traces");
+        File tracesDir = new File(appDir, TRACES_DIR);
 
         File srcDir = new File(tracesDir, sourceChromosome);
         File targetDir = new File(tracesDir, targetChromosome);
@@ -71,24 +86,16 @@ public final class BranchCoverageManager {
      *
      * @param androidEnvironment Defines the location of the adb/aapt binary.
      * @param deviceID           The id of the emulator, e.g. emulator-5554.
-     * @param packageName        The package name of the AUT.
      * @param chromosome         Identifies either a test case or a test suite.
      * @param entity             Identifies a test case if chromosome refers to
      *                           a test suite, otherwise {@code null}.
      * @return Returns a dummy message on success.
      */
-    public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID, String packageName,
+    public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID,
                                             String chromosome, String entity) {
-        // grant runtime permissions
+
         Device device = Device.devices.get(deviceID);
-        boolean granted = device.grantPermissions(packageName);
-
-        if (!granted) {
-            throw new IllegalStateException("Couldn't grant runtime permissions!");
-        }
-
-        device.getTracesFromTracer();
-        device.pullTraceFile(chromosome, entity);
+        device.pullTraces(chromosome, entity);
         return new Message("/coverage/store");
     }
 
@@ -105,10 +112,10 @@ public final class BranchCoverageManager {
 
         // get list of traces file
         File appDir = new File(appsDir.toFile(), packageName);
-        File tracesDir = new File(appDir, "traces");
+        File tracesDir = new File(appDir, TRACES_DIR);
 
         // the branches.txt should be located within the app directory
-        File branchesFile = new File(appDir, "branches.txt");
+        File branchesFile = new File(appDir, BRANCHES_FILE);
 
         // the trace file corresponding to the test case within the given test suite
         File traceFile = tracesDir.toPath().resolve(testSuiteId).resolve(testCaseId).toFile();
@@ -137,14 +144,12 @@ public final class BranchCoverageManager {
      */
     public static Message getCombinedCoverage(Path appsDir, String packageName, String chromosomes) {
 
-        // TODO: check whether it is necessary to pull again the last traces file
-
         // get list of traces file
         File appDir = new File(appsDir.toFile(), packageName);
-        File tracesDir = new File(appDir, "traces");
+        File tracesDir = new File(appDir, TRACES_DIR);
 
         // the branches.txt should be located within the app directory
-        File branchesFile = new File(appDir, "branches.txt");
+        File branchesFile = new File(appDir, BRANCHES_FILE);
 
         // only consider the traces files described by the chromosome ids
         List<File> tracesFiles = getTraceFiles(tracesDir, chromosomes);
@@ -173,7 +178,8 @@ public final class BranchCoverageManager {
      * @return Returns the branch coverage for a single test case or the combined coverage.
      * @throws IOException Should never happen.
      */
-    private static double evaluateBranchCoverage(File branchesFile, List<File> tracesFiles) throws IOException {
+    @SuppressWarnings("unused")
+    private static double evaluateBranchCoverageDetailed(File branchesFile, List<File> tracesFiles) throws IOException {
 
         Log.println("BranchesFile: " + branchesFile + "[" + branchesFile.exists() + "]");
 
@@ -287,6 +293,61 @@ public final class BranchCoverageManager {
 
         // total branch coverage
         double branchCoverage = overallCoveredBranches / overallBranches * 100;
+        Log.println("We have a total branch coverage of " + branchCoverage + "%.");
+
+        return branchCoverage;
+    }
+
+    /**
+     * Evaluates the branch coverage for a given set of traces files. Can be used
+     * to evaluate the branch coverage for a single test case as well as the combined coverage.
+     *
+     * @param branchesFile The branches.txt file listing for each class the number of branches.
+     * @param tracesFiles  The set of traces file.
+     * @return Returns the branch coverage for a single test case or the combined coverage.
+     * @throws IOException Should never happen.
+     */
+    private static double evaluateBranchCoverage(File branchesFile, List<File> tracesFiles) throws IOException {
+
+        Log.println("BranchesFile: " + branchesFile + "[" + branchesFile.exists() + "]");
+
+        for (File tracesFile : tracesFiles) {
+            Log.println("TracesFile: " + tracesFile + "[" + tracesFile.exists() + "]");
+        }
+
+        if (numberOfBranches == null) {
+            numberOfBranches = (int) Files.lines(branchesFile.toPath()).count();
+        }
+
+        // the number of branches
+        Log.println("Number of branches: " + numberOfBranches);
+
+        Set<String> coveredTraces = new HashSet<>();
+
+        // second argument refers to traces.txt file(s)
+        for (File tracesFile : tracesFiles) {
+            try (var tracesReader = new BufferedReader(new InputStreamReader(new FileInputStream(tracesFile)))) {
+
+                // read the traces
+                String trace;
+                while ((trace = tracesReader.readLine()) != null) {
+
+                    // each trace consists of className->methodName->branchID
+                    String[] triple = trace.split("->");
+
+                    if (triple.length != 3 || trace.contains(":")
+                            || trace.endsWith("->exit") || trace.endsWith("->entry")) {
+                        // ignore traces related to if statements or branch distance or virtual entry/exit vertices
+                        continue;
+                    }
+
+                    coveredTraces.add(trace);
+                }
+            }
+        }
+
+        int numberOfCoveredBranches = coveredTraces.size();
+        double branchCoverage = (double) numberOfCoveredBranches / numberOfBranches * 100;
         Log.println("We have a total branch coverage of " + branchCoverage + "%.");
 
         return branchCoverage;

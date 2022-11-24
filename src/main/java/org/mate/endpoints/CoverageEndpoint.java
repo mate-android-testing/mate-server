@@ -232,11 +232,10 @@ public class CoverageEndpoint implements Endpoint {
     }
 
     private Message storeAllCoverageData(Message request) {
-        String packageName = request.getParameter("packageName");
         String deviceID = request.getParameter("deviceId");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
-        return AllCoverageManager.storeCoverageData(androidEnvironment, deviceID, packageName, chromosome, entity);
+        return AllCoverageManager.storeCoverageData(androidEnvironment, deviceID, chromosome, entity);
     }
 
     private Message storeLineCoverageData(Message request) {
@@ -248,27 +247,24 @@ public class CoverageEndpoint implements Endpoint {
     }
 
     private Message storeMethodCoverageData(Message request) {
-        String packageName = request.getParameter("packageName");
         String deviceID = request.getParameter("deviceId");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
-        return MethodCoverageManager.storeCoverageData(androidEnvironment, deviceID, packageName, chromosome, entity);
+        return MethodCoverageManager.storeCoverageData(androidEnvironment, deviceID, chromosome, entity);
     }
 
     private Message storeBranchCoverageData(Message request) {
-        String packageName = request.getParameter("packageName");
         String deviceID = request.getParameter("deviceId");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
-        return BranchCoverageManager.storeCoverageData(androidEnvironment, deviceID, packageName, chromosome, entity);
+        return BranchCoverageManager.storeCoverageData(androidEnvironment, deviceID, chromosome, entity);
     }
 
     private Message storeBasicBlockCoverageData(Message request) {
-        String packageName = request.getParameter("packageName");
         String deviceID = request.getParameter("deviceId");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
-        return BasicBlockCoverageManager.storeCoverageData(androidEnvironment, deviceID, packageName, chromosome, entity);
+        return BasicBlockCoverageManager.storeCoverageData(androidEnvironment, deviceID, chromosome, entity);
     }
 
     private Message getCombinedCoverage(Message request) {
