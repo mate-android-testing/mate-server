@@ -74,6 +74,41 @@ public class Log {
         println(output.toString());
     }
 
+    public static void println(String message, Exception exception) {
+
+        if (logger == null) {
+            throw new IllegalStateException("No logger registered");
+        }
+
+        final StringBuilder output = new StringBuilder();
+
+        // print message along with exception message
+        output.append(LocalDateTime.now())
+                .append(" ")
+                .append(message)
+                .append(" ")
+                .append(exception.getMessage())
+                .append(System.lineSeparator());
+
+        // print stack trace
+        for (StackTraceElement element : exception.getStackTrace()) {
+            output.append(LocalDateTime.now())
+                    .append(" ")
+                    .append(element)
+                    .append(System.lineSeparator());
+        }
+
+        if (logger.log) {
+            synchronized (Log.class) {
+                logger.writeToLog(output.toString());
+            }
+        } else {
+            synchronized (Log.class) {
+                logger.buffer += output.toString();
+            }
+        }
+    }
+
     public static void println(String message) {
         if (logger == null) {
             throw new IllegalStateException("No logger registered");
