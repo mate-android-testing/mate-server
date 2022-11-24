@@ -535,6 +535,69 @@ public class Device {
     }
 
     /**
+     * Takes a screenshot of the given screen state. Removes the screenshot from the emulator afterwards.
+     *
+     * @param nodeId Identifies the screen state.
+     */
+    public void takeScreenshot(final String nodeId) {
+
+        final String screenshotName = nodeId + ".png";
+
+        // take screenshot and pull it from emulator
+        var takeSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "shell", "screencap", "-p", EXTERNAL_STORAGE  + "/" + screenshotName);
+
+        // request files from external storage (sd card)
+        Result<List<String>, String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "shell", "ls", EXTERNAL_STORAGE);
+
+        if (files.isErr()) {
+            throw new IllegalStateException("Couldn't locate any file on external storage: " + files);
+        }
+
+        // check whether the screenshot has been stored on the external storage
+        if (!files.getOk().stream().anyMatch(str -> str.trim().equals(screenshotName))) {
+            throw new IllegalStateException("Couldn't locate " + screenshotName + " on the external storage!");
+        }
+
+        File screenshotDir = appsDir.resolve(packageName).resolve("screenshots").toFile();
+
+        if (!screenshotDir.exists()) {
+            if (!screenshotDir.mkdirs()) {
+                throw new IllegalStateException("Unable to create screenshot directory!");
+            }
+        }
+
+        var pullSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "pull", EXTERNAL_STORAGE  + "/" + screenshotName, screenshotDir + File.separator + screenshotName);
+
+        var pullError = pullSS.isErr()
+                || (pullSS.getOk().stream().anyMatch(s -> s.contains("adb"))
+                && pullSS.getOk().stream().anyMatch(s -> s.contains("error")));
+
+        if (pullError) {
+            throw new IllegalStateException("Couldn't pull screenshot " + screenshotName + ": " + pullSS);
+        } else {
+            Log.println("Pull Screenshot Operation: " + pullSS.getOk());
+        }
+
+        // remove screenshot from emulator
+        var removeSSOp = ProcessRunner.runProcess(
+                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                "rm", "-f", EXTERNAL_STORAGE  + "/" + screenshotName);
+
+        var removeSSError = removeSSOp.isErr()
+                || (removeSSOp.getOk().stream().anyMatch(s -> s.contains("adb"))
+                && removeSSOp.getOk().stream().anyMatch(s -> s.contains("error")));
+
+        if (removeSSError) {
+            throw new IllegalStateException("Couldn't remove screenshot from emulator: " + removeSSOp);
+        } else {
+            Log.println("Remove Screenshot Operation: " + removeSSOp.getOk());
+        }
+    }
+
+    /**
      * Pulls the traces.txt file from the external storage (sd card) if present.
      *
      * @param chromosome Identifies either a test case or test suite.

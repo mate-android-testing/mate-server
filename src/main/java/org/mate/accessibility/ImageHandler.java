@@ -13,8 +13,8 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.Writer;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 
 public class ImageHandler {
 
@@ -35,7 +35,9 @@ public class ImageHandler {
      * @param packageName The package name corresponding to the screen state.
      * @param nodeId      Identifies the screen state.
      */
+    @Deprecated
     public void takeScreenshot(Device device, String packageName, String nodeId) {
+
         File targetDir = appsDir.resolve(packageName).resolve(SCREENSHOT_FOLDER).toFile();
 
         if (!targetDir.exists()) {
@@ -48,20 +50,20 @@ public class ImageHandler {
         String screenshotName = nodeId + ".png";
 
         // take screenshot and pull it from emulator
-        var takeSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", device.getDeviceID(),
-                "shell", "screencap", "-p", "/sdcard/" + screenshotName);
+        var takeSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", device.getDeviceID(), "shell", "screencap", "-p", "/sdcard/" + screenshotName);
 
         if (takeSS.isErr()) {
             Log.printWarning("Taking screenshot failed: " + takeSS.getErr());
         } else {
             // only pull if taking screenshot succeeded
-            var pullSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", device.getDeviceID(),
-                    "pull", "/sdcard/" + screenshotName, targetDir + File.separator + screenshotName);
+            var pullSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                    "-s", device.getDeviceID(), "pull", "/sdcard/" + screenshotName,
+                    targetDir + File.separator + screenshotName);
             if (pullSS.isErr()) {
                 Log.printWarning("Pulling screenshot failed: " + pullSS.getErr());
             }
         }
-        //device.setCurrentScreenShotLocation(targetFolder+"/"+imgPath);
     }
 
     /**
