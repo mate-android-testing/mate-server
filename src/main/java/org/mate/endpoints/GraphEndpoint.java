@@ -287,8 +287,6 @@ public class GraphEndpoint implements Endpoint {
      */
     private String computeBranchDistance(final Set<String> traces, final Set<Vertex> visitedVertices, Vertex branch) {
 
-        Log.println("Target branch vertex: " + branch.getMethod() + "->[" + branch.getStatement() + "]");
-
         /*
          * We are only interested in a direct hit (covered branch) or the distance to an if statement.
          * This equals distances of either if statements or branches and excludes distances to visited entry or
@@ -301,11 +299,9 @@ public class GraphEndpoint implements Endpoint {
 
         if (minEntry.isEmpty()) {
             // branch not reachable by execution path
-            Log.println("Shortest path length: " + Integer.MAX_VALUE);
             return String.valueOf(1);
         } else {
             final int minDistance = minEntry.get().getValue();
-            Log.println("Shortest path length: " + minDistance);
 
             if (minDistance == 0) {
                 // covered target branch
@@ -333,7 +329,6 @@ public class GraphEndpoint implements Endpoint {
          * if stmt could have been visited multiple times.
          */
         final Statement stmt = minDistanceVertex.getStatement();
-        Log.println("Closest if vertex: " + minDistanceVertex.getMethod() + "[" + minDistanceVertex.getStatement() + "]");
 
         // we only support basic blocks right now
         assert stmt.getType() == Statement.StatementType.BLOCK_STATEMENT;
@@ -343,8 +338,6 @@ public class GraphEndpoint implements Endpoint {
 
         // find the branch distance trace(s) that describes the if stmt
         final String prefix = minDistanceVertex.getMethod() + "->" + ifStmt.getInstructionIndex() + ":";
-
-        Log.println("Trace describing closest if stmt: " + prefix);
 
         /*
          * We need to look for branch distance traces that refer to the if statement. A branch distance trace is
@@ -360,9 +353,6 @@ public class GraphEndpoint implements Endpoint {
                 .filter(distance -> distance > 0)
                 .min(Comparator.naturalOrder())
                 .orElse(Integer.MAX_VALUE);
-
-        Log.println("Approach level: " + minDistance);
-        Log.println("Minimal branch distance: " + minBranchDistance);
 
         // combine and normalise
         final float normalisedBranchDistance = minBranchDistance != Integer.MAX_VALUE
@@ -689,7 +679,6 @@ public class GraphEndpoint implements Endpoint {
             }
         }
 
-        Log.println("Branch Distance Vector: " + branchDistanceVector);
         long end = System.currentTimeMillis();
         Log.println("Computing branch distance vector took: " + ((end-start)/1000) + "s");
 
