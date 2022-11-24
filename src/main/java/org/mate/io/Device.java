@@ -25,6 +25,11 @@ public class Device {
     private String currentScreenShotLocation;
 
     /**
+     * Refers to the external storage (sd card) on the emulator.
+     */
+    private static final String EXTERNAL_STORAGE = "storage/emulated/0";
+
+    /**
      * The set of covered test cases, i.e. for which traces have been dumped.
      */
     private final Set<String> coveredTestCases = new HashSet<>();
@@ -163,7 +168,8 @@ public class Device {
         File graphDir = new File(appDir, "model");
         File graphFile = new File(graphDir, graphFileName);
 
-        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", graphDirName).getOk();
+        List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID,
+                "shell", "ls", graphDirName).getOk();
 
         if (files.stream().noneMatch(str -> str.trim().equals(graphFileName))) {
             // we couldn't find the dot file on the emulator
@@ -199,7 +205,7 @@ public class Device {
      * @param espressoDir The espresso tests directory on the emulator.
      * @param testCase The name of the espresso test.
      * @return Returns {@code true} if the test case file could be fetched,
-     *          otherwise {@code false} is returned.
+     *         otherwise {@code false} is returned.
      */
     public boolean fetchEspressoTest(String espressoDir, String testCase) {
 
@@ -247,8 +253,10 @@ public class Device {
      */
     public boolean grantPermissions(String packageName) {
 
-        List<String> responseRead = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "pm", "grant", packageName, "android.permission.READ_EXTERNAL_STORAGE").getOk();
-        List<String> responseWrite = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "pm", "grant", packageName, "android.permission.WRITE_EXTERNAL_STORAGE").getOk();
+        List<String> responseRead = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "shell", "pm", "grant", packageName, "android.permission.READ_EXTERNAL_STORAGE").getOk();
+        List<String> responseWrite = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "shell", "pm", "grant", packageName, "android.permission.WRITE_EXTERNAL_STORAGE").getOk();
 
         // empty response should signal no failure
         return responseRead.isEmpty() && responseWrite.isEmpty();
@@ -310,20 +318,34 @@ public class Device {
      */
     public boolean pushDummyFiles() {
 
-        var f1 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestBmp.bmp", "sdcard/mateTestBmp.bmp");
-        var f2 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestGif.gif", "sdcard/mateTestGif.gif");
-        var f3 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestJpg.jpg", "sdcard/mateTestJpg.jpg");
-        var f4 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestJson.json", "sdcard/mateTestJson.json");
-        var f5 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestMid.mid", "sdcard/mateTestMid.mid");
-        var f6 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestPdf.pdf", "sdcard/mateTestPdf.pdf");
-        var f7 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestPng.png", "sdcard/mateTestPng.png");
-        var f8 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestTiff.tiff", "sdcard/mateTestTiff.tiff");
-        var f9 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestTxt.txt", "sdcard/mateTestTxt.txt");
-        var f10 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestWav.wav", "sdcard/mateTestWav.wav");
-        var f11 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestCsv.csv", "sdcard/mateTestCsv.csv");
-        var f12 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestXml.xml", "sdcard/mateTestXml.xml");
-        var f13 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestOgg.ogg", "sdcard/mateTestOgg.ogg");
-        var f14 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "push", "mediafiles/mateTestMp3.mp3", "sdcard/mateTestMp3.mp3");
+        var f1 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "push", "mediafiles/mateTestBmp.bmp", "sdcard/mateTestBmp.bmp");
+        var f2 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "push", "mediafiles/mateTestGif.gif", "sdcard/mateTestGif.gif");
+        var f3 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "push", "mediafiles/mateTestJpg.jpg", "sdcard/mateTestJpg.jpg");
+        var f4 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "push", "mediafiles/mateTestJson.json", "sdcard/mateTestJson.json");
+        var f5 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "push", "mediafiles/mateTestMid.mid", "sdcard/mateTestMid.mid");
+        var f6 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "push", "mediafiles/mateTestPdf.pdf", "sdcard/mateTestPdf.pdf");
+        var f7 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "push", "mediafiles/mateTestPng.png", "sdcard/mateTestPng.png");
+        var f8 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "push", "mediafiles/mateTestTiff.tiff", "sdcard/mateTestTiff.tiff");
+        var f9 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "push", "mediafiles/mateTestTxt.txt", "sdcard/mateTestTxt.txt");
+        var f10 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "push", "mediafiles/mateTestWav.wav", "sdcard/mateTestWav.wav");
+        var f11 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "push", "mediafiles/mateTestCsv.csv", "sdcard/mateTestCsv.csv");
+        var f12 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "push", "mediafiles/mateTestXml.xml", "sdcard/mateTestXml.xml");
+        var f13 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "push", "mediafiles/mateTestOgg.ogg", "sdcard/mateTestOgg.ogg");
+        var f14 = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "push", "mediafiles/mateTestMp3.mp3", "sdcard/mateTestMp3.mp3");
 
         if (f1.isErr() || f2.isErr() || f3.isErr() || f4.isErr() || f5.isErr() || f6.isErr()
                 || f7.isErr() || f8.isErr() || f9.isErr() || f10.isErr() || f11.isErr() || f12.isErr()
@@ -363,9 +385,8 @@ public class Device {
      */
     private Pair<Boolean, Boolean> doTracesAndInfoFileExist() {
 
-        final String tracesDir = "storage/emulated/0";
-        final var query =
-                ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell", "ls", tracesDir);
+        final var query = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "shell", "ls", EXTERNAL_STORAGE);
 
         if (query.isOk()) {
             final var files = query.getOk();
@@ -531,12 +552,9 @@ public class Device {
             return;
         }
 
-        // traces are stored on the sd card (external storage)
-        String tracesDir = "storage/emulated/0";
-
         // get number of traces from info.txt
         Result<List<String>, String> content = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
-                "-s", deviceID, "shell", "cat", tracesDir + "/info.txt");
+                "-s", deviceID, "shell", "cat", EXTERNAL_STORAGE + "/info.txt");
 
         if (content.isErr()) {
             throw new IllegalStateException("Couldn't read info.txt from emulator: " + content);
@@ -544,7 +562,7 @@ public class Device {
 
         // request files from external storage (sd card)
         Result<List<String>, String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
-                "-s", deviceID, "shell", "ls", tracesDir);
+                "-s", deviceID, "shell", "ls", EXTERNAL_STORAGE);
 
         if (files.isErr()) {
             throw new IllegalStateException("Couldn't locate any file on external storage: " + files);
@@ -561,7 +579,7 @@ public class Device {
 
             // request files from external storage (sd card)
             files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
-                    "-s", deviceID, "shell", "ls", tracesDir);
+                    "-s", deviceID, "shell", "ls", EXTERNAL_STORAGE);
 
             if (!files.getOk().stream().anyMatch(str -> str.trim().equals("traces.txt"))) {
                 throw new IllegalStateException("Couldn't locate the traces.txt file: " + files);
@@ -592,7 +610,7 @@ public class Device {
         Log.println("Traces File: " + tracesFile);
 
         var pullOperation = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
-                "-s", deviceID, "pull", tracesDir + "/traces.txt", String.valueOf(tracesFile));
+                "-s", deviceID, "pull", EXTERNAL_STORAGE + "/traces.txt", String.valueOf(tracesFile));
 
         var pullError = pullOperation.isErr()
                 || (pullOperation.getOk().stream().anyMatch(s -> s.contains("adb"))
@@ -608,12 +626,12 @@ public class Device {
 
             // request files from external storage (sd card)
             files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
-                    "-s", deviceID, "shell", "ls", tracesDir);
+                    "-s", deviceID, "shell", "ls", EXTERNAL_STORAGE);
 
             Log.println("New Files: " + files);
 
             pullOperation = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
-                    "-s", deviceID, "pull", tracesDir + "/traces.txt", String.valueOf(tracesFile));
+                    "-s", deviceID, "pull", EXTERNAL_STORAGE + "/traces.txt", String.valueOf(tracesFile));
 
             pullError = pullOperation.isErr()
                     || (pullOperation.getOk().stream().anyMatch(s -> s.contains("adb"))
@@ -648,12 +666,12 @@ public class Device {
         // remove trace file from emulator
         var removeTraceFileOp = ProcessRunner.runProcess(
                 androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
-                "rm", "-f", tracesDir + "/traces.txt");
+                "rm", "-f", EXTERNAL_STORAGE + "/traces.txt");
 
         // remove info file from emulator
         var removeInfoFileOp = ProcessRunner.runProcess(
                 androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
-                "rm", "-f", tracesDir + "/info.txt");
+                "rm", "-f", EXTERNAL_STORAGE + "/info.txt");
 
         var removeTracesError = removeTraceFileOp.isErr()
                 || (removeTraceFileOp.getOk().stream().anyMatch(s -> s.contains("adb"))

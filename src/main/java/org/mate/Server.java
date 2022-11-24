@@ -71,7 +71,7 @@ public class Server {
     public void loadConfig() {
         Properties properties = new Properties();
         try {
-            properties.load(new FileReader(new File(MATE_SERVER_PROPERTIES_PATH)));
+            properties.load(new FileReader(MATE_SERVER_PROPERTIES_PATH));
         } catch (IOException e) {
             Log.printWarning("failed to load " + MATE_SERVER_PROPERTIES_PATH + " file: " + e.getLocalizedMessage());
         }
