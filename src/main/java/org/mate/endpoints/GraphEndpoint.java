@@ -24,7 +24,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -35,7 +34,7 @@ import java.util.stream.Stream;
  * a system dependence graph. The usage of this endpoint requires the
  * android-graphs-lib.jar as a dependency.
  */
-public class GraphEndpoint implements Endpoint {
+public final class GraphEndpoint implements Endpoint {
 
     private final AndroidEnvironment androidEnvironment;
     private Graph graph = null;
@@ -43,27 +42,6 @@ public class GraphEndpoint implements Endpoint {
 
     // a target vertex (a random branch)
     private Vertex targetVertex = null;
-
-    /**
-     * Determines whether we deal with a relevant vertex, i.e. a vertex that represents a covered branch or refers to
-     * an if or switch statement that is reachable.
-     */
-    private final static Predicate<Map.Entry<Vertex, Integer>> isRelevantVertex = entry -> {
-        final var vertex = entry.getKey();
-        final int distance = entry.getValue();
-        return (vertex.isBranchVertex() && distance == 0)
-                || (vertex.isIfVertex() && distance != -1) || (vertex.isSwitchVertex() && distance != -1);
-    };
-
-    /*
-     * We know because of the preceding predicate that a relevant vertex represent either:
-     *     1) A branch-vertex with distance 0, or
-     *     2) An if-vertex, or
-     *     3) A switch-vertex.
-     * In any case, we are interested in the vertex with the closest distance.
-     */
-    private final static Comparator<Map.Entry<Vertex, Integer>> minEntryComparator =
-            Comparator.comparingInt(Map.Entry::getValue);
 
     public GraphEndpoint(AndroidEnvironment androidEnvironment, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
@@ -120,7 +98,7 @@ public class GraphEndpoint implements Endpoint {
             }
 
             // retrieve the visited vertices
-            Set<Vertex> visitedVertices = getVisitedVertices(appDir);
+            Set<Vertex> visitedVertices = new HashSet<>(getVisitedVertices(appDir));
 
             // draw the graph where target and visited vertices are marked in different colours
             graph.draw(drawDir, visitedVertices, targetVertices);
@@ -130,12 +108,13 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Retrieves the set of visited vertices by traversing over all traces contained in the app directory.
+     * Retrieves the set (actually a list without duplicates due to performance reasons) of visited vertices by
+     * traversing over all traces contained in the app directory.
      *
      * @param appDir The app directory.
      * @return Returns the visited vertices.
      */
-    private Set<Vertex> getVisitedVertices(File appDir) {
+    private List<Vertex> getVisitedVertices(File appDir) {
 
         // get list of traces file
         File tracesDir = new File(appDir, "traces");
@@ -144,7 +123,7 @@ public class GraphEndpoint implements Endpoint {
         List<File> tracesFiles = getTraceFiles(tracesDir, null);
 
         // read traces from trace file(s)
-        Set<String> traces = readTraces(tracesFiles);
+        List<String> traces = readTraces(tracesFiles);
 
         return mapTracesToVertices(traces);
     }
@@ -242,8 +221,8 @@ public class GraphEndpoint implements Endpoint {
         }
 
         long start = System.currentTimeMillis();
-        final Set<String> traces = getTraces(packageName, chromosome);
-        final Set<Vertex> visitedVertices = mapTracesToVertices(traces);
+        final List<String> traces = getTraces(packageName, chromosome);
+        final List<Vertex> visitedVertices = mapTracesToVertices(traces);
         final var branchVertices = graph.getBranchVertices();
         final List<String> branchDistanceVector = computeBranchDistanceVector(traces, visitedVertices, branchVertices);
         long end = System.currentTimeMillis();
@@ -261,7 +240,7 @@ public class GraphEndpoint implements Endpoint {
      * @param branchVertices The branch vertices.
      * @return Returns the branch distance vector.
      */
-    private List<String> computeBranchDistanceVector(final Set<String> traces, final Set<Vertex> visitedVertices,
+    private List<String> computeBranchDistanceVector(final List<String> traces, final List<Vertex> visitedVertices,
                                                      final List<Vertex> branchVertices) {
         final var vector = new String[branchVertices.size()];
         IntStream.range(0, branchVertices.size())
@@ -283,30 +262,21 @@ public class GraphEndpoint implements Endpoint {
      * @param branchVertex The given branch vertex.
      * @return Returns the branch distance for the given branch.
      */
-    private String computeBranchDistance(final Set<String> traces, final Set<Vertex> visitedVertices, Vertex branchVertex) {
+    private String computeBranchDistance(final List<String> traces, final List<Vertex> visitedVertices, Vertex branchVertex) {
 
-        /*
-         * We are only interested in a direct hit (covered branch) or the distance to an if or switch statement.
-         * This equals distances of either if or switch statements or branches and excludes distances to visited entry or
-         * exit vertices.
-         */
-        final var minEntry = visitedVertices.parallelStream()
-                .map(visitedVertex -> Map.entry(visitedVertex, graph.getDistance(visitedVertex, branchVertex)))
-                .filter(isRelevantVertex)
-                // TODO: there can be multiple minima having the same approach level
-                .min(minEntryComparator);
+        final var minEntry = computeMinEntry(visitedVertices, branchVertex);
 
-        if (minEntry.isEmpty()) {
+        if (minEntry == null) {
             // branch not reachable by execution path
             return String.valueOf(1);
         } else {
-            final int minDistance = minEntry.get().getValue();
+            final int minDistance = minEntry.getValue();
 
             if (minDistance == 0) {
                 // covered target branch
                 return String.valueOf(0);
             } else {
-                final Vertex minDistanceVertex = minEntry.get().getKey();
+                final Vertex minDistanceVertex = minEntry.getKey();
                 return combineApproachLevelAndBranchDistance(traces, minDistance, minDistanceVertex, branchVertex);
             }
         }
@@ -321,7 +291,7 @@ public class GraphEndpoint implements Endpoint {
      * @param branchVertex The branch vertex for which the distance should be computed.
      * @return Returns the combined approach level + branch distance metric.
      */
-    private String combineApproachLevelAndBranchDistance(final Set<String> traces, final int minDistance,
+    private String combineApproachLevelAndBranchDistance(final List<String> traces, final int minDistance,
                                                                 final Vertex minDistanceVertex, final Vertex branchVertex) {
         /*
          * The vertex with the closest distance represents an if or switch stmt, at which the execution path took the wrong
@@ -404,9 +374,43 @@ public class GraphEndpoint implements Endpoint {
         final float normalisedBranchDistance = minBranchDistance != Integer.MAX_VALUE
                 ? (float) minBranchDistance / (minBranchDistance + 1) : 1.0f;
         final float combined = minDistance + normalisedBranchDistance;
-        final float combinedNormalized =  combined / (combined + 1);
+        final float combinedNormalized = combined / (combined + 1);
         return String.valueOf(combinedNormalized);
     }
+
+    /**
+     * Computes the vertex with the closest distance to the given branch vertex. Note that a parallelized version using
+     * streams is actually slower.
+     *
+     * @param visitedVertices The list of visited vertices.
+     * @param branchVertex The given branch vertex.
+     * @return Returns the vertex that comes closest to the given branch vertex.
+     */
+    private Map.Entry<Vertex, Integer> computeMinEntry(final List<Vertex> visitedVertices, final Vertex branchVertex) {
+
+        int minDistance = Integer.MAX_VALUE;
+        Vertex minEntry = null;
+
+        /*
+         * We are only interested in a direct hit (covered branch) or the distance to an if or switch statement.
+         * This equals distances of either if or switch statements or branches and excludes distances to visited entry
+         * or exit vertices.
+         */
+        for (final Vertex visitedVertex : visitedVertices) {
+            final int distance = graph.getDistance(visitedVertex, branchVertex);
+            // TODO: there can be multiple minima having the same approach level (distance)
+            if (distance < minDistance
+                    && ((distance == 0 && visitedVertex.isBranchVertex())
+                    || (distance != -1 && (visitedVertex.isIfVertex() || visitedVertex.isSwitchVertex())))) {
+                minDistance = distance;
+                minEntry = visitedVertex;
+            }
+        }
+
+        return minEntry != null ? Map.entry(minEntry, minDistance) : null;
+    }
+
+
 
     /**
      * Retrieves the traces for the given chromosome.
@@ -415,7 +419,7 @@ public class GraphEndpoint implements Endpoint {
      * @param chromosome The chromosome for which the traces should be retrieved.
      * @return Returns the traces for the given chromosome.
      */
-    private Set<String> getTraces(final String packageName, final String chromosome) {
+    private List<String> getTraces(final String packageName, final String chromosome) {
         final Path appDir = appsDir.resolve(packageName);
         final File tracesDir = appDir.resolve("traces").toFile();
         final List<File> tracesFiles = getTraceFiles(tracesDir, chromosome);
@@ -438,8 +442,8 @@ public class GraphEndpoint implements Endpoint {
             throw new IllegalStateException("Graph hasn't been initialised!");
         }
 
-        final Set<String> traces = getTraces(packageName, chromosome);
-        final Set<Vertex> visitedVertices = mapTracesToVertices(traces);
+        final List<String> traces = getTraces(packageName, chromosome);
+        final List<Vertex> visitedVertices = mapTracesToVertices(traces);
         final var branchDistance = computeBranchDistance(traces, visitedVertices, targetVertex);
         return new Message.MessageBuilder("/graph/get_branch_distance")
                 .withParameter("branch_distance", branchDistance)
@@ -471,10 +475,10 @@ public class GraphEndpoint implements Endpoint {
         List<File> tracesFiles = getTraceFiles(tracesDir, chromosome);
 
         // read traces from trace file(s)
-        Set<String> traces = readTraces(tracesFiles);
+        List<String> traces = readTraces(tracesFiles);
 
         // we need to mark vertices we visited
-        Set<Vertex> visitedVertices = mapTracesToVertices(traces);
+        List<Vertex> visitedVertices = mapTracesToVertices(traces);
 
         long start = System.currentTimeMillis();
 
@@ -622,10 +626,10 @@ public class GraphEndpoint implements Endpoint {
         List<File> tracesFiles = getTraceFiles(tracesDir, chromosome);
 
         // read the traces from the traces files
-        Set<String> traces = readTraces(tracesFiles);
+        List<String> traces = readTraces(tracesFiles);
 
         // we need to mark vertices we visited
-        Set<Vertex> visitedVertices = mapTracesToVertices(traces);
+        List<Vertex> visitedVertices = mapTracesToVertices(traces);
 
         // evaluate fitness value (approach level + branch distance) for each single branch
         List<String> branchDistanceVector = new LinkedList<>();
@@ -774,12 +778,12 @@ public class GraphEndpoint implements Endpoint {
      * @param tracesFiles A list of traces files.
      * @return Returns the unique traces contained in the given traces files.
      */
-    private Set<String> readTraces(List<File> tracesFiles) {
+    private List<String> readTraces(List<File> tracesFiles) {
 
         // read traces from trace file(s)
         long start = System.currentTimeMillis();
 
-        Set<String> traces = new HashSet<>();
+        Set<String> traces = new LinkedHashSet<>();
 
         for (File traceFile : tracesFiles) {
             try (Stream<String> stream = Files.lines(traceFile.toPath(), StandardCharsets.UTF_8)) {
@@ -794,7 +798,7 @@ public class GraphEndpoint implements Endpoint {
         Log.println("Reading traces from file(s) took: " + (end - start) + " ms.");
 
         Log.println("Number of collected traces: " + traces.size());
-        return traces;
+        return new ArrayList<>(traces);
     }
 
     /**
@@ -803,7 +807,7 @@ public class GraphEndpoint implements Endpoint {
      * @param traces The set of traces that should be mapped to vertices.
      * @return Returns the vertices described by the given set of traces.
      */
-    private Set<Vertex> mapTracesToVertices(Set<String> traces) {
+    private List<Vertex> mapTracesToVertices(List<String> traces) {
 
         // read traces from trace file(s)
         long start = System.currentTimeMillis();
@@ -818,6 +822,21 @@ public class GraphEndpoint implements Endpoint {
                 // skip branch distance trace
                 return;
             }
+
+            // mark virtual entry
+            final String entryMarker ="->entry";
+            final int entryIndex = trace.indexOf(entryMarker);
+            if (entryIndex != -1) {
+                final String entryTrace = trace.substring(0, entryIndex + entryMarker.length());
+                final Vertex visitedEntry = graph.lookupVertex(entryTrace);
+
+                if (visitedEntry != null) {
+                    visitedVertices.add(visitedEntry);
+                } else {
+                    Log.printWarning("Couldn't derive vertex for entry trace: " + entryTrace);
+                }
+            }
+
 
             // mark virtual entry/exit vertices
             if (trace.contains("->entry")) {
@@ -856,6 +875,6 @@ public class GraphEndpoint implements Endpoint {
         Log.println("Mapping traces to vertices took: " + (end - start) + " ms.");
 
         Log.println("Number of visited vertices: " + visitedVertices.size());
-        return visitedVertices;
+        return new ArrayList<>(visitedVertices);
     }
 }
