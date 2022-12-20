@@ -1,5 +1,6 @@
 package org.mate.graphs;
 
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.Edge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 
 import java.io.File;
@@ -34,4 +35,10 @@ public interface Graph {
 
     // draws the graph where target and visited vertices are marked
     void draw(File outputPath, Set<Vertex> visitedVertices, Set<Vertex> targets);
+
+    // get the outgoing edges from the given vertex
+    Set<Edge> getOutgoingEdges(Vertex vertex);
+
+    // get the incoming edges from the given vertex
+    Set<Edge> getIncomingEdges(Vertex vertex);
 }

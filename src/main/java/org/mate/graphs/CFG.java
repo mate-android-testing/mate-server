@@ -169,6 +169,28 @@ public abstract class CFG implements Graph {
     }
 
     /**
+     * Gets the outgoing edges from the given vertex.
+     *
+     * @param vertex The vertex for which the outgoing edges should be derived.
+     * @return Returns the outgoing edges from the given vertex.
+     */
+    @Override
+    public Set<Edge> getOutgoingEdges(Vertex vertex) {
+        return baseCFG.getOutgoingEdges(vertex);
+    }
+
+    /**
+     * Gets the incoming edges from the given vertex.
+     *
+     * @param vertex The vertex for which the incoming edges should be derived.
+     * @return Returns the incoming edges from the given vertex.
+     */
+    @Override
+    public Set<Edge> getIncomingEdges(Vertex vertex) {
+        return baseCFG.getIncomingEdges(vertex);
+    }
+
+    /**
      * Pre-computes a mapping between certain traces and its vertices in the graph.
      *
      * @return Returns a mapping between a trace and its vertex in the graph.

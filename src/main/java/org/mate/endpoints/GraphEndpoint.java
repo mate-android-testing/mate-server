@@ -1,5 +1,6 @@
 package org.mate.endpoints;
 
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.Edge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
@@ -45,24 +46,21 @@ public class GraphEndpoint implements Endpoint {
 
     /**
      * Determines whether we deal with a relevant vertex, i.e. a vertex that represents a covered branch or refers to
-     * an if-statement that is reachable.
+     * an if or switch statement that is reachable.
      */
     private final static Predicate<Map.Entry<Vertex, Integer>> isRelevantVertex = entry -> {
         final var vertex = entry.getKey();
         final int distance = entry.getValue();
-        return (vertex.isBranchVertex() && distance == 0) || (vertex.isIfVertex() && distance != -1);
+        return (vertex.isBranchVertex() && distance == 0)
+                || (vertex.isIfVertex() && distance != -1) || (vertex.isSwitchVertex() && distance != -1);
     };
 
     /*
-     * We know because of the preceding predicate that both vertices are
+     * We know because of the preceding predicate that a relevant vertex represent either:
      *     1) A branch-vertex with distance 0, or
-     *     2) An If-vertex.
-     * The rule for determining the better vertex is:
-     *     1) If either vertex is a branch-branch with distance 0, that
-     *           vertex is better,
-     *     2) Else, the if-vertex with smaller distance is better.
-     * Because an If-vertex is a branch-vertex and distances are >= 0, these
-     * rules can be simplified to just comparing the distances.
+     *     2) An if-vertex, or
+     *     3) A switch-vertex.
+     * In any case, we are interested in the vertex with the closest distance.
      */
     private final static Comparator<Map.Entry<Vertex, Integer>> minEntryComparator =
             Comparator.comparingInt(Map.Entry::getValue);
@@ -269,8 +267,8 @@ public class GraphEndpoint implements Endpoint {
         IntStream.range(0, branchVertices.size())
                 .parallel()
                 .forEach(index -> {
-                    final var vertex = branchVertices.get(index);
-                    final var distance = computeBranchDistance(traces, visitedVertices, vertex);
+                    final var branchVertex = branchVertices.get(index);
+                    final var distance = computeBranchDistance(traces, visitedVertices, branchVertex);
                     vector[index] = distance;
                 });
         final var branchDistanceVector = Arrays.asList(vector);
@@ -282,19 +280,20 @@ public class GraphEndpoint implements Endpoint {
      *
      * @param traces The set of vertices.
      * @param visitedVertices The visited vertices.
-     * @param branch The given branch.
+     * @param branchVertex The given branch vertex.
      * @return Returns the branch distance for the given branch.
      */
-    private String computeBranchDistance(final Set<String> traces, final Set<Vertex> visitedVertices, Vertex branch) {
+    private String computeBranchDistance(final Set<String> traces, final Set<Vertex> visitedVertices, Vertex branchVertex) {
 
         /*
-         * We are only interested in a direct hit (covered branch) or the distance to an if statement.
-         * This equals distances of either if statements or branches and excludes distances to visited entry or
+         * We are only interested in a direct hit (covered branch) or the distance to an if or switch statement.
+         * This equals distances of either if or switch statements or branches and excludes distances to visited entry or
          * exit vertices.
          */
         final var minEntry = visitedVertices.parallelStream()
-                .map(visitedVertex -> Map.entry(visitedVertex, graph.getDistance(visitedVertex, branch)))
+                .map(visitedVertex -> Map.entry(visitedVertex, graph.getDistance(visitedVertex, branchVertex)))
                 .filter(isRelevantVertex)
+                // TODO: there can be multiple minima having the same approach level
                 .min(minEntryComparator);
 
         if (minEntry.isEmpty()) {
@@ -308,51 +307,98 @@ public class GraphEndpoint implements Endpoint {
                 return String.valueOf(0);
             } else {
                 final Vertex minDistanceVertex = minEntry.get().getKey();
-                return combineApproachLevelAndBranchDistance(traces, minDistance, minDistanceVertex);
+                return combineApproachLevelAndBranchDistance(traces, minDistance, minDistanceVertex, branchVertex);
             }
         }
     }
 
     /**
-     * Computes the combined approach level + branch distance for the given vertex (if vertex).
+     * Computes the combined approach level + branch distance for the given vertex (if or switch vertex).
      *
      * @param traces The set of traces.
-     * @param minDistance The minimal distance (approach level) from the target branch to the if statement.
-     * @param minDistanceVertex The closest if statement.
+     * @param minDistance The minimal distance (approach level) from the target branch to the if or switch statement.
+     * @param minDistanceVertex The closest if or switch statement.
+     * @param branchVertex The branch vertex for which the distance should be computed.
      * @return Returns the combined approach level + branch distance metric.
      */
-    private static String combineApproachLevelAndBranchDistance(final Set<String> traces, final int minDistance,
-                                                                final Vertex minDistanceVertex) {
+    private String combineApproachLevelAndBranchDistance(final Set<String> traces, final int minDistance,
+                                                                final Vertex minDistanceVertex, final Vertex branchVertex) {
         /*
-         * The vertex with the closest distance represents an if stmt, at which the execution path took the wrong
-         * direction. We need to find the shortest branch distance value for the given if stmt. Note that the
-         * if stmt could have been visited multiple times.
+         * The vertex with the closest distance represents an if or switch stmt, at which the execution path took the wrong
+         * direction. We need to find the shortest branch distance value for the given if or switch stmt. Note that the
+         * if or switch stmt could have been visited multiple times.
          */
         final Statement stmt = minDistanceVertex.getStatement();
 
         // we only support basic blocks right now
         assert stmt.getType() == Statement.StatementType.BLOCK_STATEMENT;
 
-        // the if stmt is located the last position of the block
-        final BasicStatement ifStmt = (BasicStatement) ((BlockStatement) stmt).getLastStatement();
+        int minBranchDistance = Integer.MAX_VALUE;
 
-        // find the branch distance trace(s) that describes the if stmt
-        final String prefix = minDistanceVertex.getMethod() + "->" + ifStmt.getInstructionIndex() + ":";
+        if (minDistanceVertex.isIfVertex()) {
 
-        /*
-         * We need to look for branch distance traces that refer to the if statement. A branch distance trace is
-         * produced for both branches, but we only need to consider those traces that describe the branch that
-         * couldn't be covered, otherwise we would have actually taken the right branch. Thus, the relevant
-         * distance traces (we may have visited the if statement multiple times) must contain a distance > 0,
-         * since a branch with a distance of 0 would have be taken. We simply need to pick the minimum of those
-         * distance traces.
-         */
-        final int minBranchDistance = traces.stream()
-                .filter(trace -> trace.startsWith(prefix))
-                .map(trace -> Integer.parseInt(trace.split(":")[1]))
-                .filter(distance -> distance > 0)
-                .min(Comparator.naturalOrder())
-                .orElse(Integer.MAX_VALUE);
+            // the if stmt is located the last position of the block
+            final BasicStatement ifStmt = (BasicStatement) ((BlockStatement) stmt).getLastStatement();
+
+            // find the branch distance trace(s) that describes the if stmt
+            final String prefix = minDistanceVertex.getMethod() + "->" + ifStmt.getInstructionIndex() + ":";
+
+            /*
+             * We need to look for branch distance traces that refer to the if statement. A branch distance trace is
+             * produced for both branches, but we only need to consider those traces that describe the branch that
+             * couldn't be covered, otherwise we would have actually taken the right branch. Thus, the relevant
+             * distance traces (we may have visited the if statement multiple times) must contain a distance > 0,
+             * since a branch with a distance of 0 would have be taken. We simply need to pick the minimum of those
+             * distance traces.
+             */
+            minBranchDistance = traces.stream()
+                    .filter(trace -> trace.startsWith(prefix))
+                    .map(trace -> Integer.parseInt(trace.split(":")[1]))
+                    .filter(distance -> distance > 0)
+                    .min(Comparator.naturalOrder())
+                    .orElse(Integer.MAX_VALUE);
+        } else if (minDistanceVertex.isSwitchVertex()) {
+
+            /*
+            * TODO: Improve the branch distance metric for switch case statements. Right now, the branch distance for
+            *  an individual case statement can be only 1, since we only differentiate between covered (0) and not
+            *  covered (1), and we already filtered out direct hits.
+             */
+
+            // check if the branch vertex is a direct successor of the closest visited switch case statement
+            Set<Edge> outgoingEdges = graph.getOutgoingEdges(minDistanceVertex);
+
+            boolean directSuccessor = outgoingEdges.stream()
+                    .map(Edge::getTarget)
+                    .anyMatch(vertex -> vertex.equals(branchVertex));
+
+            if (directSuccessor) {
+
+                // find the branch distance trace(s) that describe(s) the case stmt
+                final BasicStatement caseStmt = (BasicStatement) ((BlockStatement) branchVertex.getStatement()).getFirstStatement();
+                final String prefix = minDistanceVertex.getMethod() + "->switch->" + caseStmt.getInstructionIndex() + ":";
+
+                /*
+                 * Since we potentially traversed the switch statement multiple times, there are multiple branch distance
+                 * traces for each case statement. We need to pick the minimum out of those.
+                 */
+                minBranchDistance = traces.stream()
+                        .filter(trace -> trace.startsWith(prefix))
+                        .map(trace -> Integer.parseInt(trace.split(":")[1]))
+                        .min(Comparator.naturalOrder())
+                        .orElse(Integer.MAX_VALUE);
+            } else {
+                /*
+                * It can happen that the branch vertex is not a direct successor of the closest switch statement. In
+                * such a case, there are no branch distance traces. Or to be more precise, we don't know which traces
+                * are the relevant ones without performing a further graph traversal. We would have to look up through
+                * which case statement a path goes from the switch to the branch vertex. Moreover, there might be
+                * multiple case statements through which a path goes to the branch vertex. We simply assign here the
+                * highest possible distance to indicate that we need to choose a different path in the future.
+                 */
+                minBranchDistance = Integer.MAX_VALUE;
+            }
+        }
 
         // combine and normalise
         final float normalisedBranchDistance = minBranchDistance != Integer.MAX_VALUE
