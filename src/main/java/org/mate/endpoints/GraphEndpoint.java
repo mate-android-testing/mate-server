@@ -53,11 +53,11 @@ public class GraphEndpoint implements Endpoint {
     private final Path resultsPath;
 
     // a target vertex (a random branch)
-    private List<Vertex> targetVertexes;
+    private List<Vertex> targetVertices;
     private Map<AtStackTraceLine, AnalyzedStackTraceLine> analyzedStackTraceLines;
     private Set<String> targetComponents;
     private StackTrace stackTrace;
-    private BranchLocator branchLocator;
+    private CrashReproductionUtil crashReproductionUtil;
 
     public GraphEndpoint(AndroidEnvironment androidEnvironment, Path appsDir, Path resultsPath) {
         this.androidEnvironment = androidEnvironment;
@@ -82,7 +82,7 @@ public class GraphEndpoint implements Endpoint {
         } else if (request.getSubject().startsWith("/graph/stack_trace_tokens")) {
             String packageName = request.getParameter("package");
             Set<String> stackTraceTokens = stackTrace.getFuzzyTokens(packageName);
-            Stream<String> instructionTokens = branchLocator.getTokensForStackTrace(stackTrace, packageName);
+            Stream<String> instructionTokens = crashReproductionUtil.getTokensForStackTrace(stackTrace, packageName);
             Set<String> tokens = Stream.concat(stackTraceTokens.stream(), instructionTokens).collect(Collectors.toSet());
             var builder = new Message.MessageBuilder("/graph/stack_trace_tokens")
                     .withParameter("tokens", String.valueOf(tokens.size()));
@@ -248,7 +248,7 @@ public class GraphEndpoint implements Endpoint {
     }
 
     private int getCallTreeDistance(Set<String> traces) {
-        List<CallTreeVertex> callTreeVertices = targetVertexes.stream().map(Vertex::getMethod).map(CallTreeVertex::new).collect(Collectors.toList());
+        List<CallTreeVertex> callTreeVertices = targetVertices.stream().map(Vertex::getMethod).map(CallTreeVertex::new).collect(Collectors.toList());
         Collections.reverse(callTreeVertices);
 
         Optional<CallTreeVertex> lastCoveredVertex = Optional.empty();
@@ -305,7 +305,7 @@ public class GraphEndpoint implements Endpoint {
             return Set.of();
         } else {
             StackTrace stackTraceObj = StackTraceParser.parse(Arrays.asList(stackTrace.split("\n")));
-            return branchLocator.getTargetTracesForStackTrace(stackTraceObj.getStackTraceAtLines().collect(Collectors.toList()), (InterCFG) graph, packageName)
+            return crashReproductionUtil.getTargetTracesForStackTrace(stackTraceObj.getStackTraceAtLines().collect(Collectors.toList()), (InterCFG) graph, packageName)
                     .values().stream().flatMap(Collection::stream)
                     // TODO This is an over approximation, since it will add traces that came potentially after the crash
                     // (e.g. if the exception is thrown at the beginning of a block statement we will still pretend like the remaining statements
@@ -473,7 +473,7 @@ public class GraphEndpoint implements Endpoint {
 
             // determine the target vertices (e.g. single branch or all branches)
 
-            Set<Vertex> targetVertices = new HashSet<>(Objects.requireNonNullElseGet(targetVertexes, () -> new HashSet<>(graph.getBranchVertices())));
+            Set<Vertex> targetVertices = new HashSet<>(Objects.requireNonNullElseGet(this.targetVertices, () -> new HashSet<>(graph.getBranchVertices())));
 
             // retrieve the visited vertices
             String chromosome = request.getParameter("chromosome");
@@ -491,7 +491,7 @@ public class GraphEndpoint implements Endpoint {
         Set<String> visitedMethods = getVisitedMethods(message);
         Map<String, String> highlightMethods = visitedMethods.stream()
                 .collect(Collectors.toMap(Function.identity(), a -> "red"));
-        targetVertexes.stream().map(Vertex::getMethod).forEach(target -> highlightMethods.put(target, "blue"));
+        targetVertices.stream().map(Vertex::getMethod).forEach(target -> highlightMethods.put(target, "blue"));
 
         String id = message.getParameter("id");
 
@@ -554,12 +554,12 @@ public class GraphEndpoint implements Endpoint {
                 InterCFG interCFG = (InterCFG) graph;
 
                 try {
-                    branchLocator = new BranchLocator(interCFG.getApk().getDexFiles(), interCFG);
+                    crashReproductionUtil = new CrashReproductionUtil(interCFG.getApk().getDexFiles(), interCFG);
 
                     stackTrace = StackTraceParser.parse(Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()));
-                    analyzedStackTraceLines = branchLocator.getLastConsecutiveLines(stackTrace.getStackTraceAtLines().collect(Collectors.toList()), packageName).stream()
+                    analyzedStackTraceLines = crashReproductionUtil.getLastConsecutiveLines(stackTrace.getStackTraceAtLines().collect(Collectors.toList()), packageName).stream()
                             .collect(Collectors.toMap(Function.identity(), line -> {
-                                var interVertices = branchLocator.getTargetTracesForStackTraceLine(line, interCFG);
+                                var interVertices = crashReproductionUtil.getTargetTracesForStackTraceLine(line, interCFG);
 
                                 String method = expectOne(interVertices.stream().map(Vertex::getMethod).collect(Collectors.toSet()));
                                 var intra = new IntraCFG(apkPath, method, true, appsDir, packageName);
@@ -568,7 +568,7 @@ public class GraphEndpoint implements Endpoint {
                                         .map(intra::lookupVertex)
                                         .collect(Collectors.toSet());
 
-                                var requiredConstructorCalls = branchLocator.getRequiredConstructorCalls(line);
+                                var requiredConstructorCalls = crashReproductionUtil.getRequiredConstructorCalls(line);
 
                                 return new AnalyzedStackTraceLine(interVertices, intra, intraVertices, requiredConstructorCalls);
                             }));
@@ -636,7 +636,7 @@ public class GraphEndpoint implements Endpoint {
     private Message initIntraCFG(File apkPath, String methodName, boolean useBasicBlocks,
                                  String packageName, String target, Message request) {
         graph = new IntraCFG(apkPath, methodName, useBasicBlocks, appsDir, packageName);
-        targetVertexes = selectTargetVertex(target, packageName, apkPath, request);
+        targetVertices = selectTargetVertex(target, packageName, apkPath, request);
         return new Message("/graph/init");
     }
 
@@ -645,7 +645,7 @@ public class GraphEndpoint implements Endpoint {
         var g = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
         callTree = g.getCallTree();
         graph = g;
-        targetVertexes = selectTargetVertex(target, packageName, apkPath, request);
+        targetVertices = selectTargetVertex(target, packageName, apkPath, request);
         return new Message("/graph/init");
     }
 
@@ -681,13 +681,13 @@ public class GraphEndpoint implements Endpoint {
 
         Log.println("Looking at " + chromosome);
         Log.println(visitedVertices.stream().map(Vertex::toString).collect(Collectors.joining("\n")));
-        double sum = IntStream.range(0, targetVertexes.size()).parallel().mapToDouble(index -> {
-            double branchDistance = getBranchDistance(visitedVertices, traces, targetVertexes.get(index));
+        double sum = IntStream.range(0, targetVertices.size()).parallel().mapToDouble(index -> {
+            double branchDistance = getBranchDistance(visitedVertices, traces, targetVertices.get(index));
             Log.println("Branchdistance is: " + branchDistance + " for index " + index + " is: " + branchDistance * (index + 1));
             return branchDistance * (index + 1);
         }).sum();
         Log.println("Total branchDistance is " + sum);
-        int n = targetVertexes.size();
+        int n = targetVertices.size();
         int sumUp = (n * (n+1)) / 2;
         double avgBranchDistance = sum / sumUp;
         Log.println("Avg branchdistance is " + avgBranchDistance + " (n=" + n + "sumUp=" + sumUp + ")");

@@ -12,7 +12,7 @@ import de.uni_passau.fim.auermich.android_graphs.core.utility.GraphUtils;
 import org.jf.dexlib2.builder.BuilderInstruction;
 import org.jf.dexlib2.iface.Method;
 import org.mate.crash_reproduction.AtStackTraceLine;
-import org.mate.crash_reproduction.BranchLocator;
+import org.mate.crash_reproduction.CrashReproductionUtil;
 import org.mate.util.Log;
 
 import java.io.File;
@@ -117,7 +117,7 @@ public class InterCFG extends CFG {
     }
 
     public Set<CallTreeVertex> getTargetsByClassUsage(AtStackTraceLine line, Predicate<CallTreeVertex> methodSatisfies) {
-        String startMethod = BranchLocator.getInstructionsForLine(apk.getDexFiles(), line).orElseThrow().getX().toString();
+        String startMethod = CrashReproductionUtil.getInstructionsForLine(apk.getDexFiles(), line).orElseThrow().getX().toString();
 
         return callTree.getMethodCallers(new CallTreeVertex(startMethod), methodSatisfies);
     }

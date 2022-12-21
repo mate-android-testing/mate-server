@@ -25,11 +25,11 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-public class BranchLocator {
+public class CrashReproductionUtil {
     private final List<DexFile> dexFiles;
     private final InterCFG interCFG;
 
-    public BranchLocator(List<DexFile> dexFiles, InterCFG interCFG) throws IOException {
+    public CrashReproductionUtil(List<DexFile> dexFiles, InterCFG interCFG) throws IOException {
         this.dexFiles = dexFiles;
         this.interCFG = interCFG;
     }
@@ -146,7 +146,7 @@ public class BranchLocator {
     }
 
     public Optional<Tuple<Method, Set<BuilderInstruction>>> getInstructionsForLine(AtStackTraceLine stackTraceLine) {
-        return BranchLocator.getInstructionsForLine(dexFiles, stackTraceLine);
+        return CrashReproductionUtil.getInstructionsForLine(dexFiles, stackTraceLine);
     }
 
     public static Optional<Tuple<Method, Set<BuilderInstruction>>> getInstructionsForLine(Collection<DexFile> dexFiles, AtStackTraceLine stackTraceLine) {
@@ -190,7 +190,7 @@ public class BranchLocator {
         var result = getInstructionsForLine(stackTraceLine).orElseThrow();
         return result.getY().stream()
                 .flatMap(instruction -> Stream.concat(
-                        BranchLocator.getTokensFromInstruction(instruction),
+                        CrashReproductionUtil.getTokensFromInstruction(instruction),
                         getMenuItemFromLine(result.getX(), instruction).stream()
                                 .map(TranslatedMenuItem::getTitle)
                 ));
