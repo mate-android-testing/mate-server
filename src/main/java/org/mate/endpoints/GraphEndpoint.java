@@ -75,7 +75,7 @@ public class GraphEndpoint implements Endpoint {
             return getBranchDistance(request);
         } else if (request.getSubject().startsWith("/graph/draw")) {
             return drawGraph(request);
-        } else if (request.getSubject().startsWith("/graph/callTree/draw")) {
+        } else if (request.getSubject().startsWith("/graph/callGraph/draw")) {
             return drawCallTree(request);
         } else if (request.getSubject().startsWith("/graph/reached_targets")) {
             return reachedTargets(request);
@@ -102,7 +102,7 @@ public class GraphEndpoint implements Endpoint {
             return new Message.MessageBuilder("/graph/stack_trace")
                     .withParameter("stack_trace", String.join(",", stackTrace.getAtLines()))
                     .build();
-        } else if (request.getSubject().startsWith("/graph/call_tree_distance")) {
+        } else if (request.getSubject().startsWith("/graph/call_graph_distance")) {
             return getNormalizedCallTreeDistance(request);
         } else if (request.getSubject().startsWith("/graph/reached_required_constructors")) {
             return getNormalizedReachedRequiredConstructors(request);
