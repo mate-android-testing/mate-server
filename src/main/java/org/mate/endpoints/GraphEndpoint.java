@@ -14,7 +14,10 @@ import org.apache.commons.io.FileUtils;
 import org.jf.dexlib2.analysis.AnalyzedInstruction;
 import org.jgrapht.GraphPath;
 import org.mate.crash_reproduction.*;
-import org.mate.graphs.*;
+import org.mate.graphs.Graph;
+import org.mate.graphs.GraphType;
+import org.mate.graphs.InterCFG;
+import org.mate.graphs.IntraCFG;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
@@ -46,7 +49,6 @@ public class GraphEndpoint implements Endpoint {
     private final AndroidEnvironment androidEnvironment;
     private Graph graph;
     private CallTree callTree;
-    private ActivityGraph activityGraph;
     private final Path appsDir;
     private final Path resultsPath;
 
@@ -67,8 +69,6 @@ public class GraphEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/graph/init")) {
             return initGraph(request);
-        } else if (request.getSubject().startsWith("/graph/activity_graph_init")) {
-            return activityGraphInit(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector")) {
             return getBranchDistanceVector(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
@@ -77,18 +77,8 @@ public class GraphEndpoint implements Endpoint {
             return drawGraph(request);
         } else if (request.getSubject().startsWith("/graph/callTree/draw")) {
             return drawCallTree(request);
-        } else if (request.getSubject().startsWith("/graph/get_target_activities")) {
-            return new Message.MessageBuilder("/graph/get_target_activities")
-                    .withParameter("target_activities", String.join(",", targetComponents))
-                    .build();
         } else if (request.getSubject().startsWith("/graph/reached_targets")) {
             return reachedTargets(request);
-        } else if (request.getSubject().startsWith("/graph/get_activity_distance")) {
-            return getActivityDistance(request);
-        }  else if (request.getSubject().startsWith("/graph/get_all_activity_distances")) {
-            return getAllActivityDistances(request);
-        } else if (request.getSubject().startsWith("/graph/get_max_activity_distance")) {
-            return getMaxActivityDistance(request);
         } else if (request.getSubject().startsWith("/graph/stack_trace_tokens")) {
             String packageName = request.getParameter("package");
             Set<String> stackTraceTokens = stackTrace.getFuzzyTokens(packageName);
@@ -463,40 +453,6 @@ public class GraphEndpoint implements Endpoint {
         return ((InterCFG) graph).getTargetComponents(stackTrace.getStackTraceAtLines().filter(l -> l.isFromPackage(packageName)).collect(Collectors.toList()), componentType);
     }
 
-    private Message getActivityDistance(Message request) {
-        Set<String> targetActivities = new HashSet<>(Arrays.asList(request.getParameter("targetActivities").split(",")));
-        List<String> activitySequence = Arrays.asList(request.getParameter("activitySequence").split(","));
-
-        // Calculate average distance
-        return new Message.MessageBuilder("/graph/get_activity_distance")
-                .withParameter("activity_distance", String.valueOf(activitySequence.stream().mapToInt(activity -> getActivityDistance(targetActivities, activity)).average().orElseThrow()))
-                .build();
-    }
-
-    private int getActivityDistance(Set<String> targetActivities, String activity) {
-        return targetActivities.stream().mapToInt(targetActivity -> activityGraph.getMinDistance(activity, targetActivity)).min().orElseThrow();
-    }
-
-    private Message getMaxActivityDistance(Message request) {
-        Set<String> targetActivities = new HashSet<>(Arrays.asList(request.getParameter("targetActivities").split(",")));
-        int maxActivityDistance = targetActivities.stream().mapToInt(activityGraph::getMaxDistance).max().orElseThrow();
-        Log.println("Max activity distance is: " + maxActivityDistance);
-
-        return new Message.MessageBuilder("/graph/get_max_activity_distance")
-                .withParameter("max_activity_distance", String.valueOf(maxActivityDistance))
-                .build();
-    }
-
-    private Message getAllActivityDistances(Message request) {
-        Set<String> targetActivities = new HashSet<>(Arrays.asList(request.getParameter("targetActivities").split(",")));
-
-        return new Message.MessageBuilder("/graph/get_max_activity_distance")
-                .withParameter("activity_distances", activityGraph.getMinDistances(targetActivities).entrySet().stream()
-                        .map(entry -> entry.getKey() + ":" + entry.getValue())
-                        .collect(Collectors.joining(";")))
-                .build();
-    }
-
     private Message drawGraph(Message request) {
 
         if (graph == null) {
@@ -647,19 +603,6 @@ public class GraphEndpoint implements Endpoint {
                 }
                 return targetVertex;
         }
-    }
-
-    private Message activityGraphInit(Message request) {
-        String packageName = request.getParameter("packageName");
-
-        File activityGraphMap = appsDir.resolve(packageName).resolve("activity-graph.txt").toFile();
-
-        if (!activityGraphMap.exists()) {
-            throw new IllegalArgumentException("Can't locate activity graph " + activityGraphMap.getAbsolutePath());
-        }
-        activityGraph = new ActivityGraph(activityGraphMap);
-
-        return new Message("/graph/activity_graph_init");
     }
 
     private Message initGraph(Message request) {
