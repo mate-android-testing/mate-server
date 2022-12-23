@@ -410,8 +410,6 @@ public final class GraphEndpoint implements Endpoint {
         return minEntry != null ? Map.entry(minEntry, minDistance) : null;
     }
 
-
-
     /**
      * Retrieves the traces for the given chromosome.
      *
