@@ -224,6 +224,9 @@ public class Server {
              */
             Log.println("IOException during handling request:" + e);
             Device.listDevices(androidEnvironment);
+        } catch (final Throwable e) {
+            Log.println("Unexpected exception: " + e);
+            throw e;
         } finally {
             Log.println("connection closed");
         }
