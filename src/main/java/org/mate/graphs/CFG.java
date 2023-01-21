@@ -343,9 +343,6 @@ public abstract class CFG implements Graph {
     @Override
     public int getDistance(Vertex source, Vertex target) {
 
-        assert baseCFG.containsVertex(source)
-                && baseCFG.containsVertex(target) : "source and target vertex must be part of graph!";
-
         VertexPair distancePair = new VertexPair(source, target);
 
         if (cachedDistances.containsKey(distancePair)) {
