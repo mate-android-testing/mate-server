@@ -332,6 +332,14 @@ public abstract class CFG implements Graph {
         }
     }
 
+    /**
+     * Returns the shortest path distance between the given source and target vertex.
+     *
+     * @param source The given source vertex.
+     * @param target The given target vertex.
+     * @return Returns the shortest path distance between the given source and target vertex. If no such path exists,
+     *          a negative distance of {@code -1} is returned.
+     */
     @Override
     public int getDistance(Vertex source, Vertex target) {
 
