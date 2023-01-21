@@ -226,7 +226,7 @@ public final class GraphEndpoint implements Endpoint {
         final var branchVertices = graph.getBranchVertices();
         final List<String> branchDistanceVector = computeBranchDistanceVector(traces, visitedVertices, branchVertices);
         long end = System.currentTimeMillis();
-        Log.println("Computing branch distance vector took: " + ((end-start)/1000) + "s");
+        Log.println("Computing branch distance vector took: " + (end-start) + "ms");
         return new Message.MessageBuilder("/graph/get_branch_distance_vector")
                 .withParameter("branch_distance_vector", String.join("+", branchDistanceVector))
                 .build();
@@ -299,9 +299,6 @@ public final class GraphEndpoint implements Endpoint {
          * if or switch stmt could have been visited multiple times.
          */
         final Statement stmt = minDistanceVertex.getStatement();
-
-        // we only support basic blocks right now
-        assert stmt.getType() == Statement.StatementType.BLOCK_STATEMENT;
 
         int minBranchDistance = Integer.MAX_VALUE;
 
@@ -397,7 +394,7 @@ public final class GraphEndpoint implements Endpoint {
          * or exit vertices.
          */
         for (final Vertex visitedVertex : visitedVertices) {
-            final int distance = graph.getDistance(visitedVertex, branchVertex);
+            final int distance = graph.getDistance(branchVertex, visitedVertex);
             // TODO: there can be multiple minima having the same approach level (distance)
             if (distance < minDistance
                     && ((distance == 0 && visitedVertex.isBranchVertex())
@@ -454,7 +451,10 @@ public final class GraphEndpoint implements Endpoint {
      * @param request The request message.
      * @return Returns a message containing the branch distance information.
      */
+    @SuppressWarnings("unused")
     private Message getBranchDistance2(Message request) {
+
+        // TODO: Not yet working with newest instrumentation including switch statements.
 
         String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
@@ -486,10 +486,6 @@ public final class GraphEndpoint implements Endpoint {
         // save the closest vertex -> required for approach level
         AtomicReference<Vertex> minDistanceVertex = new AtomicReference<>();
 
-        // track global minimum distance + vertex (solely for debugging)
-        AtomicInteger minDistanceGlobal = new AtomicInteger(Integer.MAX_VALUE);
-        AtomicReference<Vertex> minDistanceVertexGlobal = new AtomicReference<>();
-
         visitedVertices.parallelStream().forEach(visitedVertex -> {
 
             int distance = graph.getDistance(visitedVertex, targetVertex);
@@ -506,22 +502,8 @@ public final class GraphEndpoint implements Endpoint {
                         minDistance.set(distance);
                     }
                 }
-
-                if (distance < minDistanceGlobal.get() && distance != -1) {
-                    // found global shorter path, e.g. distance to a visited entry or exit vertex
-                    minDistanceGlobal.set(distance);
-                    minDistanceVertexGlobal.set(visitedVertex);
-                }
             }
         });
-
-        Log.println("Shortest path length: " + minDistance.get());
-        Log.println("Shortest path length (global): " + minDistanceGlobal.get());
-
-        if (minDistanceVertexGlobal.get() != null) {
-            Log.println("Closest global vertex: " + minDistanceVertexGlobal.get().getMethod()
-                    + "->[ " + minDistanceVertexGlobal.get().getStatement() + "]");
-        }
 
         long end = System.currentTimeMillis();
         Log.println("Computing approach level took: " + (end - start) + " ms.");
@@ -547,18 +529,11 @@ public final class GraphEndpoint implements Endpoint {
             Vertex ifVertex = minDistanceVertex.get();
             Statement stmt = ifVertex.getStatement();
 
-            Log.println("Closest if vertex: " + ifVertex.getMethod() + "[" + ifVertex.getStatement() + "]");
-
-            // we only support basic blocks right now
-            assert stmt.getType() == Statement.StatementType.BLOCK_STATEMENT;
-
             // the if stmt is located the last position of the block
             BasicStatement ifStmt = (BasicStatement) ((BlockStatement) stmt).getLastStatement();
 
             // find the branch distance trace(s) that describes the if stmt
             String prefix = ifVertex.getMethod() + "->" + ifStmt.getInstructionIndex() + ":";
-
-            Log.println("Trace describing closest if stmt: " + prefix);
 
             double minBranchDistance = Double.MAX_VALUE;
 
@@ -582,9 +557,6 @@ public final class GraphEndpoint implements Endpoint {
                 }
             }
 
-            Log.println("Approach level: " + approachLevel);
-            Log.println("Minimal branch distance: " + minBranchDistance);
-
             // combine and normalise
             double normalisedBranchDistance = minBranchDistance / (minBranchDistance + 1);
             double combined = approachLevel + normalisedBranchDistance;
@@ -603,7 +575,10 @@ public final class GraphEndpoint implements Endpoint {
      * @param request The request message.
      * @return Returns a message containing the branch distance fitness vector.
      */
+    @SuppressWarnings("unused")
     private Message getBranchDistanceVector2(Message request) {
+
+        // TODO: Not yet working with the newest instrumentation including switch statements.
 
         long start = System.currentTimeMillis();
 
@@ -640,10 +615,6 @@ public final class GraphEndpoint implements Endpoint {
             // save the closest vertex -> required for approach level
             AtomicReference<Vertex> minDistanceVertex = new AtomicReference<>();
 
-            // track global minimum distance + vertex (solely for debugging)
-            AtomicInteger minDistanceGlobal = new AtomicInteger(Integer.MAX_VALUE);
-            AtomicReference<Vertex> minDistanceVertexGlobal = new AtomicReference<>();
-
             visitedVertices.parallelStream().forEach(visitedVertex -> {
 
                 int distance = graph.getDistance(visitedVertex, branch);
@@ -659,12 +630,6 @@ public final class GraphEndpoint implements Endpoint {
                             minDistanceVertex.set(visitedVertex);
                             minDistance.set(distance);
                         }
-                    }
-
-                    if (distance < minDistanceGlobal.get() && distance != -1) {
-                        // found global shorter path, e.g. distance to a visited entry or exit vertex
-                        minDistanceGlobal.set(distance);
-                        minDistanceVertexGlobal.set(visitedVertex);
                     }
                 }
             });
@@ -686,9 +651,6 @@ public final class GraphEndpoint implements Endpoint {
                  */
                 Vertex ifVertex = minDistanceVertex.get();
                 Statement stmt = ifVertex.getStatement();
-
-                // we only support basic blocks right now
-                assert stmt.getType() == Statement.StatementType.BLOCK_STATEMENT;
 
                 // the if stmt is located the last position of the block
                 BasicStatement ifStmt = (BasicStatement) ((BlockStatement) stmt).getLastStatement();
@@ -728,7 +690,7 @@ public final class GraphEndpoint implements Endpoint {
         }
 
         long end = System.currentTimeMillis();
-        Log.println("Computing branch distance vector took: " + ((end-start)/1000) + "s");
+        Log.println("Computing branch distance vector took: " + (end-start) + "ms");
 
         return new Message.MessageBuilder("/graph/get_branch_distance_vector")
                 .withParameter("branch_distance_vector", String.join("+", branchDistanceVector))
