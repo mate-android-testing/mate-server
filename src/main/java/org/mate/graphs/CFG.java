@@ -199,7 +199,7 @@ public abstract class CFG implements Graph {
 
         long start = System.currentTimeMillis();
 
-        Map<String, Vertex> vertexMap = new HashMap<>();
+        Map<String, Vertex> traceToVertexCache = new HashMap<>();
 
         // handle entry vertices
         Set<Vertex> entryVertices = baseCFG.getVertices().stream().filter(Vertex::isEntryVertex).collect(Collectors.toSet());
@@ -209,7 +209,7 @@ public abstract class CFG implements Graph {
             if (!entryVertex.equals(baseCFG.getEntry())) {
 
                 // virtual entry vertex
-                vertexMap.put(entryVertex.getMethod() + "->entry", entryVertex);
+                traceToVertexCache.put(entryVertex.getMethod() + "->entry", entryVertex);
 
                 // there are potentially several entry vertices when dealing with try-catch blocks at the beginning
                 Set<Vertex> entries = baseCFG.getOutgoingEdges(entryVertex).stream()
@@ -224,7 +224,7 @@ public abstract class CFG implements Graph {
                         if (statement instanceof BlockStatement) {
                             // each statement within a block statement is a basic statement
                             BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
-                            vertexMap.put(entry.getMethod() + "->entry->" + basicStatement.getInstructionIndex(), entry);
+                            traceToVertexCache.put(entry.getMethod() + "->entry->" + basicStatement.getInstructionIndex(), entry);
                         }
                     }
                 }
@@ -239,7 +239,7 @@ public abstract class CFG implements Graph {
             if (!exitVertex.equals(baseCFG.getExit())) {
 
                 // virtual exit vertex
-                vertexMap.put(exitVertex.getMethod() + "->exit", exitVertex);
+                traceToVertexCache.put(exitVertex.getMethod() + "->exit", exitVertex);
 
                 Set<Vertex> exits = baseCFG.getIncomingEdges(exitVertex).stream()
                         .map(Edge::getSource).collect(Collectors.toSet());
@@ -253,33 +253,38 @@ public abstract class CFG implements Graph {
                         if (statement instanceof BlockStatement) {
                             // each statement within a block statement is a basic statement
                             BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
-                            vertexMap.put(exit.getMethod() + "->exit->" + basicStatement.getInstructionIndex(), exit);
+                            traceToVertexCache.put(exit.getMethod() + "->exit->" + basicStatement.getInstructionIndex(), exit);
                         }
                     }
                 }
             }
         }
 
-        // handle branch + if stmt vertices
+        // handle branch + if and switch stmt vertices
         for (Vertex branchVertex : branchVertices) {
 
             // a branch can potentially have multiple predecessors (shared branch)
-            Set<Vertex> ifVertices = baseCFG.getIncomingEdges(branchVertex).stream()
+            Set<Vertex> ifOrSwitchVertices = baseCFG.getIncomingEdges(branchVertex).stream()
                     .map(Edge::getSource).filter(Vertex::isIfVertex).collect(Collectors.toSet());
 
-            for (Vertex ifVertex : ifVertices) {
+            // if or switch vertex
+            for (Vertex ifOrSwitchVertex : ifOrSwitchVertices) {
 
-                Statement statement = ifVertex.getStatement();
+                Statement statement = ifOrSwitchVertex.getStatement();
 
                 // TODO: handle basic statements
                 if (statement instanceof BlockStatement) {
                     // the last statement is always a basic statement of an if vertex
                     BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
                     if (InstructionUtils.isBranchingInstruction(basicStatement.getInstruction())) {
-                        vertexMap.put(ifVertex.getMethod() + "->if->" + basicStatement.getInstructionIndex(), ifVertex);
+                        traceToVertexCache.put(ifOrSwitchVertex.getMethod()
+                                        + "->if->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
+                    } else if (InstructionUtils.isSwitchInstruction(basicStatement.getInstruction())) {
+                        traceToVertexCache.put(ifOrSwitchVertex.getMethod()
+                                + "->switch->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
                     }
                     else {
-                        Log.printWarning("Unexpected block statement: " + statement + " for method " + ifVertex.getMethod());
+                        Log.printWarning("Unexpected block statement: " + statement + " for method " + ifOrSwitchVertex.getMethod());
                     }
                 }
             }
@@ -290,15 +295,15 @@ public abstract class CFG implements Graph {
             if (statement instanceof BlockStatement) {
                 // each statement within a block statement is a basic statement
                 BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
-                vertexMap.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
+                traceToVertexCache.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
             }
         }
 
         long end = System.currentTimeMillis();
-        Log.println("VertexMap construction took: " + (end - start) + " ms.");
-        Log.println("Size of VertexMap: " + vertexMap.size());
+        Log.println("TraceToVertexCache construction took: " + (end - start) + " ms.");
+        Log.println("Size of TraceToVertexCache: " + traceToVertexCache.size());
 
-        return vertexMap;
+        return traceToVertexCache;
     }
 
     /**
