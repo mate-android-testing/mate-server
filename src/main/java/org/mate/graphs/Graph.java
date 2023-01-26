@@ -6,6 +6,7 @@ import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import java.io.File;
 import java.util.List;
 import java.util.Set;
+import java.util.function.BiFunction;
 
 public interface Graph {
 
@@ -20,6 +21,9 @@ public interface Graph {
 
     // get all vertices
     List<Vertex> getVertices();
+
+    // get the distances between the given source and target vertices
+    BiFunction<Vertex, Vertex, Integer> getDistances(Set<Vertex> sources, Set<Vertex> targets);
 
     // get the distance between the target vertex and the source vertex
     int getDistance(Vertex source, Vertex target);
