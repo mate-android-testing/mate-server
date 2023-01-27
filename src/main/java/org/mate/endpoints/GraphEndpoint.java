@@ -478,7 +478,7 @@ public final class GraphEndpoint implements Endpoint {
                  * distance traces.
                  */
                 if (!isSwitchTrace && distance == 0) {
-                    return;
+                    continue;
                 }
 
                 final String method = trace.substring(0, isSwitchTrace ? arrow + 1 - switchStr.length() : arrow - 1);
