@@ -592,17 +592,45 @@ public final class GraphEndpoint implements Endpoint {
         if (minDistanceVertex.isIfVertex()) {
 
             /*
-             * The vertex with the closest distance represents an if stmt at which the execution path took the wrong
-             * direction. We need to find the shortest branch distance value for the given if stmt. Note that the if stmt
-             * could have been visited multiple times.
+             * Check if the target branch is a direct successor of the closest visited if statement. One might think that
+             * we could check for approach level == 1, but this doesn't give us any direction. Consider the following
+             * counter example: The target branch can have both as predecessor and successor an if statement, while the
+             * target branch itself was not covered. That means the successor if statement was reached through a different
+             * branch of the predecessor if statement. Both if statements have an approach level of 1, but only the
+             * predecessor if statement is the one we would be interested. However, the current implementation supplies
+             * an arbitrary if statement as the vertex with the closest distance.
              */
-            final Statement stmt = minDistanceVertex.getStatement();
+            final boolean directSuccessor
+                    = graph.getOutgoingEdges(minDistanceVertex)
+                    .stream()
+                    .map(Edge::getTarget)
+                    .anyMatch(vertex -> vertex.equals(branchVertex));
 
-            // the if statement is located the last position of the block
-            final BasicStatement ifStmt = (BasicStatement) ((BlockStatement) stmt).getLastStatement();
+            if (directSuccessor) {
 
-            // the branch distance value is attached to the if statement
-            minBranchDistance = getBranchDistance(minDistanceVertex.getMethod(), ifStmt.getInstructionIndex(), false);
+                /*
+                 * The vertex with the closest distance represents an if stmt at which the execution path took the wrong
+                 * direction. We need to find the shortest branch distance value for the given if stmt. Note that the if
+                 * stmt could have been visited multiple times. Thus, we need to find the minimum > 0 (a branch distance
+                 * of 0 would mean that we have actually covered the target branch).
+                 */
+                final Statement stmt = minDistanceVertex.getStatement();
+
+                // the if statement is located the last position of the block
+                final BasicStatement ifStmt = (BasicStatement) ((BlockStatement) stmt).getLastStatement();
+
+                // the branch distance value is attached to the if statement
+                minBranchDistance = getBranchDistance(minDistanceVertex.getMethod(), ifStmt.getInstructionIndex(),
+                        false);
+
+            } else {
+                /*
+                * It can happen that there are multiple closest if statements and without a further graph traversal we
+                * don't know which one is the correct one. We simply assign here the highest possible distance to indicate
+                * that we need to choose a different path in the future.
+                 */
+                minBranchDistance = Integer.MAX_VALUE;
+            }
         } else if (minDistanceVertex.isSwitchVertex()) {
 
             /*
@@ -611,7 +639,15 @@ public final class GraphEndpoint implements Endpoint {
              *  covered (1), and we already filtered out direct hits.
              */
 
-            // check if the branch vertex is a direct successor of the closest visited switch case statement
+            /*
+            * Check if the target branch (case stmt) is a direct successor of the closest visited switch statement. One
+            * might think that we could check for approach level == 1, but this doesn't give us any direction. Consider
+            * the following counter example: The target branch (case stmt) can have both as predecessor and successor
+            * a switch statement, while the case stmt itself was not covered. That means the successor switch statement
+            * was reached through a different case of the predecessor switch statement. Both switch statements have an
+            * approach level of 1, but only the predecessor switch statement is the one we would be interested. However,
+            * the current implementation supplies an arbitrary switch statement as the vertex with the closest distance.
+             */
             final boolean directSuccessor
                     = graph.getOutgoingEdges(minDistanceVertex)
                     .stream()
@@ -620,10 +656,12 @@ public final class GraphEndpoint implements Endpoint {
 
             if (directSuccessor) {
                 // find the branch distance trace(s) that describe(s) the case stmt
-                final BasicStatement caseStmt = (BasicStatement) ((BlockStatement) branchVertex.getStatement()).getFirstStatement();
+                final BasicStatement caseStmt = (BasicStatement) ((BlockStatement) branchVertex.getStatement())
+                        .getFirstStatement();
 
                 // the branch distance is attached to the case statement
-                minBranchDistance = getBranchDistance(minDistanceVertex.getMethod(), caseStmt.getInstructionIndex(), true);
+                minBranchDistance = getBranchDistance(minDistanceVertex.getMethod(), caseStmt.getInstructionIndex(),
+                        true);
             } else {
                 /*
                  * It can happen that the branch vertex is not a direct successor of the closest switch statement. In
