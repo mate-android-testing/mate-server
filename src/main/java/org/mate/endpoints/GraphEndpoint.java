@@ -85,12 +85,13 @@ public final class GraphEndpoint implements Endpoint {
      * Caches the pre-computed approach levels in a compact representation. In particular, we store for each relevant
      * vertex, i.e. a branch, case, if or switch vertex, the approach level to each other branch vertex. To reduce the
      * memory footprint to a minimum and speed-up the computation, a compact representation of a one-dimensional char
-     * array was chosen. The char array can be visualized as a flattened two-dimensional array where for each relevant
-     * vertex a row consisting of n branch vertex distances exists. To compute the array index for the approach level
-     * between a source and a target (branch) vertex, one needs to know the index of the source and target vertex by
-     * looking up the {@link #relevantVertexToIndex} mapping follow the following formula:
+     * array was chosen. The char array can be visualized as a flattened two-dimensional array where for each branch
+     * vertex a row consisting of n branch vertex distances and k remaining distances exists. To compute the array index
+     * for the approach level between a target (branch vertex) and a source vertex, one needs to know the index of the
+     * target (branch) and source vertex by looking up the {@link #relevantVertexToIndex} mapping and follow the
+     * following formula:
      *
-     * approachLevel(s,t) := approachLevels[relevantVertexToIndex(t) * #relevantVertices + relevantVertexToIndex(s)]
+     * approachLevel(t,s) := approachLevels[relevantVertexToIndex(t) * #relevantVertices + relevantVertexToIndex(s)]
      *
      * The multiplication defines the essentially the row in the flattened two-dimensional array and the addition the
      * offset to the respective source vertex. We favoured an char array over a short array, because the positive range
@@ -109,8 +110,20 @@ public final class GraphEndpoint implements Endpoint {
     /**
      * Caches the branch distances. To reduce the memory footprint a flattened two-dimensional is used where each row
      * represents a single method and consists of the size of the IPs, the indices of the IPs and the branch distance
-     * values for the IPs. Lastly a generation number is stored per row. To compute the row index in the branch distance
-     * array, the method name is derived from a trace and mapped via {@link #methodNameIndex} to its index.
+     * values for both if and switch statements. Lastly a generation number is stored per row. To compute the row index
+     * in the branch distance array, the method name is derived from a trace and mapped via {@link #methodNameIndex} to
+     * its index. We can visualize a row in the branch distance array as follows:
+     *
+     * (1) number of IPs in given method (size)
+     * (2) the instruction indices of the IPs in ascending order (n)
+     * (3) the minimal branch distance value > 0 (if statement) for each IP (n)
+     * (4) the minimal branch distance value > 0 (switch statement) for each IP (n)
+     *
+     * By knowing the method (row) index, one can effectively compute the address to any minimal branch distance by
+     * adding the specific offset, e.g. to compute the array index of the if branch distance value of the first IP, one
+     * calculates the address as follows: (row index + 1) + size * n. We need to have potentially two branch distance
+     * values per IP because a branch can be shared between an if and switch statement and both have a different formula
+     * for computing the branch distance.
      */
     private static short[] branchDistances = null;
 
@@ -355,28 +368,51 @@ public final class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Retrieves the cached branch distance for a particular instruction (vertex).
+     * Retrieves the cached branch distance for a particular vertex (described by a trace).
      *
-     * @param method The method encapsulating the instruction.
-     * @param instruction The instruction index.
+     * @param method The method name contained in the trace.
+     * @param instruction The instruction index contained in the trace.
      * @param isSwitchStatement Whether we deal with a switch instruction.
      * @return Returns the cached branch distance.
      */
     private static int getBranchDistance(final String method, final int instruction, final boolean isSwitchStatement) {
 
-        final int ali = methodNameIndex.get(method);
-        final int size = branchDistances[ali];
+        final int rowIndex = methodNameIndex.get(method);
+        final int size = branchDistances[rowIndex]; // the number of IPs for the given method
 
-        if (size >= 0) {
-            int distanceIndex = ali + 1;
-            final int end = ali + 1 + size;
-            while(distanceIndex < end  && branchDistances[distanceIndex] < instruction) ++distanceIndex;
-            return branchDistances[distanceIndex + size * (isSwitchStatement ? 2 : 1)] ;
-        } else {
+        if (size >= 0) { // regular case
+
+            int instructionIndex = rowIndex + 1; // the instruction index of the first IP
+            final int end = rowIndex + 1 + size; // the instruction index of the last IP
+
+            // find the instruction index of the IP corresponding to the given instruction (sorted in ascending order)
+            while (instructionIndex < end  && branchDistances[instructionIndex] < instruction) {
+                ++instructionIndex;
+            }
+
+            // the offset describes the index to the if or switch branch distance value
+            return branchDistances[instructionIndex + size * (isSwitchStatement ? 2 : 1)] ;
+        } else { // optimized case for exactly three IPs
+
+            // negating the size delivers the instruction index of the IP in the middle
             final int midInstruction = -size;
-            final int instructionIndex =
-                    ali + 2 + Integer.signum(instruction - midInstruction) + (isSwitchStatement ? 3 : 0);
-            return branchDistances[instructionIndex];
+
+            /*
+            * Recall that the row for the optimized case of exactly 3 IPs looks as follows:
+            *
+            * (1) negated instruction index of middle IP (branchDistances[rowIndex])
+            * (2) the three if branch distance values (branchDistances[rowIndex + 1] - [branchDistances[rowIndex + 3])
+            * (3) the three switch branch distance values (branchDistances[rowIndex + 4] - [branchDistances[rowIndex + 6])
+            * (4) the generation number (branchDistances[rowIndex + 7])
+            *
+            * That means that (rowIndex + 2) refers to index of the middle if branch distance value. The signum()
+            * computation either returns -1 when instruction < midInstruction, 0 if instruction == midInstruction or
+            * +1 if instruction > midInstruction. This offset defines the index to the given instruction. If we deal with
+            * a switch instruction, we need to add an offset of 3.
+             */
+            final int branchDistanceIndex =
+                    rowIndex + 2 + Integer.signum(instruction - midInstruction) + (isSwitchStatement ? 3 : 0);
+            return branchDistances[branchDistanceIndex];
         }
     }
 
@@ -397,14 +433,23 @@ public final class GraphEndpoint implements Endpoint {
 
         /*
         * We need to assign each method a unique id. Similar to the approach level array, we divide the array into
-        * rows/segments, where each row describes a method including the indices of the relevant vertices and its
-        * branch distance values. The method index refers to the base address of each row in the array.
+        * rows/segments, where each row describes a method including the number of IPs, the indices of the IPs and its
+        * branch distance values for both if and switch instructions. Lastly, a generation number follows. The method
+        * index serves as the base address of a particular row.
          */
         int total = 0;
         for (final var entry : indicesPerMethod.entrySet()) {
             methodNameIndex.put(entry.getKey(), total);
-            final int size = entry.getValue().size();
-            final int add = size != 3 ? 3 * size + 2 : 8; // the size of a row depends on the number of IPs per method
+            final int size = entry.getValue().size(); // the number of IPs
+
+            /*
+            * If the number of IPs is not equal 3, we require (3 * size) many entries for the indices of the IPs and if
+            * as well as switch branch distance values. In addition, one field is required for the number of IPs and
+            * one field for the generation number. If we have exactly 3 IPs for a method, an optimization can be applied
+            * which saves certain fields. In particular, we require only 8 fields for the 3 if and 3 switch branch
+            * distance values as well as the instruction index of the middle IP and the generation number.
+             */
+            final int add = size != 3 ? 3 * size + 2 : 8;
             total += add;
         }
 
@@ -412,37 +457,38 @@ public final class GraphEndpoint implements Endpoint {
 
         indicesPerMethod.forEach((key, value) -> {
 
-            final int index = methodNameIndex.get(key); // the base index in the array for the given method
+            final int rowIndex = methodNameIndex.get(key); // the base index in the array for the given method
             final int size = value.size();
 
             if (size != 3) { // regular case
 
-                // A segment/row stores the number of IPs followed by the indices of the IPs and a dummy branch distance
-                // for each IP, e.g. [2, {ip_1_index, ip_2_index}, {ip_1_bd, ip_2_bd}]. Lastly, a generation number
-                // follows that is iteratively decreased.
-                branchDistances[index] = (short) size; // store the size of the IPs as first entry
+                /*
+                * A row stores the number of IPs, followed by the indices of the IPs in ascending order, the if branch
+                * distance values, the switch branch distance values and lastly the generation number.
+                 */
+                branchDistances[rowIndex] = (short) size; // store the size of the IPs as first entry
 
-                int i = index + 1;
+                int i = rowIndex + 1;
                 for (final int instructionIndex : value) {
                     branchDistances[i++] = (short) instructionIndex; // store the instruction indices of the IPs next
                 }
 
                 // sort the instruction indices in ascending order
-                Arrays.sort(branchDistances, index + 1, i);
+                Arrays.sort(branchDistances, rowIndex + 1, i);
 
-                // init the branch distance for each IP with a dummy value as well as the generation number at the end
+                // init the if + switch branch distance for each IP with a dummy value as well as the generation number
                 Arrays.fill(branchDistances, i, i + 2 * size + 1, Short.MAX_VALUE);
             } else {
                 /*
                 * We can apply a special optimization if we deal exactly with three IPs. Instead of saving the number
                 * of IPs and its three indices, we store only the negated index of the middle instruction followed by
-                * dummy values for the branch distances and the generation number.
+                * dummy values for the 6 (if + switch) branch distance values and the generation number.
                  */
                 final List<Short> instructions = new ArrayList<>(value);
                 instructions.sort(Comparator.naturalOrder());
                 final int midInstruction = instructions.get(1);
-                branchDistances[index] = (short) -midInstruction;
-                Arrays.fill(branchDistances, index + 1, index + 8, Short.MAX_VALUE);
+                branchDistances[rowIndex] = (short) -midInstruction;
+                Arrays.fill(branchDistances, rowIndex + 1, rowIndex + 8, Short.MAX_VALUE);
             }
         });
     }
@@ -475,7 +521,7 @@ public final class GraphEndpoint implements Endpoint {
                  * couldn't be covered, otherwise we would have actually taken the right branch. Thus, the relevant
                  * distance traces (we may have visited the if statement multiple times) must contain a distance > 0,
                  * since a branch with a distance of 0 would have be taken. We simply need to pick the minimum of those
-                 * distance traces.
+                 * distance traces. That means, we can ignore a trace with a branch distance of 0 for if statements.
                  */
                 if (!isSwitchTrace && distance == 0) {
                     continue;
@@ -484,12 +530,12 @@ public final class GraphEndpoint implements Endpoint {
                 final String method = trace.substring(0, isSwitchTrace ? arrow + 1 - switchStr.length() : arrow - 1);
                 final int instruction = Integer.parseUnsignedInt(trace, arrow + 1, colon, 10);
 
-                final int methodIndex = methodNameIndex.get(method); // the base index in the array
-                final int size = branchDistances[methodIndex]; // the number of IPs is stored at the base index
+                final int rowIndex = methodNameIndex.get(method);
+                final int size = branchDistances[rowIndex]; // the number of IPs is stored at the row index
 
                 if (size >= 0) { // regular case
 
-                    final int instructionBaseAddress = methodIndex + 1; // the index of the first IP
+                    final int instructionBaseAddress = rowIndex + 1; // the instruction index of the first IP
                     final int branchDistanceBaseAddress = instructionBaseAddress + size; // the index of the first BD value
                     final int generation = branchDistanceBaseAddress + 2 * size; // the index of the generation number
 
@@ -513,17 +559,17 @@ public final class GraphEndpoint implements Endpoint {
                         Log.println("Instruction index not found in branch distance array for trace: " + trace);
                     }
                 } else { // optimized variant for exactly three IPs
-                    final int generation = methodIndex + 7; // the index of the generation number
+                    final int generation = rowIndex + 7; // the index of the generation number
 
                     if (branchDistances[generation] > g) { // reset the branch distance values upon new generation
-                        Arrays.fill(branchDistances, methodIndex + 1, generation, Short.MAX_VALUE);
+                        Arrays.fill(branchDistances, rowIndex + 1, generation, Short.MAX_VALUE);
                         branchDistances[generation] = g; // update the generation number
                     }
 
                     final int midInstruction = -size; // the negated value refers to the index of the middle instruction
 
                     final int branchDistanceIndex =
-                            methodIndex + 2 + Integer.signum(instruction - midInstruction) + (isSwitchTrace ? 3 : 0);
+                            rowIndex + 2 + Integer.signum(instruction - midInstruction) + (isSwitchTrace ? 3 : 0);
 
                     // update branch distance if better than previous one
                     final short oldDistance = branchDistances[branchDistanceIndex];
@@ -555,16 +601,10 @@ public final class GraphEndpoint implements Endpoint {
              */
             final Statement stmt = minDistanceVertex.getStatement();
 
-            // the if stmt is located the last position of the block
+            // the if statement is located the last position of the block
             final BasicStatement ifStmt = (BasicStatement) ((BlockStatement) stmt).getLastStatement();
 
-            /*
-             * We need to look for branch distance traces that refer to the if statement. A branch distance trace is
-             * produced for both branches, but we only need to consider those traces that describe the branch that
-             * couldn't be covered, otherwise we would have actually taken the right branch. Thus, the relevant distance
-             * traces (we may have visited the if statement multiple times) must contain a distance > 0, since a branch
-             * with a distance of 0 would have be taken. We simply need to pick the minimum of those distance traces.
-             */
+            // the branch distance value is attached to the if statement
             minBranchDistance = getBranchDistance(minDistanceVertex.getMethod(), ifStmt.getInstructionIndex(), false);
         } else if (minDistanceVertex.isSwitchVertex()) {
 
@@ -585,10 +625,7 @@ public final class GraphEndpoint implements Endpoint {
                 // find the branch distance trace(s) that describe(s) the case stmt
                 final BasicStatement caseStmt = (BasicStatement) ((BlockStatement) branchVertex.getStatement()).getFirstStatement();
 
-                /*
-                 * Since we potentially traversed the switch statement multiple times, there are multiple branch distance
-                 * traces for each case statement. We need to pick the minimum out of those.
-                 */
+                // the branch distance is attached to the case statement
                 minBranchDistance = getBranchDistance(minDistanceVertex.getMethod(), caseStmt.getInstructionIndex(), true);
             } else {
                 /*
