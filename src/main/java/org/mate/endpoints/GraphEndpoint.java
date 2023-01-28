@@ -511,21 +511,18 @@ public final class GraphEndpoint implements Endpoint {
 
                 final short distance = (short) Integer.parseUnsignedInt(trace, colon + 1, trace.length(), 10);
 
+                /*
+                * We don't need to store a branch distance of 0 for neither if or switch statements, because we would
+                * have taken that branch or case statement (approach level of 0), thus never requesting the branch
+                * distance values at all.
+                 */
+                if (distance == 0) {
+                    continue;
+                }
+
                 final String switchStr = "->switch->";
                 final boolean isSwitchTrace = trace.regionMatches(arrow + 1 - switchStr.length(), switchStr,
                         0, switchStr.length());
-
-                /*
-                 * We need to look for branch distance traces that refer to the if statement. A branch distance trace is
-                 * produced for both branches, but we only need to consider those traces that describe the branch that
-                 * couldn't be covered, otherwise we would have actually taken the right branch. Thus, the relevant
-                 * distance traces (we may have visited the if statement multiple times) must contain a distance > 0,
-                 * since a branch with a distance of 0 would have be taken. We simply need to pick the minimum of those
-                 * distance traces. That means, we can ignore a trace with a branch distance of 0 for if statements.
-                 */
-                if (!isSwitchTrace && distance == 0) {
-                    continue;
-                }
 
                 final String method = trace.substring(0, isSwitchTrace ? arrow + 1 - switchStr.length() : arrow - 1);
                 final int instruction = Integer.parseUnsignedInt(trace, arrow + 1, colon, 10);
