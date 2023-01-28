@@ -225,6 +225,15 @@ public final class GraphEndpoint implements Endpoint {
      */
     private String computeApproachLevelAndBranchDistance(final List<Vertex> visitedVertices, final Vertex branchVertex) {
 
+        /*
+        * TODO: There can be multiple vertices with the same minimal distance (approach level) to the given target branch.
+        *  The current implementation simply picks an arbitrary vertex out of those, but this is not ideal. In fact, one
+        *  would need to perform further graph traversals to decide which is the most suited one. Right now we may pick
+        *  a switch or if statement that follows the target branch but not the one that is the direct predecessor (to
+        *  which the target branch is actually attached), see for more details the comments in the method
+        *  combineApproachLevelAndBranchDistance().
+        *
+         */
         int minDistance = Integer.MAX_VALUE;
         Vertex minDistanceVertex = null;
 
@@ -422,6 +431,12 @@ public final class GraphEndpoint implements Endpoint {
      * @param instrumentationPoints The list of instrumentation points, i.e. branch, case, switch and if statements.
      */
     private static void initBranchDistanceCache(final List<String> instrumentationPoints) {
+
+        /*
+        * TODO: Only allocate a branch distance entry for if and case statements since only for those statements a
+        *  branch distance is ever requested. Right now for every IP (branch, case, if and switch) such an entry is
+        *  reserved.
+         */
 
         final Map<String, Set<Short>> indicesPerMethod
                 = instrumentationPoints.stream()
