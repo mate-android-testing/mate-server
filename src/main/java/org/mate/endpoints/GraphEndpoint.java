@@ -156,8 +156,10 @@ public final class GraphEndpoint implements Endpoint {
 
     /**
      * Pre-computes the approach levels between every pair of relevant vertices and branch vertices.
+     *
+     * @param branchVertices The list of branch vertices (targets).
      */
-    private void initApproachLevelCache() {
+    private void initApproachLevelCache(final List<Vertex> branchVertices) {
 
         final var relevantVertices = graph.getVertices()
                 .stream()
@@ -165,7 +167,6 @@ public final class GraphEndpoint implements Endpoint {
                 .toArray(Vertex[]::new);
         final var relevantVerticesCount = relevantVertices.length;
 
-        final var branchVertices = graph.getBranchVertices();
         final var branchVerticesCount = branchVertices.size();
 
         final var relevantVertexToIndex = new HashMap<Vertex, Integer>(relevantVerticesCount);
@@ -836,13 +837,11 @@ public final class GraphEndpoint implements Endpoint {
 
         targetVertex = selectTargetVertex(target);
 
-        if (targetVertex == null) { // only use caches when dealing with multiple targets
-            long start = System.currentTimeMillis();
-            initBranchDistanceCache(getInstrumentationPoints(packageName));
-            initApproachLevelCache();
-            long end = System.currentTimeMillis();
-            Log.println("Pre-Computing approach levels and branch distances took: " + (end - start) + "ms");
-        }
+        long start = System.currentTimeMillis();
+        initBranchDistanceCache(getInstrumentationPoints(packageName));
+        initApproachLevelCache(targetVertex != null ? List.of(targetVertex) : graph.getBranchVertices());
+        long end = System.currentTimeMillis();
+        Log.println("Pre-Computing approach levels and branch distances took: " + (end - start) + "ms");
 
         return new Message("/graph/init");
     }
