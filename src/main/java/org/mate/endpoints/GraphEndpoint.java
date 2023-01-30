@@ -440,6 +440,15 @@ public final class GraphEndpoint implements Endpoint {
         *  for each branch, whether there are multiple predecessors that refer both to an if and switch statement.
          */
 
+        /*
+        * TODO: Theoretically it could happen that a case statement is shared between two switch statements similar to
+        *  the case of a shared branch between an if and a switch statement or two if statements. Since we store the
+        *  branch distance value directly at the case statement in our cache, there is only a entry for potentially two
+        *  distinct branch distance values. We would need to allocate for each switch statement an entry or store the
+        *  branch distance values of the case statements directly within the switch statement similar to if statements.
+        *  However, this would require then some additional addressing to refer to some individual case.
+         */
+
         final Map<String, Set<Short>> indicesPerMethod
                 = instrumentationPoints.stream()
                 .collect(groupingBy(
