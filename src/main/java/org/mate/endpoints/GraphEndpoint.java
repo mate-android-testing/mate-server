@@ -436,7 +436,8 @@ public final class GraphEndpoint implements Endpoint {
         /*
         * TODO: Only allocate a branch distance entry for if and case statements since only for those statements a
         *  branch distance is ever requested. Right now for every IP (branch, case, if and switch) such an entry is
-        *  reserved.
+        *  reserved. Moreover, we could only allocate an entry for a switch branch distance if needed. We can check
+        *  for each branch, whether there are multiple predecessors that refer both to an if and switch statement.
          */
 
         final Map<String, Set<Short>> indicesPerMethod
