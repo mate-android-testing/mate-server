@@ -323,6 +323,31 @@ public final class GraphEndpoint implements Endpoint {
     }
 
     /**
+     * Computes the fitness value for a given chromosome combining approach level + branch distance.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the branch distance information.
+     */
+    private Message getBranchDistance(final Message request) {
+
+        final String packageName = request.getParameter("packageName");
+        final String chromosome = request.getParameter("chromosome");
+        Log.println("Computing the branch distance for the chromosome: " + chromosome);
+
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
+        final var traces = getTraces(packageName, chromosome);
+        final var visitedVertices = mapTracesToVertices(traces);
+        precomputeBranchDistances(traces);
+        final var branchDistance = computeApproachLevelAndBranchDistance(visitedVertices, targetVertex);
+        return new Message.MessageBuilder("/graph/get_branch_distance")
+                .withParameter("branch_distance", branchDistance)
+                .build();
+    }
+
+    /**
      * Computes the branch distance vector for a given chromosome combining approach level + branch distance.
      *
      * @param request The request message.
@@ -1097,9 +1122,7 @@ public final class GraphEndpoint implements Endpoint {
      * @return Returns a message containing the branch distance information.
      */
     @Deprecated
-    private Message getBranchDistance(final Message request) {
-
-        // TODO: Evaluate whether for a single target the pre-computation of approach levels + branch distances make sense.
+    private Message getBranchDistanceOld(final Message request) {
 
         final String packageName = request.getParameter("packageName");
         final String chromosome = request.getParameter("chromosome");
