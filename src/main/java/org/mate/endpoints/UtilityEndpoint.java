@@ -45,19 +45,6 @@ public class UtilityEndpoint implements Endpoint {
                 + request.getSubject() + " can't be handled by UtilityEndpoint!");
     }
 
-    private Message writeFile(Message request) {
-        String content = request.getParameter("content");
-        String fileName = request.getParameter("fileName");
-
-        try {
-            Files.writeString(Path.of("./results/").resolve(fileName), content);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-
-        return new Message.MessageBuilder("/utility/write_file").build();
-    }
-
     /**
      * Fetches a serialized test case from the internal storage and removes
      * the test case afterwards to keep memory clean.
@@ -80,24 +67,31 @@ public class UtilityEndpoint implements Endpoint {
                 .build();
     }
 
+    // TODO: Is this functionality relevant?
     private Message letUserPickOption(Message request) {
-        int numberOfOptions = Integer.parseInt(request.getParameter("options"));
-        String[] options = new String[numberOfOptions];
+
+        final int numberOfOptions = Integer.parseInt(request.getParameter("options"));
+        final String[] options = new String[numberOfOptions];
 
         for (int i = 0; i < numberOfOptions; i++) {
             options[i] = request.getParameter("option_" + i);
         }
 
-        return new Message.MessageBuilder("/utility/let_user_pick").withParameter("picked_option", String.valueOf(letUserPickOption(options))).build();
+        return new Message.MessageBuilder("/utility/let_user_pick")
+                .withParameter("picked_option", String.valueOf(letUserPickOption(options)))
+                .build();
     }
 
+    // TODO: Is this functionality relevant?
     private int letUserPickOption(String[] options) {
-        JDialog dialog = new JDialog((JFrame) null, "Select one",true);
 
-        int[] selected = new int[1];
-        JPanel panel = new JPanel();
+        final JDialog dialog = new JDialog((JFrame) null, "Select one",true);
+
+        final int[] selected = new int[1];
+        final JPanel panel = new JPanel();
         panel.setLayout(new GridLayout(options.length,1));
-        JButton[] buttons = new JButton[options.length];
+        final JButton[] buttons = new JButton[options.length];
+
         for (int i = 0; i < options.length; i++) {
             buttons[i] = new JButton(options[i]);
             int finalI = i;
@@ -115,6 +109,21 @@ public class UtilityEndpoint implements Endpoint {
         dialog.dispose();
 
         return selected[0];
+    }
+
+    // TODO: Is this functionality relevant?
+    private Message writeFile(Message request) {
+
+        final String content = request.getParameter("content");
+        final String fileName = request.getParameter("fileName");
+
+        try {
+            Files.writeString(Path.of("./results/").resolve(fileName), content);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+
+        return new Message.MessageBuilder("/utility/write_file").build();
     }
 
     /**
