@@ -100,7 +100,7 @@ public class Server {
         router.add("/fuzzer", new FuzzerEndpoint(androidEnvironment));
         router.add("/utility", new UtilityEndpoint(androidEnvironment, resultsPath, appsDir));
         router.add("/fitness", new FitnessEndpoint(androidEnvironment, resultsPath, appsDir));
-        router.add("/graph", new GraphEndpoint(androidEnvironment, appsDir));
+        router.add("/graph", new GraphEndpoint(androidEnvironment, resultsPath, appsDir));
 
         cleanup();
         createFolders();

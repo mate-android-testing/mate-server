@@ -160,10 +160,10 @@ public class GraphEndpoint implements Endpoint {
     // TODO: Make utility class.
     private CrashReproductionUtil crashReproductionUtil;
 
-    public GraphEndpoint(AndroidEnvironment androidEnvironment, Path appsDir, Path resultsPath) {
+    public GraphEndpoint(AndroidEnvironment androidEnvironment, Path resultsPath, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
-        this.appsDir = appsDir;
         this.resultsPath = resultsPath;
+        this.appsDir = appsDir;
     }
 
     @Override
