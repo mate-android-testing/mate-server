@@ -18,7 +18,6 @@ import org.jf.dexlib2.util.MethodUtil;
 import org.mate.graphs.InterCFG;
 import org.mate.util.Log;
 
-import java.io.IOException;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -29,7 +28,7 @@ public class CrashReproductionUtil {
     private final List<DexFile> dexFiles;
     private final InterCFG interCFG;
 
-    public CrashReproductionUtil(List<DexFile> dexFiles, InterCFG interCFG) throws IOException {
+    public CrashReproductionUtil(List<DexFile> dexFiles, InterCFG interCFG) {
         this.dexFiles = dexFiles;
         this.interCFG = interCFG;
     }
@@ -192,15 +191,15 @@ public class CrashReproductionUtil {
                 .flatMap(instruction -> Stream.concat(
                         CrashReproductionUtil.getTokensFromInstruction(instruction),
                         getMenuItemFromLine(result.getX(), instruction).stream()
-                                .map(TranslatedMenuItem::getTitle)
+                                .map(MenuItemWithResolvedTitle::getTitle)
                 ));
     }
 
-    private Optional<TranslatedMenuItem> getMenuItemFromLine(Method method, BuilderInstruction instruction) {
+    private Optional<MenuItemWithResolvedTitle> getMenuItemFromLine(Method method, BuilderInstruction instruction) {
         return interCFG.getComponentOfClass(MethodUtils.getClassName(method.toString()), ComponentType.ACTIVITY)
                 .flatMap(c -> {
                     if (c instanceof Activity) {
-                        Map<Method, List<TranslatedMenuItem>> menus = ((Activity) c).getMenus();
+                        Map<Method, List<MenuItemWithResolvedTitle>> menus = ((Activity) c).getMenus();
 
                         // need to resolve on create menu method
                         return Optional.ofNullable(MenuUtils.ITEM_SELECT_METHOD_TO_ON_CREATE_MENU.get(MethodUtils.getMethodName(method)))

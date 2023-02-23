@@ -3,9 +3,9 @@ package org.mate.graphs;
 import de.uni_passau.fim.auermich.android_graphs.core.app.APK;
 import de.uni_passau.fim.auermich.android_graphs.core.app.components.Component;
 import de.uni_passau.fim.auermich.android_graphs.core.app.components.ComponentType;
-import de.uni_passau.fim.auermich.android_graphs.core.calltrees.CallTree;
-import de.uni_passau.fim.auermich.android_graphs.core.calltrees.CallTreeVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.calltree.CallTree;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.calltree.CallTreeVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.ClassHierarchy;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.ClassUtils;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.GraphUtils;
@@ -130,7 +130,8 @@ public class InterCFG extends CFG {
 
     public Vertex findVertexByInstruction(Method method, BuilderInstruction builderInstruction) {
         Set<Vertex> vertices = getVertices().stream()
-                .filter(vertex -> vertex.containsInstruction(method.toString(), builderInstruction.getLocation().getIndex()))
+                .filter(vertex -> vertex.containsInstruction(method.toString(),
+                        builderInstruction.getLocation().getIndex()))
                 .collect(Collectors.toSet());
 
         if (vertices.size() == 1) {

@@ -1,14 +1,14 @@
 package org.mate.graphs;
 
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.Edge;
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.BaseCFG;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.InstructionUtils;
 import org.jgrapht.GraphPath;
-import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
+import org.jgrapht.alg.interfaces.ManyToManyShortestPathsAlgorithm;
 import org.mate.graphs.util.VertexPair;
 import org.mate.util.Log;
 
@@ -19,33 +19,51 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public abstract class CFG implements Graph {
+public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
 
+    /**
+     * The underlying CFG.
+     */
     protected final BaseCFG baseCFG;
+
+    /**
+     * The package name of the AUT, e.g. com.zola.bmi.
+     */
     private final String appName;
 
     // cache the list of branches (the order must be consistent when requesting the branch distance vector)
-    protected List<Vertex> branchVertices;
+    protected List<CFGVertex> branchVertices;
 
-    // the search algorithm (bi-directional dijkstra seems to be the fastest one)
-    private final ShortestPathAlgorithm<Vertex, Edge> dijkstra;
+    /**
+     * The employed shortest path algorithm. For individual vertices the bi-directional dijkstra seems to be the fastest
+     * option, while for resolving the shortest paths between many vertices, the CH many-to-many shortest path algorithm
+     * appears to be the best option.
+     */
+    private final ManyToManyShortestPathsAlgorithm<CFGVertex, CFGEdge> shortestPathAlgorithm;
 
-    // the path to the apps dir
+    /**
+     * The path to the 'apps' folder.
+     */
     protected final Path appsDir;
 
+    /**
+     * Contains the instrumented branches of the AUT. This also includes case statements belonging to switch instructions.
+     */
     private static final String BRANCHES_FILE = "branches.txt";
 
     /**
-     * Contains a mapping between a trace and its vertex within the graph. The mapping
-     * is only defined for traces describing branches, if statements and entry/exit statements.
-     * A look up of single vertices is quite expensive and this map should speed up the mapping process.
+     * Caches a mapping from trace to vertex for the most relevant vertices, e.g. branch, case, if and switch vertices.
      */
-    private Map<String, Vertex> vertexMap;
+    private Map<String, CFGVertex> traceToVertexCache;
 
-    // cache already computed distances to the target vertex
+    /**
+     * Caches already computed distances between two arbitrary vertices. Note that the order of the vertex pair doesn't
+     * matter.
+     */
     private final Map<VertexPair, Integer> cachedDistances = new ConcurrentHashMap<>();
 
     /**
@@ -59,10 +77,10 @@ public abstract class CFG implements Graph {
         this.baseCFG = baseCFG;
         this.appName = appName;
         this.appsDir = appsDir;
-        this.vertexMap = new HashMap<>();
+        this.traceToVertexCache = new HashMap<>(); // pre-init for initBranchVertices()!
         branchVertices = initBranchVertices();
-        dijkstra = baseCFG.initBidirectionalDijkstraAlgorithm();
-        vertexMap = initVertexMap();
+        shortestPathAlgorithm = baseCFG.initCHManyToManyShortestPathAlgorithm();
+        traceToVertexCache = initTraceToVertexCache();
     }
 
     /**
@@ -70,7 +88,7 @@ public abstract class CFG implements Graph {
      *
      * @return Returns the branch vertices.
      */
-    private List<Vertex> initBranchVertices() {
+    private List<CFGVertex> initBranchVertices() {
 
         Path appDir = appsDir.resolve(appName);
         File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
@@ -81,7 +99,8 @@ public abstract class CFG implements Graph {
             // hopefully this preserves the order (remove blank line at end)
             branches.addAll(stream.filter(line -> line.length() > 0).collect(Collectors.toList()));
         } catch (IOException e) {
-            Log.printWarning("Reading branches.txt failed!");
+            Log.printError("Reading " + BRANCHES_FILE + " failed!");
+            throw new IllegalStateException(e);
         }
 
         return mapBranchesToVertices(branches);
@@ -93,15 +112,15 @@ public abstract class CFG implements Graph {
      * @param branches The list of branches that should be mapped to vertices.
      * @return Returns the branch vertices.
      */
-    private List<Vertex> mapBranchesToVertices(List<String> branches) {
+    private List<CFGVertex> mapBranchesToVertices(List<String> branches) {
 
         long start = System.currentTimeMillis();
 
-        List<Vertex> branchVertices = Collections.synchronizedList(new ArrayList<>());
+        List<CFGVertex> branchVertices = Collections.synchronizedList(new ArrayList<>());
 
         branches.parallelStream().forEach(branch -> {
 
-            Vertex branchVertex = lookupVertex(branch);
+            CFGVertex branchVertex = lookupVertex(branch);
 
             if (branchVertex == null) {
                 Log.printWarning("Couldn't derive vertex for branch: " + branch);
@@ -130,8 +149,8 @@ public abstract class CFG implements Graph {
      * @return Returns whether the given vertex is reachable or not.
      */
     @Override
-    public boolean isReachable(Vertex vertex) {
-        return dijkstra.getPath(baseCFG.getEntry(), vertex) != null;
+    public boolean isReachable(CFGVertex vertex) {
+        return shortestPathAlgorithm.getPath(baseCFG.getEntry(), vertex) != null;
     }
 
     /**
@@ -140,7 +159,7 @@ public abstract class CFG implements Graph {
      * @return Returns all vertices in the graph.
      */
     @Override
-    public List<Vertex> getVertices() {
+    public List<CFGVertex> getVertices() {
         return new ArrayList<>(baseCFG.getVertices());
     }
 
@@ -154,6 +173,7 @@ public abstract class CFG implements Graph {
 
     /**
      * Draws the graph where target and visited vertices are marked in different colors:
+     *
      * The visited vertices get marked in green.
      * The uncovered target vertices get marked in red.
      * The covered target vertices get marked in orange.
@@ -163,8 +183,30 @@ public abstract class CFG implements Graph {
      * @param targets         The list of target vertices.
      */
     @Override
-    public void draw(File outputPath, Set<Vertex> visitedVertices, Set<Vertex> targets) {
+    public void draw(File outputPath, Set<CFGVertex> visitedVertices, Set<CFGVertex> targets) {
         baseCFG.drawGraph(outputPath, visitedVertices, targets);
+    }
+
+    /**
+     * Gets the outgoing edges from the given vertex.
+     *
+     * @param vertex The vertex for which the outgoing edges should be derived.
+     * @return Returns the outgoing edges from the given vertex.
+     */
+    @Override
+    public Set<CFGEdge> getOutgoingEdges(CFGVertex vertex) {
+        return baseCFG.getOutgoingEdges(vertex);
+    }
+
+    /**
+     * Gets the incoming edges from the given vertex.
+     *
+     * @param vertex The vertex for which the incoming edges should be derived.
+     * @return Returns the incoming edges from the given vertex.
+     */
+    @Override
+    public Set<CFGEdge> getIncomingEdges(CFGVertex vertex) {
+        return baseCFG.getIncomingEdges(vertex);
     }
 
     /**
@@ -172,27 +214,27 @@ public abstract class CFG implements Graph {
      *
      * @return Returns a mapping between a trace and its vertex in the graph.
      */
-    private Map<String, Vertex> initVertexMap() {
+    private Map<String, CFGVertex> initTraceToVertexCache() {
 
         long start = System.currentTimeMillis();
 
-        Map<String, Vertex> vertexMap = new HashMap<>();
+        Map<String, CFGVertex> traceToVertexCache = new HashMap<>();
 
         // handle entry vertices
-        Set<Vertex> entryVertices = baseCFG.getVertices().stream().filter(Vertex::isEntryVertex).collect(Collectors.toSet());
+        Set<CFGVertex> entryVertices = baseCFG.getVertices().stream().filter(CFGVertex::isEntryVertex).collect(Collectors.toSet());
 
-        for (Vertex entryVertex : entryVertices) {
+        for (CFGVertex entryVertex : entryVertices) {
             // exclude global entry vertex
             if (!entryVertex.equals(baseCFG.getEntry())) {
 
                 // virtual entry vertex
-                vertexMap.put(entryVertex.getMethod() + "->entry", entryVertex);
+                traceToVertexCache.put(entryVertex.getMethod() + "->entry", entryVertex);
 
                 // there are potentially several entry vertices when dealing with try-catch blocks at the beginning
-                Set<Vertex> entries = baseCFG.getOutgoingEdges(entryVertex).stream()
-                        .map(Edge::getTarget).collect(Collectors.toSet());
+                Set<CFGVertex> entries = baseCFG.getOutgoingEdges(entryVertex).stream()
+                        .map(CFGEdge::getTarget).collect(Collectors.toSet());
 
-                for (Vertex entry : entries) {
+                for (CFGVertex entry : entries) {
                     // exclude dummy CFGs solely consisting of entry and exit vertex
                     if (!entry.isExitVertex()) {
                         Statement statement = entry.getStatement();
@@ -201,7 +243,7 @@ public abstract class CFG implements Graph {
                         if (statement instanceof BlockStatement) {
                             // each statement within a block statement is a basic statement
                             BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
-                            vertexMap.put(entry.getMethod() + "->entry->" + basicStatement.getInstructionIndex(), entry);
+                            traceToVertexCache.put(entry.getMethod() + "->entry->" + basicStatement.getInstructionIndex(), entry);
                         }
                     }
                 }
@@ -209,19 +251,19 @@ public abstract class CFG implements Graph {
         }
 
         // handle exit vertices
-        Set<Vertex> exitVertices = baseCFG.getVertices().stream().filter(Vertex::isExitVertex).collect(Collectors.toSet());
+        Set<CFGVertex> exitVertices = baseCFG.getVertices().stream().filter(CFGVertex::isExitVertex).collect(Collectors.toSet());
 
-        for (Vertex exitVertex : exitVertices) {
+        for (CFGVertex exitVertex : exitVertices) {
             // exclude global exit vertex
             if (!exitVertex.equals(baseCFG.getExit())) {
 
                 // virtual exit vertex
-                vertexMap.put(exitVertex.getMethod() + "->exit", exitVertex);
+                traceToVertexCache.put(exitVertex.getMethod() + "->exit", exitVertex);
 
-                Set<Vertex> exits = baseCFG.getIncomingEdges(exitVertex).stream()
-                        .map(Edge::getSource).collect(Collectors.toSet());
+                Set<CFGVertex> exits = baseCFG.getIncomingEdges(exitVertex).stream()
+                        .map(CFGEdge::getSource).collect(Collectors.toSet());
 
-                for (Vertex exit : exits) {
+                for (CFGVertex exit : exits) {
                     // exclude dummy CFGs solely consisting of entry and exit vertex
                     if (!exit.isEntryVertex()) {
                         Statement statement = exit.getStatement();
@@ -230,33 +272,38 @@ public abstract class CFG implements Graph {
                         if (statement instanceof BlockStatement) {
                             // each statement within a block statement is a basic statement
                             BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
-                            vertexMap.put(exit.getMethod() + "->exit->" + basicStatement.getInstructionIndex(), exit);
+                            traceToVertexCache.put(exit.getMethod() + "->exit->" + basicStatement.getInstructionIndex(), exit);
                         }
                     }
                 }
             }
         }
 
-        // handle branch + if stmt vertices
-        for (Vertex branchVertex : branchVertices) {
+        // handle branch + if and switch stmt vertices
+        for (CFGVertex branchVertex : branchVertices) {
 
             // a branch can potentially have multiple predecessors (shared branch)
-            Set<Vertex> ifVertices = baseCFG.getIncomingEdges(branchVertex).stream()
-                    .map(Edge::getSource).filter(Vertex::isIfVertex).collect(Collectors.toSet());
+            Set<CFGVertex> ifOrSwitchVertices = baseCFG.getIncomingEdges(branchVertex).stream()
+                    .map(CFGEdge::getSource).filter(CFGVertex::isIfVertex).collect(Collectors.toSet());
 
-            for (Vertex ifVertex : ifVertices) {
+            // if or switch vertex
+            for (CFGVertex ifOrSwitchVertex : ifOrSwitchVertices) {
 
-                Statement statement = ifVertex.getStatement();
+                Statement statement = ifOrSwitchVertex.getStatement();
 
                 // TODO: handle basic statements
                 if (statement instanceof BlockStatement) {
                     // the last statement is always a basic statement of an if vertex
                     BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
                     if (InstructionUtils.isBranchingInstruction(basicStatement.getInstruction())) {
-                        vertexMap.put(ifVertex.getMethod() + "->if->" + basicStatement.getInstructionIndex(), ifVertex);
+                        traceToVertexCache.put(ifOrSwitchVertex.getMethod()
+                                + "->if->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
+                    } else if (InstructionUtils.isSwitchInstruction(basicStatement.getInstruction())) {
+                        traceToVertexCache.put(ifOrSwitchVertex.getMethod()
+                                + "->switch->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
                     }
                     else {
-                        Log.printWarning("Unexpected block statement: " + statement + " for method " + ifVertex.getMethod());
+                        Log.printWarning("Unexpected block statement: " + statement + " for method " + ifOrSwitchVertex.getMethod());
                     }
                 }
             }
@@ -267,24 +314,24 @@ public abstract class CFG implements Graph {
             if (statement instanceof BlockStatement) {
                 // each statement within a block statement is a basic statement
                 BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
-                vertexMap.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
+                traceToVertexCache.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
             }
         }
 
         long end = System.currentTimeMillis();
-        Log.println("VertexMap construction took: " + (end - start) + " ms.");
-        Log.println("Size of VertexMap: " + vertexMap.size());
+        Log.println("TraceToVertexCache construction took: " + (end - start) + " ms.");
+        Log.println("Size of TraceToVertexCache: " + traceToVertexCache.size());
 
-        return vertexMap;
+        return traceToVertexCache;
     }
 
     /**
-     * Returns the branch vertices that could be instrumented.
+     * Returns the branch vertices that could be instrumented. This includes case statements.
      *
      * @return Returns the branch vertices.
      */
     @Override
-    public List<Vertex> getBranchVertices() {
+    public List<CFGVertex> getBranchVertices() {
         return Collections.unmodifiableList(branchVertices);
     }
 
@@ -292,16 +339,14 @@ public abstract class CFG implements Graph {
      * Looks up a trace corresponding to a vertex in the graph.
      *
      * @param trace The trace describing the vertex.
-     * @return Returns the vertex corresponding to the trace
-     * or {@code null} if no vertex matches the trace.
+     * @return Returns the vertex corresponding to the trace or {@code null} if no vertex matches the trace.
      */
     @Override
-    public Vertex lookupVertex(String trace) {
-        if (vertexMap.containsKey(trace)) {
-            return vertexMap.get(trace);
+    public CFGVertex lookupVertex(String trace) {
+        if (traceToVertexCache.containsKey(trace)) {
+            return traceToVertexCache.get(trace);
         } else {
             try {
-                Log.println("Non cached vertex lookup for trace: " + trace);
                 return baseCFG.lookUpVertex(trace);
             } catch (Exception e) {
                 Log.printWarning(e.getMessage());
@@ -310,11 +355,16 @@ public abstract class CFG implements Graph {
         }
     }
 
+    /**
+     * Returns the shortest path distance between the given source and target vertex.
+     *
+     * @param source The given source vertex.
+     * @param target The given target vertex.
+     * @return Returns the shortest path distance between the given source and target vertex. If no such path exists,
+     *          a negative distance of {@code -1} is returned.
+     */
     @Override
-    public int getDistance(Vertex source, Vertex target) {
-
-        assert baseCFG.containsVertex(source)
-                && baseCFG.containsVertex(target) : "source and target vertex must be part of graph!";
+    public int getDistance(CFGVertex source, CFGVertex target) {
 
         VertexPair distancePair = new VertexPair(source, target);
 
@@ -322,8 +372,7 @@ public abstract class CFG implements Graph {
             return cachedDistances.get(distancePair);
         }
 
-        // TODO: adjust path search algorithm (dijkstra, bfs, ...)
-        GraphPath<Vertex, Edge> path = dijkstra.getPath(source, target);
+        GraphPath<CFGVertex, CFGEdge> path = shortestPathAlgorithm.getPath(source, target);
 
         // a negative path length indicates that there is no path between the given vertices
         int distance = path != null ? path.getLength() : -1;
@@ -334,11 +383,39 @@ public abstract class CFG implements Graph {
         return distance;
     }
 
+    /**
+     * Returns the shortest path distances between the given source and target vertices.
+     *
+     * @param sources The set of source vertices.
+     * @param targets The set of target vertices.
+     * @return Returns the shortest path distances between the given source and target vertices. If no path between a
+     *          source and target vertex exists, a negative distance of {@code -1} is returned.
+     */
+    @Override
+    public BiFunction<CFGVertex, CFGVertex, Integer> getDistances(final Set<CFGVertex> sources, final Set<CFGVertex> targets) {
+        final var distances
+                = shortestPathAlgorithm.getManyToManyPaths(sources, targets);
+        return (s, t) -> {
+            final var path = distances.getPath(s, t);
+            return path != null ? path.getLength() : -1;
+        };
+    }
+
+    /**
+     * Returns the size of the CFG in terms of the number of vertices.
+     *
+     * @return Returns the number of vertices of the CFG.
+     */
     @Override
     public int size() {
         return baseCFG.size();
     }
 
+    /**
+     * Returns the package name of the AUT.
+     *
+     * @return Returns the package name of the AUT.
+     */
     @Override
     public String getAppName() {
         return appName;
