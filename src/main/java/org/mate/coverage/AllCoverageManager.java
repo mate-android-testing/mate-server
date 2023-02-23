@@ -3,9 +3,7 @@ package org.mate.coverage;
 import com.google.common.collect.Lists;
 import org.apache.commons.io.FileUtils;
 import org.mate.io.Device;
-import org.mate.io.ProcessRunner;
 import org.mate.network.message.Message;
-import org.mate.network.message.Messages;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
 
@@ -21,48 +19,48 @@ import java.util.stream.Collectors;
 public class AllCoverageManager {
 
     /**
+     * The name of the file that contains all the instrumented blocks.
+     */
+    private static final String BLOCKS_FILE = "blocks.txt";
+
+    /**
+     * The name of the directory where the traces have been stored.
+     */
+    private static final String TRACES_DIR = "traces";
+
+    /**
+     * The total number of instructions.
+     */
+    private static Integer numberOfInstructions = null;
+
+    /**
+     * The total number of branches.
+     */
+    private static Integer numberOfBranches = null;
+
+    /**
+     * The total number of methods.
+     */
+    private static Integer numberOfMethods = null;
+
+    /**
      * Stores the 'all coverage' data for a chromosome, which can be either a test case or a test suite.
      * <p>
      * First, a broadcast is sent to the AUT in order to write out a traces.txt file on the external storage.
      * Second, this traces.txt is pulled from the emulator and saved on a pre-defined location (app directory/traces).
      *
      * @param androidEnvironment Defines the location of the adb/aapt binary.
-     * @param deviceID           The id of the emulator, e.g. emulator-5554.
-     * @param packageName        The package name of the AUT.
-     * @param chromosome         Identifies either a test case or a test suite.
-     * @param entity             Identifies a test case if chromosome refers to
-     *                           a test suite, otherwise {@code null}.
+     * @param deviceID The id of the emulator, e.g. emulator-5554.
+     * @param chromosome Identifies either a test case or a test suite.
+     * @param entity Identifies a test case if chromosome refers to
+     *         a test suite, otherwise {@code null}.
      * @return Returns an empty message.
      */
-    public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID, String packageName,
+    public static Message storeCoverageData(AndroidEnvironment androidEnvironment, String deviceID,
                                             String chromosome, String entity) {
 
-        // grant runtime permissions
         Device device = Device.devices.get(deviceID);
-        boolean granted = device.grantPermissions(packageName);
-
-        if (!granted) {
-            throw new IllegalStateException("Couldn't grant runtime permissions!");
-        }
-
-        // send broadcast in order to write out traces
-        var broadcastOperation = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(),
-                "-s",
-                deviceID,
-                "shell",
-                "am",
-                "broadcast",
-                "-a",
-                "STORE_TRACES",
-                "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
-
-        if (broadcastOperation.isErr()) {
-            throw new IllegalStateException("Couldn't send broadcast!");
-        }
-
-        device.pullTraceFile(chromosome, entity);
+        device.pullTraces(chromosome, entity);
         return new Message("/coverage/store");
     }
 
@@ -77,28 +75,21 @@ public class AllCoverageManager {
 
         // get list of traces file
         File appDir = new File(appsDir.toFile(), packageName);
-        File tracesDir = new File(appDir, "traces");
+        File tracesDir = new File(appDir, TRACES_DIR);
 
         // the blocks.txt should be located within the app directory
-        File blocksFile = new File(appDir, "blocks.txt");
+        File blocksFile = new File(appDir, BLOCKS_FILE);
 
         // only consider the traces files described by the chromosome ids
         List<File> tracesFiles = getTraceFiles(tracesDir, chromosomes);
 
         // evaluate 'all coverage' over all traces files
-        List<Double> coverage = null;
-
-        try {
-            coverage = evaluateCoverage(blocksFile, tracesFiles);
-        } catch (IOException e) {
-            Log.printError(e.getMessage());
-            throw new IllegalStateException("'All coverage' couldn't be evaluated!");
-        }
+        CoverageDTO coverage = evaluateCoverage(blocksFile, tracesFiles);
 
         return new Message.MessageBuilder("/coverage/combined")
-                .withParameter("method_coverage", String.valueOf(coverage.get(0)))
-                .withParameter("branch_coverage", String.valueOf(coverage.get(1)))
-                .withParameter("line_coverage", String.valueOf(coverage.get(2)))
+                .withParameter("method_coverage", String.valueOf(coverage.getMethodCoverage()))
+                .withParameter("branch_coverage", String.valueOf(coverage.getBranchCoverage()))
+                .withParameter("line_coverage", String.valueOf(coverage.getLineCoverage()))
                 .build();
     }
 
@@ -106,26 +97,25 @@ public class AllCoverageManager {
      * Copies the coverage data, i.e. traces of test cases, specified through the list of entities
      * from the source chromosome (test suite) to the target chromosome (test suite).
      *
-     * @param appsDir          The apps directory containing all app directories.
-     * @param packageName      The package name of the AUT.
+     * @param appsDir The apps directory containing all app directories.
+     * @param packageName The package name of the AUT.
      * @param sourceChromosome The source chromosome (test suite).
      * @param targetChromosome The target chromosome (test suite).
-     * @param entities         A list of test cases.
+     * @param entities A list of test cases.
      * @return Returns a message describing the success/failure of the operation.
      */
     public static Message copyCoverageData(Path appsDir, String packageName, String sourceChromosome,
                                            String targetChromosome, String[] entities) {
 
         File appDir = new File(appsDir.toFile(), packageName);
-        File tracesDir = new File(appDir, "traces");
+        File tracesDir = new File(appDir, TRACES_DIR);
 
         File srcDir = new File(tracesDir, sourceChromosome);
         File targetDir = new File(tracesDir, targetChromosome);
 
         if (!targetDir.mkdirs() && !targetDir.isDirectory()) {
             final var errorMsg = "Chromosome copy failed: target directory could not be created.";
-            Log.printError(errorMsg);
-            return Messages.errorMessage(errorMsg);
+            throw new IllegalStateException(errorMsg);
         }
         for (String entity : entities) {
 
@@ -139,8 +129,7 @@ public class AllCoverageManager {
             } catch (IOException e) {
                 final var errorMsg = "Chromosome copy failed: entity " + entity + " could not be copied from "
                         + srcDir + " to " + targetDir;
-                Log.printError(errorMsg);
-                return Messages.errorMessage(errorMsg);
+                throw new IllegalStateException(errorMsg, e);
             }
         }
         return new Message("/coverage/copy");
@@ -149,50 +138,44 @@ public class AllCoverageManager {
     /**
      * Computes the 'all coverage' of a single test case within a test suite.
      *
-     * @param appsDir      The apps directory.
-     * @param packageName  The package name of the AUT.
-     * @param testSuiteId  The id of the test suite.
-     * @param testCaseId   The id of the test case.
+     * @param appsDir The apps directory.
+     * @param packageName The package name of the AUT.
+     * @param testSuiteId The id of the test suite.
+     * @param testCaseId The id of the test case.
      * @return Returns the 'all coverage' for the given test case.
      */
     public static Message getCoverage(Path appsDir, String packageName, String testSuiteId, String testCaseId) {
 
         // get list of traces file
         File appDir = new File(appsDir.toFile(), packageName);
-        File tracesDir = new File(appDir, "traces");
+        File tracesDir = new File(appDir, TRACES_DIR);
 
         // the blocks.txt should be located within the app directory
-        File blocksFile = new File(appDir, "blocks.txt");
+        File blocksFile = new File(appDir, BLOCKS_FILE);
 
         // the trace file corresponding to the test case within the given test suite
         File traceFile = tracesDir.toPath().resolve(testSuiteId).resolve(testCaseId).toFile();
 
         // evaluate 'all coverage' over all traces files
-        List<Double> coverage = null;
-
-        try {
-            coverage = evaluateCoverage(blocksFile, Lists.newArrayList(traceFile));
-        } catch (IOException e) {
-            Log.printError(e.getMessage());
-            throw new IllegalStateException("'All coverage' couldn't be evaluated!");
-        }
+        CoverageDTO coverage = evaluateCoverage(blocksFile, Lists.newArrayList(traceFile));
 
         return new Message.MessageBuilder("/coverage/get")
-                .withParameter("method_coverage", String.valueOf(coverage.get(0)))
-                .withParameter("branch_coverage", String.valueOf(coverage.get(1)))
-                .withParameter("line_coverage", String.valueOf(coverage.get(2)))
+                .withParameter("method_coverage", String.valueOf(coverage.getMethodCoverage()))
+                .withParameter("branch_coverage", String.valueOf(coverage.getBranchCoverage()))
+                .withParameter("line_coverage", String.valueOf(coverage.getLineCoverage()))
                 .build();
     }
 
     /**
-     * Evaluates the 'all coverage' for a given set of traces files.
+     * Evaluates the 'all coverage' for a given set of traces files. Reports coverage stats on a per class basis.
      *
      * @param basicBlocksFile The blocks.txt file listing for each class the basic blocks.
-     * @param tracesFiles     The set of traces file.
+     * @param tracesFiles The set of traces file.
      * @return Returns a list containing the method, branch and line coverage.
      * @throws IOException Should never happen.
      */
-    private static List<Double> evaluateCoverage(File basicBlocksFile, List<File> tracesFiles) throws IOException {
+    @SuppressWarnings("unused")
+    private static CoverageDTO evaluateCoverageDetailed(File basicBlocksFile, List<File> tracesFiles) throws IOException {
 
         Log.println("BasicBlocksFile: " + basicBlocksFile + "[" + basicBlocksFile.exists() + "]");
 
@@ -200,11 +183,142 @@ public class AllCoverageManager {
             Log.println("TracesFile: " + tracesFile + "[" + tracesFile.exists() + "]");
         }
 
-        List<Double> coverage = new ArrayList<>(3);
-        coverage.add(evaluateMethodCoverage(basicBlocksFile, tracesFiles));
-        coverage.add(evaluateBranchCoverage(basicBlocksFile, tracesFiles));
-        coverage.add(evaluateLineCoverage(basicBlocksFile, tracesFiles));
+        CoverageDTO coverage = new CoverageDTO();
+        coverage.setMethodCoverage(evaluateMethodCoverage(basicBlocksFile, tracesFiles));
+        coverage.setBranchCoverage(evaluateBranchCoverage(basicBlocksFile, tracesFiles));
+        coverage.setLineCoverage(evaluateLineCoverage(basicBlocksFile, tracesFiles));
         return coverage;
+    }
+
+    /**
+     * Reads the blocks.txt file and computes the total number of methods, branches and instructions.
+     *
+     * @param basicBlocksFile The blocks.txt file.
+     */
+    private static void readBlocksFile(File basicBlocksFile) {
+
+        numberOfInstructions = 0;
+        numberOfBranches = 0;
+        numberOfMethods = 0;
+
+        final Set<String> methods = new HashSet<>();
+
+        try (var blocksReader = new BufferedReader(new InputStreamReader(new FileInputStream(basicBlocksFile)))) {
+
+            // an entry looks as follows: class name -> method name -> block id -> block size -> isBranch
+            String block;
+            while ((block = blocksReader.readLine()) != null) {
+
+                final String[] tuple = block.split("->");
+                if (tuple.length == 5) {
+
+                    final String method = tuple[0].trim() + "->" + tuple[1].trim();
+                    final int blockSize = Integer.parseInt(tuple[3].trim());
+                    final boolean isBranch = tuple[4].equals("isBranch");
+
+                    if (methods.add(method)) {
+                        // we deal with a new method
+                        numberOfMethods++;
+                    }
+
+                    numberOfInstructions += blockSize;
+
+                    if (isBranch) {
+                        numberOfBranches++;
+                    }
+                } else {
+                    Log.println("Malformed entry in " + basicBlocksFile + ": " + block);
+                }
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Couldn't read from " + basicBlocksFile + "!", e);
+        } finally {
+            methods.clear(); // give free for garbage collection
+        }
+    }
+
+    /**
+     * Evaluates the 'all coverage' for a given set of traces files.
+     *
+     * @param basicBlocksFile The blocks.txt file listing for each class the basic blocks.
+     * @param tracesFiles The set of traces file.
+     * @return Returns a coverage dto containing method, branch and line coverage information.
+     */
+    private static CoverageDTO evaluateCoverage(File basicBlocksFile, List<File> tracesFiles) {
+
+        Log.println(String.format("BasicBlocksFile: %s [Exists: %b]", basicBlocksFile, basicBlocksFile.exists()));
+
+        for (File tracesFile : tracesFiles) {
+            Log.println(String.format("TracesFile: %s [Exists: %b]", tracesFile, tracesFile.exists()));
+        }
+
+        if (numberOfInstructions == null) {
+            // we only need to read the blocks.txt file once
+            readBlocksFile(basicBlocksFile);
+        }
+
+        int numberOfCoveredMethods = 0;
+        int numberOfCoveredBranches = 0;
+        int numberOfCoveredInstructions = 0;
+
+        final Set<String> coveredTraces = new HashSet<>();
+        final Set<String> coveredMethods = new HashSet<>();
+
+        for (var traceFile : tracesFiles) {
+            try (var tracesReader = new BufferedReader(new InputStreamReader(new FileInputStream(traceFile)))) {
+
+                // a trace looks as follows: class name -> method name -> block id -> block size -> isBranch
+                String trace;
+                while ((trace = tracesReader.readLine()) != null) {
+
+                    if (coveredTraces.add(trace)) {
+                        // we deal with a new trace
+
+                        final String[] tuple = trace.split("->");
+                        if (tuple.length == 5) {
+
+                            final String method = tuple[0].trim() + "->" + tuple[1].trim();
+                            final int blockSize = Integer.parseInt(tuple[3].trim());
+                            final boolean isBranch = tuple[4].equals("isBranch");
+
+                            numberOfCoveredInstructions += blockSize;
+
+                            if (coveredMethods.add(method)) {
+                                numberOfCoveredMethods++;
+                            }
+
+                            if (isBranch) {
+                                numberOfCoveredBranches++;
+                            }
+                        } else {
+                            Log.println("Malformed trace in " + traceFile + ": " + trace);
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException("Couldn't read from " + traceFile + "!", e);
+            }
+        }
+
+        // give free for garbage collection
+        coveredMethods.clear();
+        coveredTraces.clear();
+
+        CoverageDTO coverageDTO = new CoverageDTO();
+
+        double methodCoverage = (double) numberOfCoveredMethods / numberOfMethods * 100;
+        coverageDTO.setMethodCoverage(methodCoverage);
+        Log.println("We have a total method coverage of " + methodCoverage + "%.");
+
+        double branchCoverage = (double) numberOfCoveredBranches / numberOfBranches * 100;
+        coverageDTO.setBranchCoverage(branchCoverage);
+        Log.println("We have a total branch coverage of " + branchCoverage + "%");
+
+        double lineCoverage = (double) numberOfCoveredInstructions / numberOfInstructions * 100;
+        coverageDTO.setLineCoverage(lineCoverage);
+        Log.println("We have a total line coverage of " + lineCoverage + "%");
+
+        return coverageDTO;
     }
 
     /**
@@ -212,7 +326,7 @@ public class AllCoverageManager {
      * a single test case as well as the combined coverage.
      *
      * @param basicBlocksFile The blocks.txt file listing for each class the number of branches.
-     * @param tracesFiles     The set of traces file.
+     * @param tracesFiles The set of traces file.
      * @return Returns the method coverage for a single test case or the combined coverage.
      * @throws IOException Should never happen.
      */
@@ -251,7 +365,7 @@ public class AllCoverageManager {
      * single test case as well as the combined coverage.
      *
      * @param basicBlocksFile The blocks.txt file listing for each class the number of branches.
-     * @param tracesFiles     The set of traces file.
+     * @param tracesFiles The set of traces file.
      * @return Returns the line coverage for a single test case or the combined coverage.
      * @throws IOException Should never happen.
      */
@@ -281,7 +395,7 @@ public class AllCoverageManager {
      * single test case as well as the combined coverage.
      *
      * @param basicBlocksFile The blocks.txt file listing for each class the number of branches.
-     * @param tracesFiles     The set of traces file.
+     * @param tracesFiles The set of traces file.
      * @return Returns the branch coverage for a single test case or the combined coverage.
      * @throws IOException Should never happen.
      */
@@ -321,13 +435,10 @@ public class AllCoverageManager {
         try (var blocksReader = new BufferedReader(new InputStreamReader(new FileInputStream(blocksFile)))) {
 
             // an entry looks as follows: class name -> method name -> block id -> block size -> isBranch
-            String line;
-            while ((line = blocksReader.readLine()) != null) {
-                if (line.isBlank()) {
-                    continue;
-                }
+            String block;
+            while ((block = blocksReader.readLine()) != null) {
 
-                final String[] tokens = line.split("->");
+                final String[] tokens = block.split("->");
                 final String clazz = tokens[0];
                 final String method = tokens[1];
                 final String methodSignature = clazz + "->" + method;
@@ -357,13 +468,13 @@ public class AllCoverageManager {
         final Set<String> coveredMethods = new HashSet<>();
 
         for (var traceFile : tracesFiles) {
-            try (var branchesReader = new BufferedReader(new InputStreamReader(new FileInputStream(traceFile)))) {
+            try (var tracesReader = new BufferedReader(new InputStreamReader(new FileInputStream(traceFile)))) {
 
                 // a trace looks as follows: class name -> method name -> basic block id (instruction index)
                 // -> number of instructions of block -> isBranch
-                String line;
-                while ((line = branchesReader.readLine()) != null) {
-                    final String[] tuple = line.split("->");
+                String trace;
+                while ((trace = tracesReader.readLine()) != null) {
+                    final String[] tuple = trace.split("->");
                     if (tuple.length == 5) {
 
                         final String clazz = tuple[0].trim();
@@ -378,7 +489,7 @@ public class AllCoverageManager {
                             coveredMethodsPerClass.merge(clazz, 1, Integer::sum);
                         }
                     } else {
-                        Log.printWarning("Found incomplete line \"" + line + "\" in traces file \""
+                        Log.printWarning("Found incomplete line \"" + trace + "\" in traces file \""
                                 + traceFile + "\"");
                     }
                 }
@@ -401,10 +512,10 @@ public class AllCoverageManager {
         try (var blocksReader = new BufferedReader(new InputStreamReader(new FileInputStream(blocksFile)))) {
 
             // an entry looks as follows: class name -> method name -> block id -> block size -> isBranch
-            String line;
-            while ((line = blocksReader.readLine()) != null) {
+            String block;
+            while ((block = blocksReader.readLine()) != null) {
 
-                final String[] tokens = line.split("->");
+                final String[] tokens = block.split("->");
                 final String clazz = tokens[0];
                 boolean isBranch = tokens[4].equals("isBranch");
 
@@ -430,13 +541,13 @@ public class AllCoverageManager {
         // stores a mapping of class -> (method -> basic block id) where a basic block can only contain a single branch!
         final Map<String, Map<String, Set<Integer>>> coveredBranches = new HashMap<>();
         for (var traceFile : tracesFiles) {
-            try (var branchesReader = new BufferedReader(new InputStreamReader(new FileInputStream(traceFile)))) {
+            try (var tracesReader = new BufferedReader(new InputStreamReader(new FileInputStream(traceFile)))) {
 
                 // a trace looks as follows: class name -> method name -> basic block id (instruction index)
                 // -> number of instructions of block -> isBranch
-                String line;
-                while ((line = branchesReader.readLine()) != null) {
-                    final String[] tuple = line.split("->");
+                String trace;
+                while ((trace = tracesReader.readLine()) != null) {
+                    final String[] tuple = trace.split("->");
                     if (tuple.length == 5) {
 
                         final String clazz = tuple[0].trim();
@@ -451,7 +562,7 @@ public class AllCoverageManager {
                             coveredBranches.get(clazz).get(method).add(blockId);
                         }
                     } else {
-                        Log.printWarning("Found incomplete line \"" + line + "\" in traces file \""
+                        Log.printWarning("Found incomplete line \"" + trace + "\" in traces file \""
                                 + traceFile + "\"");
                     }
                 }
@@ -478,14 +589,14 @@ public class AllCoverageManager {
         // stores a mapping of class -> (method -> (basic block -> number of instructions of block))
         final Map<String, Map<String, Map<Integer, Integer>>> coveredInstructions = new HashMap<>();
 
-        for (final var path : tracesFiles) {
-            try (var traceReader = new BufferedReader(new InputStreamReader(new FileInputStream(path)))) {
+        for (final var traceFile : tracesFiles) {
+            try (var tracesReader = new BufferedReader(new InputStreamReader(new FileInputStream(traceFile)))) {
 
                 // a trace looks as follows: class name -> method name -> basic block id (instruction index)
                 // -> number of instructions of block -> isBranch
-                String line;
-                while ((line = traceReader.readLine()) != null) {
-                    final String[] tuple = line.split("->");
+                String trace;
+                while ((trace = tracesReader.readLine()) != null) {
+                    final String[] tuple = trace.split("->");
                     if (tuple.length == 5) {
 
                         final String clazz = tuple[0].trim();
@@ -498,7 +609,7 @@ public class AllCoverageManager {
                         coveredInstructions.get(clazz).putIfAbsent(method, new HashMap<>());
                         coveredInstructions.get(clazz).get(method).putIfAbsent(blockId, count);
                     } else {
-                        Log.printWarning("Found incomplete line \"" + line + "\" in traces file \"" + path.toString() + "\"");
+                        Log.printWarning("Found incomplete line \"" + trace + "\" in traces file \"" + traceFile.toString() + "\"");
                     }
                 }
             }
@@ -529,10 +640,10 @@ public class AllCoverageManager {
         try (var blocksReader = new BufferedReader(new InputStreamReader(new FileInputStream(blocksFile)))) {
 
             // an entry looks as follows: class name -> method name -> block id -> block size -> isBranch
-            String line;
-            while ((line = blocksReader.readLine()) != null) {
+            String block;
+            while ((block = blocksReader.readLine()) != null) {
 
-                final String[] tokens = line.split("->");
+                final String[] tokens = block.split("->");
                 final String clazz = tokens[0];
                 final int instructionCount = Integer.parseInt(tokens[3]);
 
@@ -547,7 +658,7 @@ public class AllCoverageManager {
     /**
      * Gets the list of traces files specified by the given chromosomes.
      *
-     * @param tracesDir   The base directory containing the traces files.
+     * @param tracesDir The base directory containing the traces files.
      * @param chromosomes Encodes a mapping to one or several traces files.
      * @return Returns the list of traces files described by the given chromosomes.
      */
@@ -569,8 +680,7 @@ public class AllCoverageManager {
                                     .map(Path::toFile)
                                     .collect(Collectors.toList()));
                 } catch (IOException e) {
-                    Log.printError("Couldn't retrieve traces files!");
-                    throw new IllegalArgumentException(e);
+                    throw new IllegalStateException("Couldn't retrieve traces files!", e);
                 }
             }
         }

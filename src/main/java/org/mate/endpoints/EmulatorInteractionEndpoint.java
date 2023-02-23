@@ -136,11 +136,10 @@ public class EmulatorInteractionEndpoint implements Endpoint {
         Log.println("Taking screenshot...");
 
         var deviceID = request.getParameter("deviceId");
-        var packageName = request.getParameter("packageName");
         var nodeID = request.getParameter("nodeId");
 
         Device device = Device.devices.get(deviceID);
-        imageHandler.takeScreenshot(device, packageName, nodeID);
+        device.takeScreenshot(nodeID);
 
         return new Message.MessageBuilder("/emulator/interaction").build();
     }

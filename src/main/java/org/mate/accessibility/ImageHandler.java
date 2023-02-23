@@ -10,41 +10,35 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 
 public class ImageHandler {
 
     public static int contImg = 0;
     private final AndroidEnvironment androidEnvironment;
-    private Path screenshotDir;
+    private final Path appsDir;
+    private static final String SCREENSHOT_FOLDER = "screenshots";
 
-    public ImageHandler(AndroidEnvironment androidEnvironment) {
+    public ImageHandler(AndroidEnvironment androidEnvironment, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
-    }
-
-    /**
-     * Sets the screenshot directory.
-     *
-     * @param screenshotDir The new screenshot directory.
-     */
-    public void setScreenshotDir(Path screenshotDir) {
-        this.screenshotDir = screenshotDir;
+        this.appsDir = appsDir;
     }
 
     /**
      * Takes a screenshot of the given screen state.
      *
-     * @param device The emulator instance.
+     * @param device      The emulator instance.
      * @param packageName The package name corresponding to the screen state.
-     * @param nodeId Identifies the screen state.
+     * @param nodeId      Identifies the screen state.
      */
+    @Deprecated
     public void takeScreenshot(Device device, String packageName, String nodeId) {
 
-        Path targetDir = screenshotDir.resolve(packageName);
+        File targetDir = appsDir.resolve(packageName).resolve(SCREENSHOT_FOLDER).toFile();
 
-        if (!targetDir.toFile().exists()) {
-            if (!targetDir.toFile().mkdirs()) {
+        if (!targetDir.exists()) {
+            if (!targetDir.mkdirs()) {
                 Log.printError("Unable to create screenshot directory!");
                 return;
             }
@@ -53,35 +47,35 @@ public class ImageHandler {
         String screenshotName = nodeId + ".png";
 
         // take screenshot and pull it from emulator
-        var takeSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", device.getDeviceID(),
-                "shell", "screencap", "-p", "/sdcard/" + screenshotName);
+        var takeSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", device.getDeviceID(), "shell", "screencap", "-p", "/sdcard/" + screenshotName);
 
         if (takeSS.isErr()) {
             Log.printWarning("Taking screenshot failed: " + takeSS.getErr());
         } else {
             // only pull if taking screenshot succeeded
-            var pullSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", device.getDeviceID(),
-                    "pull", "/sdcard/" + screenshotName, String.valueOf(targetDir.resolve(screenshotName)));
+            var pullSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                    "-s", device.getDeviceID(), "pull", "/sdcard/" + screenshotName,
+                    targetDir + File.separator + screenshotName);
             if (pullSS.isErr()) {
                 Log.printWarning("Pulling screenshot failed: " + pullSS.getErr());
             }
         }
-        //device.setCurrentScreenShotLocation(targetFolder+"/"+imgPath);
     }
 
     /**
      * Checks whether there is a flickering observable between the given screenshot
      * and multiple samples of it.
      *
-     * @param device The emulator instance.
+     * @param device      The emulator instance.
      * @param packageName The package name identifies the location of the screenshot.
-     * @param stateId Represents the name of the screenshot.
+     * @param stateId     Represents the name of the screenshot.
      * @return Returns {@code true} if flickering could be observed, otherwise
-     *              {@code false} is returned.
+     * {@code false} is returned.
      */
     public boolean checkForFlickering(Device device, String packageName, String stateId) {
 
-        Path targetDir = screenshotDir.resolve(packageName);
+        Path targetDir = appsDir.resolve(packageName).resolve(SCREENSHOT_FOLDER);
         String screenshotName = stateId + ".png";
 
         // check whether original screenshot is present (the one we check for flickering)
@@ -94,7 +88,7 @@ public class ImageHandler {
         // take 20 screenshot samples and pull them
         for (int i = 0; i < 20; i++) {
 
-            String screenshotSampleName = screenshotName.replace(".png","_flicker_"+i+".png");
+            String screenshotSampleName = screenshotName.replace(".png", "_flicker_" + i + ".png");
             samples.add(screenshotSampleName);
 
             ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", device.getDeviceID(),
@@ -125,26 +119,25 @@ public class ImageHandler {
     }
 
     @Deprecated
-    public String markImage(String originalImgPath,int x1, int y1, int x2, int y2,String flawType) {
+    public String markImage(String originalImgPath, int x1, int y1, int x2, int y2, String flawType) {
 
         System.out.println("MARK IMAGE");
         contImg++;
-        String newImagePath = originalImgPath.replace(".png","_"+contImg+".png");
+        String newImagePath = originalImgPath.replace(".png", "_" + contImg + ".png");
 
         try {
-
             BufferedImage img = ImageIO.read(new File(originalImgPath));
             Graphics2D g2d = img.createGraphics();
             g2d.setColor(Color.RED);
             g2d.setStroke(new BasicStroke(5));
-            g2d.drawRect(x1, y1, x2-x1, y2-y1);
+            g2d.drawRect(x1, y1, x2 - x1, y2 - y1);
             Font currentFont = g2d.getFont();
-            Font newFont = currentFont.deriveFont(Font.PLAIN,40);
+            Font newFont = currentFont.deriveFont(Font.PLAIN, 40);
             g2d.setFont(newFont);
-            g2d.drawString(flawType,img.getWidth()/6,img.getHeight()-100);
+            g2d.drawString(flawType, img.getWidth() / 6, img.getHeight() - 100);
             ImageIO.write(img, "PNG", new File(newImagePath));
             g2d.dispose();
-        }catch (Exception e){
+        } catch (Exception e) {
             System.out.println("EXCEPTION --->" + e.getMessage());
         }
 
@@ -183,7 +176,7 @@ public class ImageHandler {
             g2d.drawRect(x, y, width, height);
             ImageIO.write(img, "PNG", new File(imageName));
             g2d.dispose();
-        }catch (Exception e){
+        } catch (Exception e) {
             System.out.println("EXCEPTION --->" + e.getMessage());
         }
         System.out.println(cmdStr);
@@ -195,16 +188,16 @@ public class ImageHandler {
      * Calculates the luminance of a widget based on a screenshot.
      *
      * @param packageName Identifies the directory containing the screenshot.
-     * @param stateId Identifies the name of the screenshot.
-     * @param x1 The x1 coordinate of the widget.
-     * @param x2 The x2 coordinate of the widget.
-     * @param y1 The y1 coordinate of the widget.
-     * @param y2 The y2 coordinate of the widget.
+     * @param stateId     Identifies the name of the screenshot.
+     * @param x1          The x1 coordinate of the widget.
+     * @param x2          The x2 coordinate of the widget.
+     * @param y1          The y1 coordinate of the widget.
+     * @param y2          The y2 coordinate of the widget.
      * @return Returns the luminance of the given widget.
      */
     public String calculateLuminance(String packageName, String stateId, int x1, int x2, int y1, int y2) {
 
-        Path targetDir = screenshotDir.resolve(packageName);
+        Path targetDir = appsDir.resolve(packageName).resolve(SCREENSHOT_FOLDER);
         File screenshot = new File(targetDir.toFile(), stateId + ".png");
 
         if (!screenshot.exists()) {
@@ -218,17 +211,17 @@ public class ImageHandler {
      * Checks the surrounding color of a widget based on a screenshot.
      *
      * @param packageName Identifies the directory containing the screenshot.
-     * @param stateId Identifies the name of the screenshot.
-     * @param x1 The x1 coordinate of the widget.
-     * @param x2 The x2 coordinate of the widget.
-     * @param y1 The y1 coordinate of the widget.
-     * @param y2 The y2 coordinate of the widget.
+     * @param stateId     Identifies the name of the screenshot.
+     * @param x1          The x1 coordinate of the widget.
+     * @param x2          The x2 coordinate of the widget.
+     * @param y1          The y1 coordinate of the widget.
+     * @param y2          The y2 coordinate of the widget.
      * @return Returns a value indicating too which degree the surrounding color of
-     *          the widget matches.
+     * the widget matches.
      */
     public double matchSurroundingColor(String packageName, String stateId, int x1, int x2, int y1, int y2) {
 
-        Path targetDir = screenshotDir.resolve(packageName);
+        Path targetDir = appsDir.resolve(packageName).resolve(SCREENSHOT_FOLDER);
         File screenshot = new File(targetDir.toFile(), stateId + ".png");
 
         if (!screenshot.exists()) {
@@ -242,16 +235,16 @@ public class ImageHandler {
      * Calculates the contrast ratio.
      *
      * @param packageName Identifies the directory containing the screenshot.
-     * @param stateId Identifies the name of the screenshot.
-     * @param x1 The x1 coordinate of the widget.
-     * @param x2 The x2 coordinate of the widget.
-     * @param y1 The y1 coordinate of the widget.
-     * @param y2 The y2 coordinate of the widget.
+     * @param stateId     Identifies the name of the screenshot.
+     * @param x1          The x1 coordinate of the widget.
+     * @param x2          The x2 coordinate of the widget.
+     * @param y1          The y1 coordinate of the widget.
+     * @param y2          The y2 coordinate of the widget.
      * @return Returns the contrast ratio.
      */
     public double calculateContrastRatio(String packageName, String stateId, int x1, int x2, int y1, int y2) {
 
-        Path targetDir = screenshotDir.resolve(packageName);
+        Path targetDir = appsDir.resolve(packageName).resolve(SCREENSHOT_FOLDER);
         File screenshot = new File(targetDir.toFile(), stateId + ".png");
 
         if (!screenshot.exists()) {

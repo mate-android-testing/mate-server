@@ -74,7 +74,7 @@ public class Lexer {
             }
 
             if (nextChar == -1) {
-                return LexResult.failure("Lexing value failed: unexpected EOF");
+                return LexResult.failure("Lexing value failed: unexpected EOF for input: " + value);
             }
 
             char chr = (char) nextChar;

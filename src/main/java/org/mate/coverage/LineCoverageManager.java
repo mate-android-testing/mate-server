@@ -76,16 +76,20 @@ public class LineCoverageManager {
     /**
      * Returns the line coverage percentage metric.
      *
-     * @param appsDir     The apps directory.
+     * @param appsDir The apps directory.
      * @param packageName The package name of the AUT.
      * @param chromosomes Identifies the chromosomes for which the line coverage percentage metric should be derived.
-     * @param lines       The list of source lines.
      * @return Returns the line coverage percentage metric.
      */
-    public static Message getLineCoveredPercentages(final Path appsDir, final String packageName,
-                                                    final String chromosomes, List<String> lines) {
+    public static Message getLineCoveredPercentages(final Path appsDir, final String packageName, final String chromosomes) {
 
-        var sourceLines = lines.stream()
+        Result<List<String>, String> lines = getLines(appsDir, packageName);
+
+        if (lines.isErr()) {
+            return Messages.errorMessage(lines.getErr());
+        }
+
+        var sourceLines = lines.getOk().stream()
                 .map(LineCoverageManager.Line::valueOf)
                 .collect(Collectors.toList());
 
@@ -214,7 +218,7 @@ public class LineCoverageManager {
     /**
      * Gets the coverage files corresponding to the chromosomes.
      *
-     * @param chromosomes     The chromosomes for which coverage should be derived.
+     * @param chromosomes The chromosomes for which coverage should be derived.
      * @param baseCoverageDir The path of the coverage base directory.
      * @return Returns the coverage files corresponding, or an error message if something went wrong.
      */
@@ -254,10 +258,10 @@ public class LineCoverageManager {
     /**
      * Computes the line coverage of a single test case within a test suite.
      *
-     * @param appsDir     The apps directory.
+     * @param appsDir The apps directory.
      * @param packageName The package name of the AUT.
      * @param testSuiteId The id of the test suite.
-     * @param testCaseId  The id of the test case.
+     * @param testCaseId The id of the test case.
      * @return Returns the line coverage for the given test case.
      */
     public static Message getCoverage(Path appsDir, String packageName, String testSuiteId, String testCaseId) {
@@ -271,22 +275,22 @@ public class LineCoverageManager {
 
         Path classesDirPath = appsDir.resolve(packageName).resolve("src").resolve("classes");
         /*
-        * We can't use here Lists.newArrayList(coverageFile) to hand over the coverage file in a list.
-        * This is due to the fact that a 'Path' object is iterable and Lists.newArrayList() would construct
-        * a list where each element is a sub path in this context due to overloading!
+         * We can't use here Lists.newArrayList(coverageFile) to hand over the coverage file in a list.
+         * This is due to the fact that a 'Path' object is iterable and Lists.newArrayList() would construct
+         * a list where each element is a sub path in this context due to overloading!
          */
         IBundleCoverage bundle = generateBundleCoverage(Collections.singletonList(coverageFile), classesDirPath);
         ICounter counter = bundle.getLineCounter();
 
         return new Message.MessageBuilder("/coverage/get")
-                .withParameter("line_coverage", String.valueOf(counter.getCoveredRatio()))
+                .withParameter("line_coverage", String.valueOf(counter.getCoveredRatio() * 100))
                 .build();
     }
 
     /**
      * Gets the combined line coverage for the given chromosomes.
      *
-     * @param appsDir     The apps directory.
+     * @param appsDir The apps directory.
      * @param packageName The package name of the AUT.
      * @param chromosomes The chromosomes for which coverage should be derived.
      * @return Returns a message containing the coverage information or an error message on failure.
@@ -305,7 +309,7 @@ public class LineCoverageManager {
         ICounter counter = bundle.getLineCounter();
 
         return new Message.MessageBuilder("/coverage/combined")
-                .withParameter("line_coverage", String.valueOf(counter.getCoveredRatio()))
+                .withParameter("line_coverage", String.valueOf(counter.getCoveredRatio() * 100))
                 .build();
     }
 
@@ -337,7 +341,7 @@ public class LineCoverageManager {
     /**
      * Returns the coverage base directory.
      *
-     * @param appsDir     The apps directory.
+     * @param appsDir The apps directory.
      * @param packageName The package name of the AUT.
      * @return Returns the path to the coverage base directory.
      */
@@ -348,9 +352,9 @@ public class LineCoverageManager {
     /**
      * Returns the chromosome base directory.
      *
-     * @param appsDir     The apps directory.
+     * @param appsDir The apps directory.
      * @param packageName The package name of the AUT.
-     * @param chromosome  The identifier of the chromosome.
+     * @param chromosome The identifier of the chromosome.
      * @return Returns the path to the chromosome base directory.
      */
     private static Path getCoverageChromosomeDir(final Path appsDir, final String packageName, final String chromosome) {
@@ -361,11 +365,11 @@ public class LineCoverageManager {
      * Stores the coverage data.
      *
      * @param androidEnvironment Defines the location of the adb/aapt binary.
-     * @param appsDir            The apps directory.
-     * @param deviceID           The name of the emulator, e.g. emulator-5554.
-     * @param packageName        The package name of the AUT.
-     * @param chromosome         Identifies either a test suite or a test case.
-     * @param entity             Identifies the test case when chromosome refers to the test suite or {@code null}.
+     * @param appsDir The apps directory.
+     * @param deviceID The name of the emulator, e.g. emulator-5554.
+     * @param packageName The package name of the AUT.
+     * @param chromosome Identifies either a test suite or a test case.
+     * @param entity Identifies the test case when chromosome refers to the test suite or {@code null}.
      * @return Returns an empty message in case of success, otherwise a error message is returned.
      */
     public static Message storeCoverageData(AndroidEnvironment androidEnvironment, final Path appsDir,
@@ -428,11 +432,11 @@ public class LineCoverageManager {
     /**
      * Copies the coverage data from the chromosome source directory to the chromosome target directory.
      *
-     * @param appsDir          The apps directory.
-     * @param packageName      The package name of the AUT.
-     * @param chromosomeSrc    The chromosome source directory.
+     * @param appsDir The apps directory.
+     * @param packageName The package name of the AUT.
+     * @param chromosomeSrc The chromosome source directory.
      * @param chromosomeTarget The chromosome target directory.
-     * @param entities         The identifiers of the individual chromosomes / coverage files.
+     * @param entities The identifiers of the individual chromosomes / coverage files.
      * @return Returns an empty message in case of success, otherwise a error message is returned.
      */
     public static Message copyLineCoverageData(final Path appsDir, final String packageName, final String chromosomeSrc,
@@ -466,14 +470,7 @@ public class LineCoverageManager {
         return new Message("/coverage/copy");
     }
 
-    /**
-     * Retrieves the source lines of the app under test.
-     *
-     * @param appsDir     The apps directory.
-     * @param packageName The package name of the AUT.
-     * @return Returns a message containing the source lines in case of success, otherwise a error message is returned.
-     */
-    public static Message getSourceLines(final Path appsDir, final String packageName) {
+    private static Result<List<String>, String> getLines(final Path appsDir, final String packageName) {
 
         Path reportFile = appsDir.resolve(packageName).resolve(packageName + ".report");
         String separator = "+";
@@ -484,7 +481,7 @@ public class LineCoverageManager {
         } catch (ParserConfigurationException e) {
             final var errorMsg = "Failed to get source lines: unable to set FEATURE_SECURE_PROCESSING for DocumentBuilderFactory";
             Log.printError(errorMsg);
-            return Messages.errorMessage(errorMsg);
+            return Result.errOf(errorMsg);
         }
 
         DocumentBuilder builder;
@@ -493,7 +490,7 @@ public class LineCoverageManager {
         } catch (ParserConfigurationException e) {
             final var errorMsg = "Failed to get source lines: unable to create document builder";
             Log.printError(errorMsg);
-            return Messages.errorMessage(errorMsg);
+            return Result.errOf(errorMsg);
         }
 
         // ignore dtd file
@@ -504,16 +501,17 @@ public class LineCoverageManager {
         } catch (SAXException e) {
             final var errorMsg = "Failed to get source lines: unable to parse report file (" + reportFile + ")";
             Log.printError(errorMsg);
-            return Messages.errorMessage(errorMsg);
+            return Result.errOf(errorMsg);
         } catch (IOException e) {
             e.printStackTrace();
             final var errorMsg = "Failed to get source lines: IOException while reading report file (" + reportFile + ")";
             Log.printError(errorMsg);
-            return Messages.errorMessage(errorMsg);
+            return Result.errOf(errorMsg);
         }
 
         List<String> sourceLines = new ArrayList<>();
         NodeList packages = document.getDocumentElement().getElementsByTagName("package");
+
         for (int i = 0; i < packages.getLength(); i++) {
             var currentPackage = (Element) packages.item(i);
             var currentPackageName = currentPackage.getAttribute("name");
@@ -530,8 +528,47 @@ public class LineCoverageManager {
             }
         }
 
-        return new Message.MessageBuilder("/coverage/getSourceLines")
-                .withParameter("lines", String.join("\n", sourceLines))
-                .build();
+        return Result.okOf(sourceLines);
+    }
+
+    /**
+     * Retrieves the source lines of the app under test.
+     *
+     * @param appsDir The apps directory.
+     * @param packageName The package name of the AUT.
+     * @return Returns a message containing the source lines in case of success, otherwise a error message is returned.
+     */
+    public static Message getSourceLines(final Path appsDir, final String packageName) {
+
+        Result<List<String>, String> sourceLines = getLines(appsDir, packageName);
+
+        if (sourceLines.isErr()) {
+            return Messages.errorMessage(sourceLines.getErr());
+        } else {
+            return new Message.MessageBuilder("/coverage/getSourceLines")
+                    .withParameter("lines", String.join("\n", sourceLines.getOk()))
+                    .build();
+        }
+    }
+
+    /**
+     * Retrieves the number of source lines of the app under test.
+     *
+     * @param appsDir The apps directory.
+     * @param packageName The package name of the AUT.
+     * @return Returns a message containing the number of source lines in case of success, otherwise a error message is
+     *         returned.
+     */
+    public static Message getNumberOfSourceLines(final Path appsDir, final String packageName) {
+
+        Result<List<String>, String> sourceLines = getLines(appsDir, packageName);
+
+        if (sourceLines.isErr()) {
+            return Messages.errorMessage(sourceLines.getErr());
+        } else {
+            return new Message.MessageBuilder("/coverage/getNumberOfSourceLines")
+                    .withParameter("lines", String.valueOf(sourceLines.getOk().size()))
+                    .build();
+        }
     }
 }

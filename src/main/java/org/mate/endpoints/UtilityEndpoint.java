@@ -32,6 +32,10 @@ public class UtilityEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/utility/fetch_test_case")) {
             return fetchTestCase(request);
+        } else if (request.getSubject().startsWith("/utility/fetch_espresso_test")) {
+            return fetchEspressoTest(request);
+        } else if (request.getSubject().startsWith("/utility/fetch_dot_graph")) {
+            return fetchDotGraph(request);
         } else if (request.getSubject().startsWith("/utility/write_file")) {
             return writeFile(request);
         } else if (request.getSubject().startsWith("/utility/let_user_pick")) {
@@ -111,5 +115,45 @@ public class UtilityEndpoint implements Endpoint {
         dialog.dispose();
 
         return selected[0];
+    }
+
+    /**
+     * Fetches and removes an espresso test from the emulator.
+     *
+     * @param request The request message.
+     * @return Returns a message wrapping the outcome of the operation, i.e. success or failure.
+     */
+    private Message fetchEspressoTest(Message request) {
+
+        String deviceID = request.getParameter("deviceId");
+        String espressoDir = request.getParameter("espressoDir");
+        String testCase = request.getParameter("testcase");
+
+        Device device = Device.devices.get(deviceID);
+        boolean response = device.fetchEspressoTest(espressoDir, testCase);
+
+        return new Message.MessageBuilder("/utility/fetch_espresso_test")
+                .withParameter("response", String.valueOf(response))
+                .build();
+    }
+
+    /**
+     * Fetches and removes a dot file (model graph) from the emulator.
+     *
+     * @param request The request message.
+     * @return A response message, with content about the success of the operation.
+     */
+    private Message fetchDotGraph(Message request) {
+
+        String deviceID = request.getParameter("deviceId");
+        String dirName = request.getParameter("dirName");
+        String fileName = request.getParameter("fileName");
+
+        Device device = Device.devices.get(deviceID);
+        boolean response = device.fetchDotGraph(dirName, fileName);
+
+        return new Message.MessageBuilder("/utility/fetch_dot_graph")
+                .withParameter("response", String.valueOf(response))
+                .build();
     }
 }
