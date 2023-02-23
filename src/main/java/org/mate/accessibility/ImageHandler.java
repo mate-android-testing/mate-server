@@ -101,9 +101,11 @@ public class ImageHandler {
         return AccessibilityUtils.checkFlickering(targetDir, screenshotName, samples);
     }
 
+    // TODO: Document.
     public void markImage(List<Rectangle> rectangles, String stateId, String packageName) throws IOException {
-        Path targetDir = screenshotDir.resolve(packageName);
-        File imageFile = targetDir.resolve(stateId + ".png").toFile();
+
+        final Path targetDir = appsDir.resolve(packageName).resolve(SCREENSHOT_FOLDER);
+        final File imageFile = targetDir.resolve(stateId + ".png").toFile();
 
         BufferedImage img = ImageIO.read(imageFile);
         Graphics2D g2d = img.createGraphics();

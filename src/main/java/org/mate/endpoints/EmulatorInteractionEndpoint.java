@@ -144,10 +144,13 @@ public class EmulatorInteractionEndpoint implements Endpoint {
         return new Message.MessageBuilder("/emulator/interaction").build();
     }
 
+    // TODO: Is this functionality relevant?
     private Message markOnScreenshots(Message request) {
-        var packageName = request.getParameter("packageName");
-        var stateId = request.getParameter("state");
-        List<Rectangle> rectangles = Arrays.stream(request.getParameter("rectangles").split(";"))
+
+        final var packageName = request.getParameter("packageName");
+        final var stateId = request.getParameter("state");
+
+        final List<Rectangle> rectangles = Arrays.stream(request.getParameter("rectangles").split(";"))
                 .map(recString -> {
                     String[] parts = recString.split(",");
                     int x1 = Integer.parseInt(parts[0]);
@@ -159,8 +162,10 @@ public class EmulatorInteractionEndpoint implements Endpoint {
                 }).collect(Collectors.toList());
 
         try {
+            // TODO: Avoid ImageHandler if possible and use Device instead.
             imageHandler.markImage(rectangles, stateId, packageName);
         } catch (IOException e) {
+            // TODO: Prepend custom error message.
             throw new UncheckedIOException(e);
         }
 
