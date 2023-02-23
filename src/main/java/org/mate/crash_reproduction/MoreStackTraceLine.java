@@ -2,29 +2,56 @@ package org.mate.crash_reproduction;
 
 import java.util.stream.Stream;
 
+/**
+ * Models a '... X more' stack trace line. Such a line appears when the subsequent stack trace lines are repeating
+ * themselves.
+ */
 public class MoreStackTraceLine implements StackTraceLine {
-    private final int numberOfLinesMissing;
 
-    public MoreStackTraceLine(int numberOfLinesMissing) {
-        this.numberOfLinesMissing = numberOfLinesMissing;
+    /**
+     * The number indicating how many stack trace lines would follow but have been compacted.
+     */
+    private final int numberOfSubsequentLines;
+
+    /**
+     * Initialises a '... X more' stack trace line with the given number of subsequent lines.
+     * 
+     * @param numberOfSubsequentLines The number of subsequent lines.
+     */
+    public MoreStackTraceLine(int numberOfSubsequentLines) {
+        this.numberOfSubsequentLines = numberOfSubsequentLines;
     }
 
-    public int getNumberOfLinesMissing() {
-        return numberOfLinesMissing;
+    /**
+     * Returns the number of subsequent (missing) lines.
+     * 
+     * @return Returns the number of subsequent (missing) lines.
+     */
+    public int getNumberOfSubsequentLines() {
+        return numberOfSubsequentLines;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public boolean isFromPackage(String string) {
+    public boolean isFromPackage(String packageName) {
         return false;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Stream<String> getFuzzyTokens() {
         return Stream.empty();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String toString() {
-        return "... " + numberOfLinesMissing + " more";
+        return "... " + numberOfSubsequentLines + " more";
     }
 }

@@ -8,100 +8,164 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-public class StackTraceParser {
+/**
+ * Provides a parser for a stack trace.
+ */
+public final class StackTraceParser {
+
+    /**
+     * A map of various stack trace line patterns and the functions that are necessary to parse the stack traces from
+     * those patterns.
+     */
     private static final Map<Pattern, Function<Matcher, ? extends StackTraceLine>> STACK_TRACE_LINE_PATTERNS = new HashMap<>();
+
     static {
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("^Caused by: (\\S+): (.+)"), StackTraceParser::parseCausedByLine);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("^Caused by: (\\S+)$"), StackTraceParser::parseCausedByLineWithoutMessage);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("^(\\S+)$"), StackTraceParser::parseCausedByLineWithoutMessage);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("^(\\S+): (.+)$"), StackTraceParser::parseCausedByLine);
-        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\((.+):(\\d+)\\)"), StackTraceParser::parseNormalStackTraceLine);
-        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(:(\\d+)\\)"), StackTraceParser::parseOtherStackTraceLineWithLine);
-        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(Native Method\\)"), StackTraceParser::parseOtherStackTraceLine);
-        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(SourceFile.*\\)"), StackTraceParser::parseOtherStackTraceLine);
-        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(\\)"), StackTraceParser::parseOtherStackTraceLine);
-        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(:.*\\)"), StackTraceParser::parseOtherStackTraceLine);
-        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(.*SyntheticClass\\)"), StackTraceParser::parseOtherStackTraceLine);
-        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(Unknown Source\\)"), StackTraceParser::parseOtherStackTraceLine);
-        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\((\\S+)\\.java\\)"), StackTraceParser::parseStackTraceLineWithoutLineNumber);
-        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\((\\S+)\\.kt\\)"), StackTraceParser::parseStackTraceLineWithoutLineNumber);
+        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\((.+):(\\d+)\\)"), StackTraceParser::parseRegularAtStackTraceLine);
+        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(:(\\d+)\\)"), StackTraceParser::parseSpecialAtStackTraceLineWithLine);
+        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(Native Method\\)"), StackTraceParser::parseSpecialAtStackTraceLine);
+        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(SourceFile.*\\)"), StackTraceParser::parseSpecialAtStackTraceLine);
+        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(\\)"), StackTraceParser::parseSpecialAtStackTraceLine);
+        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(:.*\\)"), StackTraceParser::parseSpecialAtStackTraceLine);
+        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(.*SyntheticClass\\)"), StackTraceParser::parseSpecialAtStackTraceLine);
+        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(Unknown Source\\)"), StackTraceParser::parseSpecialAtStackTraceLine);
+        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\((\\S+)\\.java\\)"), StackTraceParser::parseAtStackTraceLineWithoutLineNumber);
+        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\((\\S+)\\.kt\\)"), StackTraceParser::parseAtStackTraceLineWithoutLineNumber);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("\\.\\.\\. (\\d+) more"), StackTraceParser::parseMoreStackTraceLine);
     }
 
+    /**
+     * Prevents instantiation of utility class.
+     */
     private StackTraceParser() {
-        throw new UnsupportedOperationException("Cannot initialize utility class");
+        throw new UnsupportedOperationException("Cannot initialize utility class!");
     }
 
-    public static StackTrace parse(List<String> lines) {
-        List<StackTraceLine> parsedLines = lines.stream()
+    /**
+     * Parses a list of lines into specific stack trace lines.
+     *
+     * @param lines The raw input lines.
+     * @return Returns a list of parsed stack trace lines.
+     */
+    public static StackTrace parse(final List<String> lines) {
+        final List<StackTraceLine> parsedLines = lines.stream()
                 .map(String::trim)
                 .map(StackTraceParser::parseLine)
                 .collect(Collectors.toList());
         return new StackTrace(parsedLines);
     }
 
-    private static StackTraceLine parseLine(String line) {
+    /**
+     * Parses a single line into a stack trace line.
+     *
+     * @param line The raw input line.
+     * @return Returns the parsed stack trace line.
+     */
+    private static StackTraceLine parseLine(final String line) {
+
+        // check which pattern applies to the given line
         for (var entry : STACK_TRACE_LINE_PATTERNS.entrySet()) {
-            Matcher matcher = entry.getKey().matcher(line);
+            final Matcher matcher = entry.getKey().matcher(line);
 
             if (matcher.matches()) {
                 return entry.getValue().apply(matcher);
             }
         }
 
-        throw new IllegalArgumentException("Cannot parse '" + line + "'");
+        throw new IllegalArgumentException("Cannot parse '" + line + "'!");
     }
 
-    private static CausedByStackTraceLine parseCausedByLine(Matcher matcher) {
-        String exception = matcher.group(1);
-        String message = matcher.group(2);
-
+    /**
+     * Parses a 'caused by' stack trace line.
+     *
+     * @param matcher The matcher matching the raw 'caused by' input line.
+     * @return Returns the parsed {@link CausedByStackTraceLine}.
+     */
+    private static CausedByStackTraceLine parseCausedByLine(final Matcher matcher) {
+        final String exception = matcher.group(1);
+        final String message = matcher.group(2);
         return new CausedByStackTraceLine(matcher.group(0), exception, message);
     }
 
-    private static CausedByStackTraceLine parseCausedByLineWithoutMessage(Matcher matcher) {
-        String exception = matcher.group(1);
-
+    /**
+     * Parses a 'caused by' stack trace line without a message.
+     *
+     * @param matcher The matcher matching the raw 'caused by' input line.
+     * @return Returns the parsed {@link CausedByStackTraceLine}.
+     */
+    private static CausedByStackTraceLine parseCausedByLineWithoutMessage(final Matcher matcher) {
+        final String exception = matcher.group(1);
         return new CausedByStackTraceLine(matcher.group(0), exception);
     }
 
-    private static AtStackTraceLine parseNormalStackTraceLine(Matcher matcher) {
-        String packageName = matcher.group(1);
-        String className = matcher.group(2);
-        String methodName = matcher.group(3);
-        String fileName = matcher.group(4);
-        int lineNumber = Integer.parseInt(matcher.group(5));
-
+    /**
+     * Parses a regular 'at' stack trace line.
+     *
+     * @param matcher The matcher matching the raw 'at' input line.
+     * @return Returns the parsed {@link AtStackTraceLine}.
+     */
+    private static AtStackTraceLine parseRegularAtStackTraceLine(final Matcher matcher) {
+        final String packageName = matcher.group(1);
+        final String className = matcher.group(2);
+        final String methodName = matcher.group(3);
+        final String fileName = matcher.group(4);
+        final int lineNumber = Integer.parseInt(matcher.group(5));
         return new AtStackTraceLine(matcher.group(0), packageName, className, methodName, fileName, lineNumber);
     }
 
-    private static AtStackTraceLine parseOtherStackTraceLine(Matcher matcher) {
-        String packageName = matcher.group(1);
-        String className = matcher.group(2);
-        String methodName = matcher.group(3);
-
+    /**
+     * Parses a special 'at' stack trace line, e.g. one that refers to a native method or one that has no source code
+     * information attached.
+     *
+     * @param matcher The matcher matching the raw 'at' input line.
+     * @return Returns the parsed {@link AtStackTraceLine}.
+     */
+    private static AtStackTraceLine parseSpecialAtStackTraceLine(final Matcher matcher) {
+        final String packageName = matcher.group(1);
+        final String className = matcher.group(2);
+        final String methodName = matcher.group(3);
         return new AtStackTraceLine(matcher.group(0), packageName, className, methodName);
     }
 
-    private static AtStackTraceLine parseOtherStackTraceLineWithLine(Matcher matcher) {
-        String packageName = matcher.group(1);
-        String className = matcher.group(2);
-        String methodName = matcher.group(3);
-        int line = Integer.parseInt(matcher.group(4));
-
-        return new AtStackTraceLine(matcher.group(0), packageName, className, methodName, line);
+    /**
+     * Parses a special 'at' stack trace line, e.g. one that refers to a native method or one that has no source code
+     * information attached, but that exposes at least a line number.
+     *
+     * @param matcher The matcher matching the raw 'at' input line.
+     * @return Returns the parsed {@link AtStackTraceLine}.
+     */
+    private static AtStackTraceLine parseSpecialAtStackTraceLineWithLine(final Matcher matcher) {
+        final String packageName = matcher.group(1);
+        final String className = matcher.group(2);
+        final String methodName = matcher.group(3);
+        final int lineNumber = Integer.parseInt(matcher.group(4));
+        return new AtStackTraceLine(matcher.group(0), packageName, className, methodName, lineNumber);
     }
 
-    private static AtStackTraceLine parseStackTraceLineWithoutLineNumber(Matcher matcher) {
-        String packageName = matcher.group(1);
-        String className = matcher.group(2);
-        String methodName = matcher.group(3);
-        String fileName = matcher.group(4);
-
+    /**
+     * Parses an 'at' stack trace line that doesn't expose a line number.
+     *
+     * @param matcher The matcher matching the raw 'at' input line.
+     * @return Returns the parsed {@link AtStackTraceLine}.
+     */
+    private static AtStackTraceLine parseAtStackTraceLineWithoutLineNumber(final Matcher matcher) {
+        final String packageName = matcher.group(1);
+        final String className = matcher.group(2);
+        final String methodName = matcher.group(3);
+        final String fileName = matcher.group(4);
         return new AtStackTraceLine(matcher.group(0), packageName, className, methodName, fileName);
     }
 
-    private static MoreStackTraceLine parseMoreStackTraceLine(Matcher matcher) {
+    /**
+     * Parses a '... X more' stack trace line.
+     *
+     * @param matcher The matcher matching the raw '... X more' input line.
+     * @return Returns the parsed {@link MoreStackTraceLine}.
+     */
+    private static MoreStackTraceLine parseMoreStackTraceLine(final Matcher matcher) {
         return new MoreStackTraceLine(Integer.parseInt(matcher.group(1)));
     }
 }
