@@ -333,13 +333,10 @@ public final class BasicBlockCoverageManager {
         try (var blocksReader = new BufferedReader(new InputStreamReader(new FileInputStream(blocksFile)))) {
 
             // an entry looks as follows: class name -> method name -> block id -> block size -> isBranch
-            String line;
-            while ((line = blocksReader.readLine()) != null) {
-                if (line.isBlank()) {
-                    continue;
-                }
+            String block;
+            while ((block = blocksReader.readLine()) != null) {
 
-                final String[] tokens = line.split("->");
+                final String[] tokens = block.split("->");
                 final String clazz = tokens[0];
                 final int instructionCount = Integer.parseInt(tokens[3]);
 
