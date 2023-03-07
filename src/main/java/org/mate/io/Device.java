@@ -143,7 +143,7 @@ public class Device {
      *         otherwise {@code false} is returned.
      */
     public boolean fetchTestCase(String testCaseDir, String testCase) {
-        return fetchTestFile(testCaseDir, testCase, "test-cases");
+        return fetchFile(testCaseDir, testCase, "test-cases");
     }
 
     /**
@@ -155,7 +155,7 @@ public class Device {
      * @return Returns {@code true} if the transition system file could be fetched, otherwise {@code false} is returned.
      */
     public boolean fetchTransitionSystem(String transitionSystemDir, String fileName) {
-        return fetchTestFile(transitionSystemDir, fileName, "transition-systems");
+        return fetchFile(transitionSystemDir, fileName, "transition-systems");
     }
 
     /**
@@ -165,53 +165,52 @@ public class Device {
      * @param fileName The name of the file.
      * @return Returns {@code true} if the file could be fetched, otherwise {@code false} is returned.
      */
-    private boolean fetchTestFile(final String baseDir, final String fileName, final String resultDirName) {
+    private boolean fetchFile(final String baseDir, final String fileName, final String resultDirName) {
 
-        // check whether the test case file exists
+        // check whether the test exists
         Result<List<String>, String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
-                "-s", deviceID, "shell", "ls", testCaseDir);
+                "-s", deviceID, "shell", "ls", baseDir);
 
-        if (result.isErr() || !result.getOk().stream().anyMatch(str -> str.trim().equals(testCase))) {
-
-            // the test case file couldn't be found, retry once
-            Log.println("Couldn't locate test case file: " + result);
+        if (result.isErr() || result.getOk().stream().noneMatch(str -> str.trim().equals(fileName))) {
+            // the file couldn't be found, retry once
+            Log.println("Couldn't locate file: " + result);
             Util.sleep(3);
 
             List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID,
-                    "shell", "ls", testCaseDir).getOk();
+                    "shell", "ls", baseDir).getOk();
 
-            if (!files.stream().anyMatch(str -> str.trim().equals(testCase))) {
-                Log.println("Couldn't locate test case file: " + files);
+            if (files.stream().noneMatch(str -> str.trim().equals(fileName))) {
+                Log.println("Couldn't locate file: " + files);
                 return false;
             }
         }
 
         File appDir = new File(appsDir.toFile(), packageName);
-        File testCasesDir = new File(appDir, "test-cases");
-        File testCaseFile = new File(testCasesDir, testCase);
+        File resultDir = new File(appDir, resultDirName);
+        File resultFile = new File(resultDir, fileName);
 
         // create local test-cases directory if not present
-        if (!testCasesDir.exists()) {
-            Log.println("Creating test-cases directory: " + testCasesDir.mkdirs());
+        if (!resultDir.exists()) {
+            Log.println("Creating directory: " + resultDir.mkdirs());
         }
 
         // fetch the test case file
         var pullOp = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s",
-                deviceID, "pull", testCaseDir + "/" + testCase, String.valueOf(testCaseFile));
+                deviceID, "pull", baseDir + "/" + fileName, String.valueOf(resultFile));
 
         Log.println("Pull Operation: " + pullOp);
 
-        if (!testCaseFile.exists()) {
-            Log.println("Pulling test case file " + testCaseFile + " failed!");
+        if (!resultFile.exists()) {
+            Log.println("Pulling file " + resultFile + " failed!");
         }
 
-        // remove test case file from emulator
+        // remove file from emulator
         var removeOp = ProcessRunner.runProcess(
                 androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
-                "rm", "-f", testCaseDir + "/" + testCase);
+                "rm", "-f", baseDir + "/" + fileName);
 
-        Log.println("Removal of test case file succeeded: " + removeOp.isOk());
-        return testCaseFile.exists();
+        Log.println("Removal of file succeeded: " + removeOp.isOk());
+        return resultFile.exists();
     }
 
     /**
