@@ -6,9 +6,6 @@ import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
 
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
 
 public class CoverageEndpoint implements Endpoint {
     private final AndroidEnvironment androidEnvironment;
@@ -34,6 +31,8 @@ public class CoverageEndpoint implements Endpoint {
             return copyCoverageData(request);
         } else if (request.getSubject().startsWith("/coverage/getSourceLines")) {
             return getSourceLines(request);
+        } else if (request.getSubject().startsWith("/coverage/getNumberOfSourceLines")) {
+            return getNumberOfSourceLines(request);
         } else if (request.getSubject().startsWith("/coverage/get")) {
             return getCoverage(request);
         }
@@ -233,11 +232,10 @@ public class CoverageEndpoint implements Endpoint {
     }
 
     private Message storeAllCoverageData(Message request) {
-        String packageName = request.getParameter("packageName");
         String deviceID = request.getParameter("deviceId");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
-        return AllCoverageManager.storeCoverageData(androidEnvironment, deviceID, packageName, chromosome, entity);
+        return AllCoverageManager.storeCoverageData(androidEnvironment, deviceID, chromosome, entity);
     }
 
     private Message storeLineCoverageData(Message request) {
@@ -249,27 +247,24 @@ public class CoverageEndpoint implements Endpoint {
     }
 
     private Message storeMethodCoverageData(Message request) {
-        String packageName = request.getParameter("packageName");
         String deviceID = request.getParameter("deviceId");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
-        return MethodCoverageManager.storeCoverageData(androidEnvironment, deviceID, packageName, chromosome, entity);
+        return MethodCoverageManager.storeCoverageData(androidEnvironment, deviceID, chromosome, entity);
     }
 
     private Message storeBranchCoverageData(Message request) {
-        String packageName = request.getParameter("packageName");
         String deviceID = request.getParameter("deviceId");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
-        return BranchCoverageManager.storeCoverageData(androidEnvironment, deviceID, packageName, chromosome, entity);
+        return BranchCoverageManager.storeCoverageData(androidEnvironment, deviceID, chromosome, entity);
     }
 
     private Message storeBasicBlockCoverageData(Message request) {
-        String packageName = request.getParameter("packageName");
         String deviceID = request.getParameter("deviceId");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
-        return BasicBlockCoverageManager.storeCoverageData(androidEnvironment, deviceID, packageName, chromosome, entity);
+        return BasicBlockCoverageManager.storeCoverageData(androidEnvironment, deviceID, chromosome, entity);
     }
 
     private Message getCombinedCoverage(Message request) {
@@ -334,13 +329,17 @@ public class CoverageEndpoint implements Endpoint {
     private Message getLineCoveredPercentages(Message request) {
         String packageName = request.getParameter("packageName");
         String chromosomes = request.getParameter("chromosomes");
-        List<String> lines = Arrays.stream(request.getParameter("lines").split("\\*")).collect(Collectors.toList());
-        return LineCoverageManager.getLineCoveredPercentages(appsDir, packageName, chromosomes, lines);
+        return LineCoverageManager.getLineCoveredPercentages(appsDir, packageName, chromosomes);
     }
 
     private Message getSourceLines(Message request) {
         String packageName = request.getParameter("packageName");
         return LineCoverageManager.getSourceLines(appsDir, packageName);
+    }
+
+    private Message getNumberOfSourceLines(Message request) {
+        String packageName = request.getParameter("packageName");
+        return LineCoverageManager.getNumberOfSourceLines(appsDir, packageName);
     }
 
 }

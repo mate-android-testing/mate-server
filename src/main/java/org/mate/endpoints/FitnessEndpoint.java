@@ -49,8 +49,12 @@ public class FitnessEndpoint implements Endpoint {
             return copyFitnessData(request);
         } else if (request.getSubject().startsWith("/fitness/get_branches")) {
             return getBranches(request);
+        } else if (request.getSubject().startsWith("/fitness/get_number_of_branches")) {
+            return getNumberOfBranches(request);
         } else if (request.getSubject().startsWith("/fitness/get_basic_blocks")) {
             return getBasicBlocks(request);
+        } else if (request.getSubject().startsWith("/fitness/get_number_of_basic_blocks")) {
+            return getNumberOfBasicBlocks(request);
         } else if (request.getSubject().startsWith("/fitness/get_basic_block_fitness_vector")) {
             return getBasicBlockFitnessVector(request);
         } else if (request.getSubject().startsWith("/fitness/get_branch_fitness_vector")) {
@@ -201,6 +205,38 @@ public class FitnessEndpoint implements Endpoint {
 
         String packageName = request.getParameter("packageName");
         Path appDir = appsDir.resolve(packageName);
+        List<String> branches = getBranches(appDir);
+
+        return new Message.MessageBuilder("/fitness/get_branches")
+                .withParameter("branches", String.join("+", branches))
+                .build();
+    }
+
+    /**
+     * Returns the number of branches of the AUT according to the branches.txt file.
+     *
+     * @param request The message request.
+     * @return Returns the number of branches of the AUT encapsulated in a message.
+     */
+    private Message getNumberOfBranches(Message request) {
+
+        String packageName = request.getParameter("packageName");
+        Path appDir = appsDir.resolve(packageName);
+        int numberOfBranches = getBranches(appDir).size();
+
+        return new Message.MessageBuilder("/fitness/get_number_of_branches")
+                .withParameter("branches", String.valueOf(numberOfBranches))
+                .build();
+    }
+
+    /**
+     * Reads the branches from the branches.txt file of the AUT.
+     *
+     * @param appDir The app dir of the AUT.
+     * @return Returns the branches according to the branches.txt file.
+     */
+    private List<String> getBranches(Path appDir) {
+
         File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
 
         List<String> branches = new ArrayList<>();
@@ -213,9 +249,7 @@ public class FitnessEndpoint implements Endpoint {
             throw new IllegalStateException(e);
         }
 
-        return new Message.MessageBuilder("/fitness/get_branches")
-                .withParameter("branches", String.join("+", branches))
-                .build();
+        return branches;
     }
 
     /**
@@ -228,6 +262,39 @@ public class FitnessEndpoint implements Endpoint {
 
         String packageName = request.getParameter("packageName");
         Path appDir = appsDir.resolve(packageName);
+        List<String> basicBlocks = getBasicBlocks(appDir);
+
+        String blocks = String.join("+", basicBlocks);
+        return new Message.MessageBuilder("/fitness/get_basic_blocks")
+                .withParameter("blocks", blocks)
+                .build();
+    }
+
+    /**
+     * Returns the number of basic blocks of the AUT according to the blocks.txt file.
+     *
+     * @param request The message request.
+     * @return Returns the number of basic blocks of the AUT encapsulated in a message.
+     */
+    private Message getNumberOfBasicBlocks(Message request) {
+
+        String packageName = request.getParameter("packageName");
+        Path appDir = appsDir.resolve(packageName);
+        int numberOfBasicBlocks = getBasicBlocks(appDir).size();
+
+        return new Message.MessageBuilder("/fitness/get_number_of_basic_blocks")
+                .withParameter("blocks", String.valueOf(numberOfBasicBlocks))
+                .build();
+    }
+
+    /**
+     * Reads the basic blocks of the AUT from the blocks.txt file.
+     *
+     * @param appDir The app dir of the AUT.
+     * @return Returns the basic blocks of the AUT.
+     */
+    private List<String> getBasicBlocks(Path appDir) {
+
         File basicBlocksFile = appDir.resolve(BLOCKS_FILE).toFile();
 
         List<String> basicBlocks = new ArrayList<>();
@@ -252,10 +319,7 @@ public class FitnessEndpoint implements Endpoint {
             throw new IllegalArgumentException(e);
         }
 
-        String blocks = String.join("+", basicBlocks);
-        return new Message.MessageBuilder("/fitness/get_basic_blocks")
-                .withParameter("blocks", blocks)
-                .build();
+        return basicBlocks;
     }
 
     private Message getBranchFitnessVector(Message request) {
@@ -701,40 +765,11 @@ public class FitnessEndpoint implements Endpoint {
     private Message storeNoveltyFitnessData(Message request) {
 
         String deviceID = request.getParameter("deviceId");
-        String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
 
-        // grant read/write permission on external storage
         Device device = Device.getDevice(deviceID);
-        boolean granted = device.grantPermissions(packageName);
-
-        if (!granted) {
-            throw new IllegalStateException("Couldn't grant runtime permissions!");
-        }
-
-        // send broadcast in order to write out traces
-        var broadcastOperation = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(),
-                "-s",
-                deviceID,
-                "shell",
-                "am",
-                "broadcast",
-                "-a",
-                "STORE_TRACES",
-                "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer",
-                "--es",
-                "packageName",
-                packageName);
-
-        if (broadcastOperation.isErr()) {
-            throw new IllegalStateException("Couldn't send broadcast!");
-        }
-
-        // fetch the traces from emulator
-        device.pullTraceFile(chromosome, entity);
+        device.pullTraces(chromosome, entity);
         return new Message("/fitness/store_fitness_data");
     }
 
@@ -770,37 +805,11 @@ public class FitnessEndpoint implements Endpoint {
     private Message storeMethodFitnessData(Message request) {
 
         String deviceID = request.getParameter("deviceId");
-        String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
 
-        // grant read/write permission on external storage
         Device device = Device.getDevice(deviceID);
-        boolean granted = device.grantPermissions(packageName);
-
-        if (!granted) {
-            throw new IllegalStateException("Couldn't grant runtime permissions!");
-        }
-
-        // send broadcast in order to write out traces
-        var broadcastOperation = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(),
-                "-s",
-                deviceID,
-                "shell",
-                "am",
-                "broadcast",
-                "-a",
-                "STORE_TRACES",
-                "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
-
-        if (broadcastOperation.isErr()) {
-            throw new IllegalStateException("Couldn't send broadcast!");
-        }
-
-        // fetch the traces from emulator
-        device.pullTraceFile(chromosome, entity);
+        device.pullTraces(chromosome, entity);
         return new Message("/fitness/store_fitness_data");
     }
 
@@ -813,37 +822,11 @@ public class FitnessEndpoint implements Endpoint {
     private Message storeBasicBlockFitnessData(Message request) {
 
         String deviceID = request.getParameter("deviceId");
-        String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
 
-        // grant read/write permission on external storage
         Device device = Device.getDevice(deviceID);
-        boolean granted = device.grantPermissions(packageName);
-
-        if (!granted) {
-            throw new IllegalStateException("Couldn't grant runtime permissions!");
-        }
-
-        // send broadcast in order to write out traces
-        var broadcastOperation = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(),
-                "-s",
-                deviceID,
-                "shell",
-                "am",
-                "broadcast",
-                "-a",
-                "STORE_TRACES",
-                "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
-
-        if (broadcastOperation.isErr()) {
-            throw new IllegalStateException("Couldn't send broadcast!");
-        }
-
-        // fetch the traces from emulator
-        device.pullTraceFile(chromosome, entity);
+        device.pullTraces(chromosome, entity);
         return new Message("/fitness/store_fitness_data");
     }
 
@@ -920,37 +903,11 @@ public class FitnessEndpoint implements Endpoint {
     private Message storeBranchFitnessData(Message request) {
 
         String deviceID = request.getParameter("deviceId");
-        String packageName = request.getParameter("packageName");
         String chromosome = request.getParameter("chromosome");
         String entity = request.getParameter("entity");
 
-        // grant read/write permission on external storage
         Device device = Device.getDevice(deviceID);
-        boolean granted = device.grantPermissions(packageName);
-
-        if (!granted) {
-            throw new IllegalStateException("Couldn't grant runtime permissions!");
-        }
-
-        // send broadcast in order to write out traces
-        var broadcastOperation = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(),
-                "-s",
-                deviceID,
-                "shell",
-                "am",
-                "broadcast",
-                "-a",
-                "STORE_TRACES",
-                "-n",
-                packageName + "/de.uni_passau.fim.auermich.tracer.Tracer");
-
-        if (broadcastOperation.isErr()) {
-            throw new IllegalStateException("Couldn't send broadcast!");
-        }
-
-        // fetch the traces from emulator
-        device.pullTraceFile(chromosome, entity);
+        device.pullTraces(chromosome, entity);
         return new Message("/fitness/store_fitness_data");
     }
 }
