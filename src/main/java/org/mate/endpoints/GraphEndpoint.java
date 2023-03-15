@@ -1,6 +1,5 @@
 package org.mate.endpoints;
 
-import de.uni_passau.fim.auermich.android_graphs.core.app.components.ComponentType;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.calltree.CallTreeVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
@@ -8,7 +7,6 @@ import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.ClassUtils;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.Tuple;
 import org.apache.commons.io.FileUtils;
 import org.jf.dexlib2.analysis.AnalyzedInstruction;
@@ -146,11 +144,6 @@ public class GraphEndpoint implements Endpoint {
     private Map<AtStackTraceLine, AnalyzedStackTraceLine> analyzedStackTraceLines;
 
     /**
-     * The set of target components.
-     */
-    private Set<String> targetComponents;
-
-    /**
      * The stack trace used for crash reproduction.
      */
     private StackTrace stackTrace;
@@ -179,8 +172,6 @@ public class GraphEndpoint implements Endpoint {
             return drawCallTree(request);
         } else if (request.getSubject().startsWith("/graph/draw")) {
             return drawGraph(request);
-        } else if (request.getSubject().startsWith("/graph/reached_targets")) {
-            return reachedTargets(request);
         } else if (request.getSubject().startsWith("/graph/stack_trace_tokens")) {
             return getStackTraceTokens(request);
         } else if(request.getSubject().startsWith("/graph/stack_trace_user_tokens")) {
@@ -969,11 +960,6 @@ public class GraphEndpoint implements Endpoint {
         Log.println("Call tree distance for " + chromosome + " is: abs. distance " + callTreeDistance
                 + ", rel. distance " + normalizedCallTreeDistance);
 
-        // TODO: Remove after testing.
-        if (normalizedCallTreeDistance < 0 || normalizedCallTreeDistance > 1) {
-            throw new IllegalStateException("Normalized distance not between 0 and 1!");
-        }
-
         return normalizedCallTreeDistance;
     }
 
@@ -1070,7 +1056,6 @@ public class GraphEndpoint implements Endpoint {
         // the call tree vertices describing the stack trace in reversed order
         final List<CallTreeVertex> callTreeVertices = targetVertices.stream()
                 .map(v -> (CFGVertex) v)
-                // TODO: Is this cast correct?
                 .map(CFGVertex::getMethod)
                 .map(CallTreeVertex::new)
                 .collect(Collectors.toList());
@@ -1112,94 +1097,6 @@ public class GraphEndpoint implements Endpoint {
         }
     }
 
-    // TODO: Understand & Document.
-    // TODO: Remove since only used for debugging if I am correct.
-    private Message reachedTargets(Message request) {
-
-        var tracesPerFile = getTracesPerFile(request);
-
-        // If an exception is thrown then there is no trace of the line that threw the exception
-        // Since (at least one of) the target lines will throw an exception we need to manually add these traces
-        // in order to decide whether we have reached all target lines/methods
-        tracesPerFile.forEach(traces -> traces.addAll(deduceTracesFromStackTrace(
-                request.getParameter("stackTrace"),
-                request.getParameter("packageName"))));
-
-        Message response = new Message(request.getSubject());
-
-        appendMap(response, "reachedTargetComponents", getMapWithMostTrue(tracesPerFile,
-                this::reachedTargetComponents), Function.identity(), Object::toString);
-        appendMap(response, "reachedTargetMethods", getMapWithMostTrue(tracesPerFile,
-                this::reachedTargetMethods), AtStackTraceLine::toString, Object::toString);
-        appendMap(response, "reachedTargetLines", getMapWithMostTrue(tracesPerFile,
-                this::reachedTargetLines), AtStackTraceLine::toString, Object::toString);
-
-        return response;
-    }
-
-    // TODO: Understand & Document.
-    private Set<String> deduceTracesFromStackTrace(String stackTrace, String packageName) {
-
-        if (stackTrace == null) {
-            return Set.of();
-        } else {
-            StackTrace stackTraceObj = StackTraceParser.parse(Arrays.asList(stackTrace.split("\n")));
-            return crashReproductionUtil.getTargetTracesForStackTrace(stackTraceObj.getStackTraceAtLines()
-                    .collect(Collectors.toList()), (InterCFG) graph, packageName)
-                    .values().stream().flatMap(Collection::stream)
-                    // TODO This is an over approximation, since it will add traces that came potentially after the crash
-                    // (e.g. if the exception is thrown at the beginning of a block statement we will still pretend like
-                    // the remaining statements
-                    // from the block statement were reached as well)
-                    // TODO: Is this cast correct?
-                    .flatMap(v -> tracesForStatement(((CFGVertex) v).getStatement()))
-                    .collect(Collectors.toSet());
-        }
-    }
-
-    // TODO: Rename this to something like 'appendRequestParameters'.
-    private static <K, V> void appendMap(Message request, String mapName, Map<K, V> map,
-                                         Function<K, String> keyToString, Function<V, String> valueToString) {
-
-        request.addParameter(mapName + ".size", String.valueOf(map.size()));
-
-        int pos = 0;
-        for (var entry : map.entrySet()) {
-            request.addParameter(mapName + ".k" + pos, keyToString.apply(entry.getKey()));
-            request.addParameter(mapName + ".v" + pos, valueToString.apply(entry.getValue()));
-            pos++;
-        }
-    }
-
-    /**
-     * Computes a mapping for each traces per file and returns the mapping with the most {@code true} values.
-     *
-     * @param tracesPerFile The traces per file / action.
-     * @param tracesToMapFunction The traces to map function.
-     * @param <T> The key type of the (result) map.
-     * @return Returns a mapping that contains the most {@code true} values according to the supplied mapping function.
-     */
-    private <T> Map<T, Boolean> getMapWithMostTrue(final List<Set<String>> tracesPerFile,
-                                                   Function<Set<String>, Map<T, Boolean>> tracesToMapFunction) {
-        return tracesPerFile.stream()
-                .map(tracesToMapFunction)
-                .max(Comparator.comparingLong(map -> map.values().stream().filter(b -> b).count()))
-                .orElseThrow();
-    }
-
-    /**
-     * Computes a mapping that describes which target component (key) has been covered by the given traces.
-     *
-     * @param traces The given traces.
-     * @return Returns a mapping that tracks which target component has been covered by the traces.
-     */
-    private Map<String, Boolean> reachedTargetComponents(final Set<String> traces) {
-        final Set<String> reachedClasses = traces.stream().map(this::traceToClass).collect(Collectors.toSet());
-        return targetComponents.stream()
-                .map(ClassUtils::convertDottedClassName)
-                .collect(Collectors.toMap(Function.identity(), reachedClasses::contains));
-    }
-
     /**
      * Computes a mapping that describes which stack trace line (target method) has been covered by the given traces.
      *
@@ -1220,41 +1117,6 @@ public class GraphEndpoint implements Endpoint {
                 }));
         onlyAllowCoveredIfPredecessorCoveredAsWell(reachedTargetMethods);
         return reachedTargetMethods;
-    }
-
-    /**
-     * Computes a mapping that describes which target line has been covered by the given traces.
-     *
-     * @param traces The given traces.
-     * @return Returns a mapping that tracks which target line has been covered by the traces.
-     */
-    private Map<AtStackTraceLine, Boolean> reachedTargetLines(final Set<String> traces) {
-
-        final Set<String> reachedBasicBlocks = traces.stream()
-                .map(trace -> {
-                    final String[] parts = trace.split("->");
-                    // class name -> method name -> basic block index
-                    return parts[0] + "->" + parts[1] + "->" + parts[2];
-                }).collect(Collectors.toSet());
-
-        final Map<AtStackTraceLine, Boolean> reachedTargetLines = analyzedStackTraceLines.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> {
-                    final long matches = e.getValue().getInterCFGVertices().stream()
-                            .map(v -> (CFGVertex) v)
-                            .filter(v -> tracesForStatement(v.getStatement()).anyMatch(reachedBasicBlocks::contains))
-                            .count();
-
-                    if (matches == 0) {
-                        return false;
-                    } else if (matches == e.getValue().getInterCFGVertices().size()) {
-                        return true;
-                    } else { // TODO: Can this really happen and what does this mean in fact?
-                        Log.printWarning("Reached only some parts of line!");
-                        return true;
-                    }
-                }));
-        onlyAllowCoveredIfPredecessorCoveredAsWell(reachedTargetLines);
-        return reachedTargetLines;
     }
 
     // TODO: Need help here for understanding!
@@ -1349,32 +1211,6 @@ public class GraphEndpoint implements Endpoint {
     private String traceToMethod(final String trace) {
         final String[] parts = trace.split("->");
         return parts[0] + "->" + parts[1];
-    }
-
-    /**
-     * Retrieves the class name from the given trace.
-     *
-     * @param trace The given trace.
-     * @return Returns the class name encapsulated in the trace.
-     */
-    private String traceToClass(String trace) {
-        return trace.split("->")[0];
-    }
-
-    /**
-     * Retrieves the target components, i.e. a component that transitively invokes any of the methods encoded in the
-     * stack trace and belongs to the AUT package and is of one of the given component types.
-     *
-     * @param packageName The AUT package.
-     * @param componentTypes The allowed component types, e.g. activities.
-     * @return Returns the given target components.
-     */
-    private Set<String> getTargetComponents(final CallTree callTree, final String packageName,
-                                            final ComponentType... componentTypes) {
-        // TODO: Separate here call tree logic from stack trace logic. (Separation of Concern)
-        return callTree.getTargetComponents(stackTrace.getStackTraceAtLines()
-                .filter(stackTraceLine -> stackTraceLine.isFromPackage(packageName))
-                .collect(Collectors.toList()), componentTypes);
     }
 
     /**
@@ -1596,9 +1432,6 @@ public class GraphEndpoint implements Endpoint {
                     return new AnalyzedStackTraceLine(targetInterCFGVertices, intraCFG,
                             targetIntraCFGVertices, requiredConstructorCalls);
                 }));
-
-        // Retrieves all activities or fragments that transitively invoke any of the methods contained in the stack trace.
-        targetComponents = getTargetComponents(callTree, packageName, ComponentType.ACTIVITY, ComponentType.FRAGMENT);
 
         // TODO: Use List<CFGVertex> type.
         // Retrieve the target vertices from the stack trace lines.

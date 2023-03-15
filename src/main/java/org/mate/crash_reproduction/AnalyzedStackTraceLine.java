@@ -3,37 +3,86 @@ package org.mate.crash_reproduction;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import org.mate.graphs.IntraCFG;
 
+import java.util.Collections;
 import java.util.Set;
 
+/**
+ * Encodes a stack trace line at the basic block (intraCFG) and method level (call tree).
+ */
 public class AnalyzedStackTraceLine {
-    private final Set<Vertex> targetInterVertices;
+
+    /**
+     * The bytecode lines (basic block vertices in the interCFG) that map to the encoded source code line number of
+     * the stack trace line.
+     */
+    private final Set<Vertex> interCFGVertices;
+
+    // TODO: might be redundant to the intraCFG vertices...
+
+    /**
+     * The bytecode lines (basic block vertices in the intraCFG) that map to the encoded source code line number of
+     * the stack trace line.
+     */
+    private final Set<Vertex> IntraCFGVertices;
+
+    /**
+     * The intra CFG corresponding to the method encoded in the stack trace line.
+     */
     private final IntraCFG intraCFG;
-    private final Set<Vertex> targetMethodVertices;
+
+    /**
+     * The required constructors to properly invoke the method in the stack trace line. This includes the class
+     * constructors or the static constructor of the method encoded in the stack trace line plus the constructors
+     * required to properly initialise the parameters of the method.
+     */
     private final Set<String> requiredConstructorCalls;
 
-    public AnalyzedStackTraceLine(Set<Vertex> targetInterVertices,
+    // TODO: Add reference to original stack trace line?
+    public AnalyzedStackTraceLine(Set<Vertex> interCFGVertices,
                                   IntraCFG intraCFG,
-                                  Set<Vertex> targetMethodVertices,
+                                  Set<Vertex> IntraCFGVertices,
                                   Set<String> requiredConstructorCalls) {
-        this.targetInterVertices = targetInterVertices;
+        this.interCFGVertices = interCFGVertices;
         this.intraCFG = intraCFG;
-        this.targetMethodVertices = targetMethodVertices;
+        this.IntraCFGVertices = IntraCFGVertices;
         this.requiredConstructorCalls = requiredConstructorCalls;
     }
 
-    public Set<Vertex> getTargetInterVertices() {
-        return targetInterVertices;
+    /**
+     * Retrieves the set of basic block vertices in the interCFG that map to the encoded source code line number of
+     * the stack trace line.
+     *
+     * @return Returns the set of interCFG vertices that map to the source code line number in the stack trace line.
+     */
+    public Set<Vertex> getInterCFGVertices() {
+        return Collections.unmodifiableSet(interCFGVertices);
     }
 
+    /**
+     * Retrieves the set of basic block vertices in the intraCFG that map to the encoded source code line number of
+     * the stack trace line.
+     *
+     * @return Returns the set of intraCFG vertices that map to the source code line number in the stack trace line.
+     */
+    public Set<Vertex> getIntraCFGVertices() {
+        return Collections.unmodifiableSet(IntraCFGVertices);
+    }
+
+    /**
+     * Retrieves the intra-procedural CFG corresponding to the method encoded in the stack trace line.
+     *
+     * @return Returns the intra-procedural CFG corresponding to the method encoded in the stack trace line.
+     */
     public IntraCFG getIntraCFG() {
         return intraCFG;
     }
 
-    public Set<Vertex> getTargetMethodVertices() {
-        return targetMethodVertices;
-    }
-
+    /**
+     * Retrieves the set of required constructors to properly invoke the method encoded in the stack trace line.
+     *
+     * @return Returns the set of required constructors.
+     */
     public Set<String> getRequiredConstructorCalls() {
-        return requiredConstructorCalls;
+        return Collections.unmodifiableSet(requiredConstructorCalls);
     }
 }

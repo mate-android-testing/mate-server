@@ -20,13 +20,12 @@ import org.mate.graphs.InterCFG;
 import org.mate.util.Log;
 
 import java.util.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 /**
- *
+ * Provides mainly utility functions for crash reproduction.
  */
 public final class CrashReproductionUtil {
 
@@ -42,29 +41,9 @@ public final class CrashReproductionUtil {
      */
     private final CallTree callTree;
 
-    /**
-     * The inter-procedural CFG.
-     */
-    private final InterCFG interCFG;
-
     public CrashReproductionUtil(CallTree callTree) {
         this.callTree = callTree;
-        this.interCFG = callTree.getInterCFG();
         this.dexFiles = callTree.getApk().getDexFiles();
-    }
-
-    /**
-     * Retrieves
-     * @param stackTrace
-     * @param interCFG
-     * @param packageName
-     * @return
-     */
-    public Map<AtStackTraceLine, Set<Vertex>> getTargetTracesForStackTrace(List<AtStackTraceLine> stackTrace,
-                                                                           InterCFG interCFG,
-                                                                           String packageName) {
-        return getLastConsecutiveLines(stackTrace, packageName).stream()
-                .collect(Collectors.toMap(Function.identity(), line -> getTargetVerticesForStackTraceLine(line, interCFG)));
     }
 
     /**
@@ -103,6 +82,8 @@ public final class CrashReproductionUtil {
                 ))
                 .collect(Collectors.toSet());
     }
+
+    // TODO: Understand and fix documentation.
 
     /**
      *
@@ -295,6 +276,7 @@ public final class CrashReproductionUtil {
         return Optional.empty();
     }
 
+    // TODO: Understand and document.
     public Stream<String> getTokensFromStackTraceLine(AtStackTraceLine stackTraceLine) {
         var result = getInstructionsForLine(stackTraceLine).orElseThrow();
         return result.getY().stream()
@@ -305,6 +287,7 @@ public final class CrashReproductionUtil {
                 ));
     }
 
+    // TODO: Understand and document.
     private Optional<MenuItemWithResolvedTitle> getMenuItemFromLine(Method method, BuilderInstruction instruction) {
         return callTree.getComponentByNameAndType(MethodUtils.getClassName(method.toString()), ComponentType.ACTIVITY)
                 .flatMap(c -> {
@@ -326,6 +309,7 @@ public final class CrashReproductionUtil {
                 });
     }
 
+    // TODO: Understand and document.
     private static Stream<String> getTokensFromInstruction(final Instruction instruction) {
 
         if (instruction instanceof ReferenceInstruction) {
