@@ -136,7 +136,7 @@ public class GraphEndpoint implements Endpoint {
     /**
      * The list of target vertices, e.g. all branches.
      */
-    private List<Vertex> targetVertices;
+    private List<? extends Vertex> targetVertices;
 
     /**
      * Stores for each stack trace line detailed information.
@@ -189,7 +189,7 @@ public class GraphEndpoint implements Endpoint {
      *
      * @param branchVertices The list of branch vertices (targets).
      */
-    private void initApproachLevelCache(final List<Vertex> branchVertices) {
+    private void initApproachLevelCache(final List<CFGVertex> branchVertices) {
 
         final var relevantVertices = ((List<CFGVertex>) graph.getVertices())
                 .stream()
@@ -217,7 +217,8 @@ public class GraphEndpoint implements Endpoint {
         }
 
         final var approachLevels = new char[relevantVerticesCount * branchVerticesCount];
-        final BiFunction<CFGVertex, CFGVertex, Integer> distances = graph.getDistances(Set.of(relevantVertices), Set.copyOf(branchVertices));
+        final BiFunction<CFGVertex, CFGVertex, Integer> distances
+                = graph.getDistances(Set.of(relevantVertices), Set.copyOf(branchVertices));
 
         IntStream.range(0, branchVerticesCount).parallel().forEach(i -> {
 
@@ -1110,7 +1111,6 @@ public class GraphEndpoint implements Endpoint {
         final Map<AtStackTraceLine, Boolean> reachedTargetMethods = analyzedStackTraceLines.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, stackTraceLine -> {
                     final String method = expectOne(stackTraceLine.getValue().getInterCFGVertices().stream()
-                            .map(v -> (CFGVertex) v)
                             .map(CFGVertex::getMethod)
                             .collect(Collectors.toSet()));
                     return reachedMethods.contains(method);
@@ -1314,7 +1314,7 @@ public class GraphEndpoint implements Endpoint {
      * @param stackTracePath The path to the stack trace file, {@code null} if not required.
      * @return Returns the selected target vertex.
      */
-    private List<Vertex> selectTargetVertices(String target, String packageName, File apkPath, String stackTracePath) {
+    private List<? extends Vertex> selectTargetVertices(String target, String packageName, File apkPath, String stackTracePath) {
 
         Log.println("Target vertex selection strategy: " + target);
 
@@ -1385,7 +1385,7 @@ public class GraphEndpoint implements Endpoint {
      * @param apkPath The path to the APK.
      * @return Returns the target vertices for crash reproduction.
      */
-    private List<Vertex> getTargetVertices(final StackTrace stackTrace, final String packageName, final File apkPath) {
+    private List<? extends Vertex> getTargetVertices(final StackTrace stackTrace, final String packageName, final File apkPath) {
 
         final CallTree callTree = (CallTree) graph;
         final InterCFG interCFG = callTree.getInterCFG();
@@ -1398,24 +1398,20 @@ public class GraphEndpoint implements Endpoint {
                 .collect(Collectors.toList()), packageName).stream()
                 .collect(Collectors.toMap(Function.identity(), line -> {
 
-                    // TODO: Use CFGVertex type.
                     // Retrieve the inter-procedural CFG vertices that are mapped to the given stack trace line.
-                    final Set<Vertex> targetInterCFGVertices
+                    final Set<CFGVertex> targetInterCFGVertices
                             = crashReproductionUtil.getTargetVerticesForStackTraceLine(line, interCFG);
 
                     // TODO: Retrieve the target method name directly from the method name encoded in the stack trace line.
                     final String targetMethod = expectOne(targetInterCFGVertices.stream()
-                            .map(v -> (CFGVertex) v)
                             .map(CFGVertex::getMethod)
                             .collect(Collectors.toSet()));
 
                     // create the intraCFG matching the target method (method encoded in the stack trace line)
                     final IntraCFG intraCFG = new IntraCFG(apkPath, targetMethod, true, appsDir, packageName);
 
-                    // TODO: Use CFGVertex type.
                     // TODO: Remove once we can assure that those vertices are identical to the interTargetVertices!
-                    final Set<Vertex> targetIntraCFGVertices = targetInterCFGVertices.stream()
-                            .map(v -> (CFGVertex) v)
+                    final Set<CFGVertex> targetIntraCFGVertices = targetInterCFGVertices.stream()
                             .flatMap(interVertex -> tracesForStatement(interVertex.getStatement()))
                             .map(intraCFG::lookupVertex)
                             .collect(Collectors.toSet());
@@ -1433,9 +1429,8 @@ public class GraphEndpoint implements Endpoint {
                             targetIntraCFGVertices, requiredConstructorCalls);
                 }));
 
-        // TODO: Use List<CFGVertex> type.
         // Retrieve the target vertices from the stack trace lines.
-        final List<Vertex> targetInterCFGVertices = stackTrace.getStackTraceAtLines()
+        final List<CFGVertex> targetInterCFGVertices = stackTrace.getStackTraceAtLines()
                 .filter(analyzedStackTraceLines::containsKey)
                 .map(analyzedStackTraceLines::get)
                 .map(AnalyzedStackTraceLine::getInterCFGVertices)
@@ -1450,8 +1445,6 @@ public class GraphEndpoint implements Endpoint {
         // TODO: Store the call tree vertices in a global variable.
         // Map the interCFG vertices to the callTree vertices.
         final var callTreeVertices = targetInterCFGVertices.stream()
-                // TODO: Remove this cast once targetVertices have the correct type.
-                .map(v -> (CFGVertex) v)
                 .map(CFGVertex::getMethod)
                 .map(CallTreeVertex::new)
                 .collect(Collectors.toList());
@@ -1501,7 +1494,7 @@ public class GraphEndpoint implements Endpoint {
                 // TODO: Make this dependent on fitness function, only required for approach level + branch distance.
                 long start = System.currentTimeMillis();
                 initBranchDistanceCache(getInstrumentationPoints(packageName));
-                initApproachLevelCache(targetVertices);
+                initApproachLevelCache((List<CFGVertex>) targetVertices);
                 long end = System.currentTimeMillis();
                 Log.println("Pre-Computing approach levels and branch distances took: " + (end - start) + "ms");
                 break;

@@ -1,6 +1,6 @@
 package org.mate.crash_reproduction;
 
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
 import org.mate.graphs.IntraCFG;
 
 import java.util.Collections;
@@ -15,7 +15,7 @@ public class AnalyzedStackTraceLine {
      * The bytecode lines (basic block vertices in the interCFG) that map to the encoded source code line number of
      * the stack trace line.
      */
-    private final Set<Vertex> interCFGVertices;
+    private final Set<CFGVertex> interCFGVertices;
 
     // TODO: might be redundant to the intraCFG vertices...
 
@@ -23,7 +23,7 @@ public class AnalyzedStackTraceLine {
      * The bytecode lines (basic block vertices in the intraCFG) that map to the encoded source code line number of
      * the stack trace line.
      */
-    private final Set<Vertex> IntraCFGVertices;
+    private final Set<CFGVertex> IntraCFGVertices;
 
     /**
      * The intra CFG corresponding to the method encoded in the stack trace line.
@@ -38,9 +38,9 @@ public class AnalyzedStackTraceLine {
     private final Set<String> requiredConstructorCalls;
 
     // TODO: Add reference to original stack trace line?
-    public AnalyzedStackTraceLine(Set<Vertex> interCFGVertices,
+    public AnalyzedStackTraceLine(Set<CFGVertex> interCFGVertices,
                                   IntraCFG intraCFG,
-                                  Set<Vertex> IntraCFGVertices,
+                                  Set<CFGVertex> IntraCFGVertices,
                                   Set<String> requiredConstructorCalls) {
         this.interCFGVertices = interCFGVertices;
         this.intraCFG = intraCFG;
@@ -54,7 +54,7 @@ public class AnalyzedStackTraceLine {
      *
      * @return Returns the set of interCFG vertices that map to the source code line number in the stack trace line.
      */
-    public Set<Vertex> getInterCFGVertices() {
+    public Set<CFGVertex> getInterCFGVertices() {
         return Collections.unmodifiableSet(interCFGVertices);
     }
 
@@ -64,7 +64,7 @@ public class AnalyzedStackTraceLine {
      *
      * @return Returns the set of intraCFG vertices that map to the source code line number in the stack trace line.
      */
-    public Set<Vertex> getIntraCFGVertices() {
+    public Set<CFGVertex> getIntraCFGVertices() {
         return Collections.unmodifiableSet(IntraCFGVertices);
     }
 

@@ -2,7 +2,7 @@ package org.mate.crash_reproduction;
 
 import de.uni_passau.fim.auermich.android_graphs.core.app.components.Activity;
 import de.uni_passau.fim.auermich.android_graphs.core.app.components.ComponentType;
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.*;
 import org.jf.dexlib2.ReferenceType;
 import org.jf.dexlib2.builder.BuilderDebugItem;
@@ -53,7 +53,7 @@ public final class CrashReproductionUtil {
      * @param interCFG The inter-procedural CFG from which the target vertices are derived.
      * @return Returns the target vertices associated with the given stack trace line.
      */
-    public Set<Vertex> getTargetVerticesForStackTraceLine(final AtStackTraceLine line, final InterCFG interCFG) {
+    public Set<CFGVertex> getTargetVerticesForStackTraceLine(final AtStackTraceLine line, final InterCFG interCFG) {
 
         // Retrieve the method and bytecode instructions that refer to the source code line number of the stack trace line.
         var mappedMethodAndByteCodeInstructions = getInstructionsForLine(line).orElseThrow();
