@@ -10,7 +10,7 @@ import java.util.stream.Stream;
  */
 public class AtStackTraceLine implements StackTraceLine {
 
-    // TODO: Why those methods are ignored?
+    // TODO: Why those methods are ignored? -- Should be probably all Android methods (no keywords from them)
     private final static Set<String> IGNORE_METHODS = Set.of("onOptionsItemSelected");
 
     /**
@@ -155,18 +155,20 @@ public class AtStackTraceLine implements StackTraceLine {
     }
 
     /**
-     * {@inheritDoc}
+     * Returns essentially the keywords for promising actions (see paper).
+     *
+     * @return Returns the relevant keywords for the online-phase.
      */
     @Override
     public Stream<String> getFuzzyTokens() {
         return Stream.concat(
-                Arrays.stream(packageName.split("\\.")),
+                Arrays.stream(packageName.split("\\.")), // split on packages
                 Stream.concat(
-                        IGNORE_METHODS.contains(methodName) ? Stream.empty() : Stream.of(methodName),
-                        Arrays.stream(className.split("\\$"))
+                        IGNORE_METHODS.contains(methodName) ? Stream.empty() : Stream.of(methodName), // take method name as token
+                        Arrays.stream(className.split("\\$")) // split on inner classes
                 ))
-                .flatMap(TokenUtil::splitCamelCase)
-                .map(String::toLowerCase);
+                .flatMap(TokenUtil::splitCamelCase) // split all tokens on camel case
+                .map(String::toLowerCase); // TODO: Probably redundant, check MATE how it compares the keywords...
     }
 
     /**

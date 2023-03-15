@@ -65,15 +65,20 @@ public class CausedByStackTraceLine implements StackTraceLine {
             return Stream.empty();
         }
 
-        // TODO: Document this edge case.
         if (exception.equals("java.lang.NumberFormatException")) {
-            final Pattern messagePattern = Pattern.compile(".*\"(\\d*)\".*");
+
+            /*
+            * We are interested in the input (malformed number) that caused the crash. Using this information as input
+            * for MATE' input generator, we anticipate to re-trigger the crash.
+             */
+            final Pattern messagePattern = Pattern.compile(".*\"(\\d*)\".*"); // TODO: Why we only extract the number?
             final Matcher matcher = messagePattern.matcher(message);
 
             if (matcher.matches()) {
                 return Stream.of(matcher.group(1));
             }
-        } else if (exception.equals("java.lang.NullPointerException")) {
+        } else if (exception.equals("java.lang.NullPointerException")) { // TODO: Can be probably ignored?!?
+            // TODO: It seems like we would ignore the exception message...
             return Stream.empty();
         }
         return Stream.of(message);

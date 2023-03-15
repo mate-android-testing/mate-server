@@ -40,7 +40,9 @@ public class MoreStackTraceLine implements StackTraceLine {
     }
 
     /**
-     * {@inheritDoc}
+     * No tokens (keywords) can be derived from such a line as it encodes essentially no information.
+     *
+     * @return Returns an empty stream.
      */
     @Override
     public Stream<String> getFuzzyTokens() {

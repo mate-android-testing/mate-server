@@ -15,7 +15,11 @@ public interface StackTraceLine {
      */
     boolean isFromPackage(String packageName);
 
-    // TODO: What is this, the keywords that can be extracted? May rename.
+    /**
+     * Returns the relevant tokens for the online-phase (see paper) from the stack trace line.
+     *
+     * @return Returns the relevant tokens (keywords) for the online-phase.
+     */
     Stream<String> getFuzzyTokens();
 
     /**

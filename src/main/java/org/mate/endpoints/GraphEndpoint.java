@@ -2,7 +2,6 @@ package org.mate.endpoints;
 
 import de.uni_passau.fim.auermich.android_graphs.core.app.components.ComponentType;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.calltree.CallTree;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.calltree.CallTreeVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
@@ -14,10 +13,7 @@ import de.uni_passau.fim.auermich.android_graphs.core.utility.Tuple;
 import org.apache.commons.io.FileUtils;
 import org.jf.dexlib2.analysis.AnalyzedInstruction;
 import org.mate.crash_reproduction.*;
-import org.mate.graphs.Graph;
-import org.mate.graphs.GraphType;
-import org.mate.graphs.InterCFG;
-import org.mate.graphs.IntraCFG;
+import org.mate.graphs.*;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
@@ -59,12 +55,6 @@ public class GraphEndpoint implements Endpoint {
      * The path to the apps directory.
      */
     private final Path appsDir;
-
-    /**
-     * The target vertex, e.g. a random branch. If multiple targets exists, e.g. in a multi-objective search, this field
-     * is set to {@code null}.
-     */
-    // private Vertex targetVertex = null;
 
     /**
      * Contains the instrumented branches but also the instrumented if and switch instructions. These instrumentation
@@ -145,24 +135,33 @@ public class GraphEndpoint implements Endpoint {
      */
     private static short generation = Short.MAX_VALUE;
 
-    // TODO: Get rid of this, store results in specific app folder!
-    private final Path resultsPath;
-
-    private CallTree callTree;
-
-    // a target vertex (a random branch)
+    /**
+     * The list of target vertices, e.g. all branches.
+     */
     private List<Vertex> targetVertices;
 
+    /**
+     * Stores for each stack trace line detailed information.
+     */
     private Map<AtStackTraceLine, AnalyzedStackTraceLine> analyzedStackTraceLines;
+
+    /**
+     * The set of target components.
+     */
     private Set<String> targetComponents;
+
+    /**
+     * The stack trace used for crash reproduction.
+     */
     private StackTrace stackTrace;
 
-    // TODO: Make utility class.
+    /**
+     * Provides mainly utility functions for crash reproduction.
+     */
     private CrashReproductionUtil crashReproductionUtil;
 
-    public GraphEndpoint(AndroidEnvironment androidEnvironment, Path resultsPath, Path appsDir) {
+    public GraphEndpoint(AndroidEnvironment androidEnvironment, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
-        this.resultsPath = resultsPath;
         this.appsDir = appsDir;
     }
 
@@ -174,10 +173,12 @@ public class GraphEndpoint implements Endpoint {
             return getBranchDistanceVector(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
             return getBranchDistance(request);
+        } else if (request.getSubject().startsWith("/graph/get_crash_distance")) {
+            return getCrashDistance(request);
+        } else if (request.getSubject().startsWith("/graph/draw/call_tree")) {
+            return drawCallTree(request);
         } else if (request.getSubject().startsWith("/graph/draw")) {
             return drawGraph(request);
-        } else if (request.getSubject().startsWith("/graph/callGraph/draw")) {
-            return drawCallTree(request);
         } else if (request.getSubject().startsWith("/graph/reached_targets")) {
             return reachedTargets(request);
         } else if (request.getSubject().startsWith("/graph/stack_trace_tokens")) {
@@ -186,12 +187,6 @@ public class GraphEndpoint implements Endpoint {
             return getStackTraceUserTokens(request);
         } else if (request.getSubject().startsWith("/graph/stack_trace")) {
             return getStackTrace(request);
-        } else if (request.getSubject().startsWith("/graph/call_graph_distance")) {
-            return getNormalizedCallTreeDistance(request);
-        } else if (request.getSubject().startsWith("/graph/reached_required_constructors")) {
-            return getNormalizedReachedRequiredConstructors(request);
-        } else if (request.getSubject().startsWith("/graph/basic_block_distance")) {
-            return getMergedNormalizedBasicBlockDistance(request);
         } else {
             throw new IllegalArgumentException("Message request with subject: "
                     + request.getSubject() + " can't be handled by GraphEndpoint!");
@@ -880,28 +875,6 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Retrieves the average basic block distance between the traces and the target methods.
-     *
-     * @param request The request message.
-     * @return Returns the response containing the average basic block distance.
-     */
-    private Message getMergedNormalizedBasicBlockDistance(Message request) {
-
-        final List<Set<String>> traces = getTracesPerFile(request);
-        final Map<AtStackTraceLine, Double> basicBlockDistances = getNormalizedBasicBlockDistances(traces);
-
-        // computes the average basic block distance
-        double sum = basicBlockDistances.values().stream().mapToDouble(d -> d).sum();
-        // TODO: Rename to average basic block distance.
-        double mergedNormalizedBasicBlockDistance = sum / basicBlockDistances.size();
-
-        return new Message.MessageBuilder(request.getSubject())
-                // TODO: Rename to average basic block distance.
-                .withParameter("mergedNormalizedDistance", String.valueOf(mergedNormalizedBasicBlockDistance))
-                .build();
-    }
-
-    /**
      * Computes the normalized basic block distance between the given traces and the target methods described by the
      * stack trace.
      *
@@ -944,8 +917,7 @@ public class GraphEndpoint implements Endpoint {
         final var analyzedStackTraceLine = analyzedStackTraceLines.get(stackTraceLine);
         final IntraCFG intraCFG = analyzedStackTraceLine.getIntraCFG();
 
-        // TODO: Is this cast correct?
-        final String targetMethod = analyzedStackTraceLine.getTargetMethodVertices().stream()
+        final String targetMethod = analyzedStackTraceLine.getIntraCFGVertices().stream()
                 .map(v -> (CFGVertex) v)
                 .findAny().orElseThrow().getMethod();
 
@@ -953,7 +925,7 @@ public class GraphEndpoint implements Endpoint {
 
         for (String trace : traces) {
             if (traceToMethod(trace).equals(targetMethod)) {
-                int distance = analyzedStackTraceLine.getTargetMethodVertices().stream()
+                int distance = analyzedStackTraceLine.getIntraCFGVertices().stream()
                         // TODO: Employ a cache for the distances!
                         .map(targetVertex -> intraCFG.getDistance(intraCFG.lookupVertex(trace), (CFGVertex) targetVertex))
                         .map(dist -> dist == -1 ? Integer.MAX_VALUE : dist) // -1 means not reachable
@@ -970,15 +942,76 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Determines how many of the required constructors have been visited by traces.
+     * Retrieves the normalized call tree distance for the given chromosome.
      *
-     * @param request The message request.
-     * @return Returns the normalized number (percentage) of visited constructors.
+     * @param chromosome The chromosome for which the call tree distance should be derived.
+     * @param tracesPerFile The traces per file (action).
+     * @return Returns the normalized call tree distance for the given chromosome.
      */
-    private Message getNormalizedReachedRequiredConstructors(Message request) {
+    private double getCallTreeDistance(final String chromosome, final List<Set<String>> tracesPerFile) {
+
+        Log.println("Computing the call tree distance for the chromosome: " + chromosome);
+
+        // We don't want to mix the traces of different actions, since our target action should produce all traces
+        // necessary to cover the stack trace methods.
+        // If we mix the traces then it's possible that we get a call tree distance of zero even if the target methods
+        // are called from different actions
+        // (and never just by one action). Then we have technically reached all target methods, but not in the right sequence
+        double callTreeDistance = tracesPerFile.stream()
+                .map(traces -> traces.stream().map(this::traceToMethod).collect(Collectors.toSet()))
+                .mapToInt(this::getCallTreeDistance)
+                .min().orElseThrow();
+
+        double normalizedCallTreeDistance = callTreeDistance == Integer.MAX_VALUE
+                ? 1
+                : callTreeDistance / (callTreeDistance + 1);
+
+        Log.println("Call tree distance for " + chromosome + " is: abs. distance " + callTreeDistance
+                + ", rel. distance " + normalizedCallTreeDistance);
+
+        // TODO: Remove after testing.
+        if (normalizedCallTreeDistance < 0 || normalizedCallTreeDistance > 1) {
+            throw new IllegalStateException("Normalized distance not between 0 and 1!");
+        }
+
+        return normalizedCallTreeDistance;
+    }
+
+    /**
+     * Retrieves the normalized (average) basic block distance between the traces and the target methods.
+     *
+     * @param chromosome The chromosome for which the basic block distance should be derived.
+     * @param tracesPerFile The traces per file (action).
+     * @return Returns the normalized basic block distance for the given chromosome.
+     */
+    private double getBasicBlockDistance(final String chromosome, final List<Set<String>> tracesPerFile) {
+
+        Log.println("Computing the call tree distance for the chromosome: " + chromosome);
+
+        final Map<AtStackTraceLine, Double> basicBlockDistances = getNormalizedBasicBlockDistances(tracesPerFile);
+
+        // computes the average basic block distance
+        double sum = basicBlockDistances.values().stream().mapToDouble(d -> d).sum();
+        double averageBasicBlockDistance = sum / basicBlockDistances.size();
+
+        Log.println("Basic block distance for " + chromosome + " is: " + averageBasicBlockDistance);
+
+        return averageBasicBlockDistance;
+    }
+
+    /**
+     * Retrieves the number (percentage) of reached constructors for the given chromosome.
+     *
+     * @param chromosome The chromosome for which the number of reached constructors should be derived.
+     * @param traces The traces for the given chromosome.
+     * @return Returns the number of reached constructors for the given chromosome.
+     */
+    private double getNumberOfReachedConstructors(final String chromosome, final Set<String> traces) {
+
+        Log.println("Computing number of reached constructors for the chromosome: " + chromosome);
 
         // track which methods have been visited by the traces
-        final Set<String> reachedMethods = getTraces(request).stream().map(this::traceToMethod).collect(Collectors.toSet());
+        final Set<String> reachedMethods = traces.stream().map(this::traceToMethod).collect(Collectors.toSet());
 
         // TODO: Cache this computation when initialising the call graph.
         // track the set of required constructors by iterating over the stack trace lines
@@ -995,62 +1028,32 @@ public class GraphEndpoint implements Endpoint {
                 ? 1
                 : reachedConstructors / requiredConstructors.size();
 
-        // TODO: Hardcode message subject for better readability.
-        return new Message.MessageBuilder(request.getSubject())
-                // TODO: Rename to 'reachedConstructors'.
-                .withParameter("reached", String.valueOf(normalisedNumberOfReachedConstructors))
-                .build();
+        Log.println("Number of reached constructors for " + chromosome + " is: " + normalisedNumberOfReachedConstructors);
+
+        return normalisedNumberOfReachedConstructors;
     }
 
     /**
-     * Retrieves the normalized call tree distance for a given chromosome.
+     * Retrieves the crash distance for the given chromosome.
      *
-     * @param request The message request.
-     * @return Returns the normalised call tree distance.
+     * @param request The request message.
+     * @return Returns a response message containing the computed crash distance.
      */
-    private Message getNormalizedCallTreeDistance(Message request) {
+    private Message getCrashDistance(final Message request) {
 
         final String chromosome = request.getParameter("chromosome");
         final List<Set<String>> tracesPerFile = getTracesPerFile(request);
+        final Set<String> traces = getTraces(request);
 
-        double minDistance = getCallTreeDistance(chromosome, tracesPerFile);
-        double normalizedDistance = minDistance == Integer.MAX_VALUE
-                ? 1
-                : minDistance / (minDistance + 1);
+        double callTreeDistance = getCallTreeDistance(chromosome, tracesPerFile);
+        double basicBlockDistance = getBasicBlockDistance(chromosome, tracesPerFile);
+        double reachedConstructorsPercentage = getNumberOfReachedConstructors(chromosome, traces);
 
-        // TODO: Remove after testing.
-        if (normalizedDistance < 0 || normalizedDistance > 1) {
-            throw new IllegalStateException("Normalized distance not between 0 and 1!");
-        }
+        double crashDistance = (basicBlockDistance + callTreeDistance + reachedConstructorsPercentage) / 3;
 
-        Log.println("Call tree distance for " + chromosome + " is: abs. distance " + minDistance
-                + ", rel. distance " + normalizedDistance);
-
-        return new Message.MessageBuilder("/graph/call_tree_distance")
-                .withParameter("distance", String.valueOf(normalizedDistance))
+        return new Message.MessageBuilder("/graph/get_crash_distance")
+                .withParameter("crash_distance", String.valueOf(crashDistance))
                 .build();
-    }
-
-    /**
-     * Computes the call tree distance for the given chromosome.
-     *
-     * @param chromosome The given chromosome.
-     * @param tracesPerFile The traces per file of the given chromosome.
-     * @return Returns the call tree distance for the chromosome.
-     */
-    private int getCallTreeDistance(final String chromosome, final List<Set<String>> tracesPerFile) {
-
-        Log.println("Computing the call tree distance for the chromosome: " + chromosome);
-
-        // We don't want to mix the traces of different actions, since our target action should produce all traces
-        // necessary to cover the stack trace methods.
-        // If we mix the traces then it's possible that we get a call tree distance of zero even if the target methods
-        // are called from different actions
-        // (and never just by one action). Then we have technically reached all target methods, but not in the right sequence
-        return tracesPerFile.stream()
-                .map(traces -> traces.stream().map(this::traceToMethod).collect(Collectors.toSet()))
-                .mapToInt(this::getCallTreeDistance)
-                .min().orElseThrow();
     }
 
     /**
@@ -1060,6 +1063,8 @@ public class GraphEndpoint implements Endpoint {
      * @return Returns the call tree distance.
      */
     private int getCallTreeDistance(final Set<String> traces) {
+
+        CallTree callTree = (CallTree) graph;
 
         // TODO: Cache this computation.
         // the call tree vertices describing the stack trace in reversed order
@@ -1108,6 +1113,7 @@ public class GraphEndpoint implements Endpoint {
     }
 
     // TODO: Understand & Document.
+    // TODO: Remove since only used for debugging if I am correct.
     private Message reachedTargets(Message request) {
 
         var tracesPerFile = getTracesPerFile(request);
@@ -1115,7 +1121,8 @@ public class GraphEndpoint implements Endpoint {
         // If an exception is thrown then there is no trace of the line that threw the exception
         // Since (at least one of) the target lines will throw an exception we need to manually add these traces
         // in order to decide whether we have reached all target lines/methods
-        tracesPerFile.forEach(traces -> traces.addAll(deduceTracesFromStackTrace(request.getParameter("stackTrace"),
+        tracesPerFile.forEach(traces -> traces.addAll(deduceTracesFromStackTrace(
+                request.getParameter("stackTrace"),
                 request.getParameter("packageName"))));
 
         Message response = new Message(request.getSubject());
@@ -1205,8 +1212,7 @@ public class GraphEndpoint implements Endpoint {
 
         final Map<AtStackTraceLine, Boolean> reachedTargetMethods = analyzedStackTraceLines.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, stackTraceLine -> {
-                    final String method = expectOne(stackTraceLine.getValue().getTargetInterVertices().stream()
-                            // TODO: Is this cast correct?
+                    final String method = expectOne(stackTraceLine.getValue().getInterCFGVertices().stream()
                             .map(v -> (CFGVertex) v)
                             .map(CFGVertex::getMethod)
                             .collect(Collectors.toSet()));
@@ -1233,15 +1239,14 @@ public class GraphEndpoint implements Endpoint {
 
         final Map<AtStackTraceLine, Boolean> reachedTargetLines = analyzedStackTraceLines.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> {
-                    final long matches = e.getValue().getTargetInterVertices().stream()
-                            // TODO: Is this cast correct?
+                    final long matches = e.getValue().getInterCFGVertices().stream()
                             .map(v -> (CFGVertex) v)
                             .filter(v -> tracesForStatement(v.getStatement()).anyMatch(reachedBasicBlocks::contains))
                             .count();
 
                     if (matches == 0) {
                         return false;
-                    } else if (matches == e.getValue().getTargetInterVertices().size()) {
+                    } else if (matches == e.getValue().getInterCFGVertices().size()) {
                         return true;
                     } else { // TODO: Can this really happen and what does this mean in fact?
                         Log.printWarning("Reached only some parts of line!");
@@ -1296,7 +1301,7 @@ public class GraphEndpoint implements Endpoint {
      * @param <T> The element type of the collection entries.
      * @return Returns the single element in the collection or throws an exception otherwise.
      */
-    private static <T> T expectOne(Collection<T> collection) {
+    private static <T> T expectOne(final Collection<T> collection) {
         if (collection.isEmpty()) {
             throw new NoSuchElementException("Empty collection!");
         } else if (collection.size() > 1) {
@@ -1307,12 +1312,13 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Computes the traces for the given statement.
+     * Computes the traces for the given statement. A trace encodes the full-qualified method name and the instruction
+     * index, e.g. Lcom/zola/bmi/onStop()V->3.
      *
      * @param statement The given statement.
      * @return Returns the traces for the statement.
      */
-    private Stream<String> tracesForStatement(Statement statement) {
+    private Stream<String> tracesForStatement(final Statement statement) {
         return getInstructions(statement)
                 .map(instruction -> statement.getMethod() + "->" + instruction.getInstructionIndex());
     }
@@ -1323,7 +1329,7 @@ public class GraphEndpoint implements Endpoint {
      * @param statement The given statement.
      * @return Returns the instructions belonging to the statement.
      */
-    private static Stream<AnalyzedInstruction> getInstructions(Statement statement) {
+    private static Stream<AnalyzedInstruction> getInstructions(final Statement statement) {
         if (statement instanceof BasicStatement) {
             return Stream.of(((BasicStatement) statement).getInstruction());
         } else if (statement instanceof BlockStatement) { // basic block, unroll instructions
@@ -1356,14 +1362,17 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Retrieves the target components that belong to the app package and are of the given component types.
+     * Retrieves the target components, i.e. a component that transitively invokes any of the methods encoded in the
+     * stack trace and belongs to the AUT package and is of one of the given component types.
      *
-     * @param packageName The app package.
+     * @param packageName The AUT package.
      * @param componentTypes The allowed component types, e.g. activities.
      * @return Returns the given target components.
      */
-    private Set<String> getTargetComponents(String packageName, ComponentType... componentTypes) {
-        return ((InterCFG) graph).getTargetComponents(stackTrace.getStackTraceAtLines()
+    private Set<String> getTargetComponents(final CallTree callTree, final String packageName,
+                                            final ComponentType... componentTypes) {
+        // TODO: Separate here call tree logic from stack trace logic. (Separation of Concern)
+        return callTree.getTargetComponents(stackTrace.getStackTraceAtLines()
                 .filter(stackTraceLine -> stackTraceLine.isFromPackage(packageName))
                 .collect(Collectors.toList()), componentTypes);
     }
@@ -1380,8 +1389,6 @@ public class GraphEndpoint implements Endpoint {
             throw new IllegalStateException("Graph hasn't been initialised!");
         }
 
-        // TODO: Rename request parameter to 'chromosomes'.
-        final String chromosomes = request.getParameter("chromosome");
         final boolean raw = Boolean.parseBoolean(request.getParameter("raw"));
 
         final File appDir = new File(appsDir.toFile(), graph.getAppName());
@@ -1394,15 +1401,10 @@ public class GraphEndpoint implements Endpoint {
         } else {
             Log.println("Drawing graph...");
 
-            // TODO: Initialise the target vertices directly with the branches if multiple targets.
-
-            // determine the target vertices (e.g. single branch or all branches)
-            // final Set<Vertex> targetVertices = new HashSet<>(Objects.requireNonNullElseGet(this.targetVertices,
-            //        () -> new HashSet<>(graph.getBranchVertices())));
             final Set<Vertex> targetVertices = new HashSet<>(this.targetVertices);
 
             // retrieve the visited vertices
-            final Set<Vertex> visitedVertices = new HashSet<>(getVisitedVertices(appDir, chromosomes));
+            final Set<Vertex> visitedVertices = new HashSet<>(getVisitedVertices(appDir, null));
 
             // draw the graph where target and visited vertices are marked in different colours
             graph.draw(drawDir, visitedVertices, targetVertices);
@@ -1419,25 +1421,30 @@ public class GraphEndpoint implements Endpoint {
      */
     private Message drawCallTree(Message request) {
 
+        CallTree callTree = (CallTree) graph;
+
         final Set<String> traces = getTraces(request);
         final Set<String> visitedMethods = getVisitedMethods(traces);
+
+        final File appDir = new File(appsDir.toFile(), graph.getAppName());
+        final File drawDir = new File(appDir, "graph-drawings");
+        drawDir.mkdirs();
+
+        final String id = request.getParameter("id");
+        final File dotFile = new File(drawDir, id + ".dot");
 
         // highlight the visited methods in red and the target methods in blue
         final Map<String, String> highlightMethods = visitedMethods.stream()
                 .collect(Collectors.toMap(Function.identity(), a -> "red"));
         targetVertices.stream()
-                // TODO: Is this cast correct?
                 .map(v -> (CFGVertex) v)
                 .map(CFGVertex::getMethod)
                 .forEach(target -> highlightMethods.put(target, "blue"));
 
         // export the call tree to a dot file
-        final String id = request.getParameter("id");
-        final File dotFile = resultsPath.resolve(id + ".dot").toFile();
         callTree.toDot(dotFile, highlightMethods);
 
-        // TODO: Follow here typical convention for subject names.
-        return new Message("/graph/callTree/draw");
+        return new Message("/graph/draw/call_tree");
     }
 
     /**
@@ -1466,9 +1473,12 @@ public class GraphEndpoint implements Endpoint {
      * Selects one or more target vertices based on the given target criterion.
      *
      * @param target Describes how a target should be selected.
+     * @param packageName The package name of the AUT.
+     * @param apkPath The path to the APK file.
+     * @param stackTracePath The path to the stack trace file, {@code null} if not required.
      * @return Returns the selected target vertex.
      */
-    private List<Vertex> selectTargetVertices(String target, String packageName, File apkPath, Message request) {
+    private List<Vertex> selectTargetVertices(String target, String packageName, File apkPath, String stackTracePath) {
 
         Log.println("Target vertex selection strategy: " + target);
 
@@ -1476,7 +1486,6 @@ public class GraphEndpoint implements Endpoint {
             // TODO: Rename to 'all_branches'/'branches'.
             case "no_target":
                 return graph.getBranchVertices();
-                // return null; // for multiple targets
             case "random_target":
             case "random_branch":
                 List<CFGVertex> targets = target.equals("random_target") ? graph.getVertices() : graph.getBranchVertices();
@@ -1492,17 +1501,18 @@ public class GraphEndpoint implements Endpoint {
                     }
                 }
             case "stack_trace":
-                // TODO: Hardcode file name of stack trace file to get rid of message request param!
                 final File appDir = new File(appsDir.toFile(), packageName);
 
                 // the stack_trace.txt should be located within the app directory
-                final File stackTraceFile = new File(appDir, request.getParameter("stack_trace_path"));
+                final File stackTraceFile = new File(appDir, stackTracePath);
 
                 if (!stackTraceFile.exists()) {
                     throw new IllegalArgumentException("Stack trace file does not exist at: " + stackTraceFile.getAbsolutePath());
                 }
 
-                return getTargetVertices(stackTraceFile, packageName, apkPath);
+                stackTrace = parseStackTraceFromFile(stackTraceFile);
+
+                return getTargetVertices(stackTrace, packageName, apkPath);
             default:
                 // look up target vertex/vertices by supplied trace(s)
                 final List<Vertex> targetVertices = Arrays.stream(target.split(","))
@@ -1516,82 +1526,120 @@ public class GraphEndpoint implements Endpoint {
         }
     }
 
-    private List<Vertex> getTargetVertices(final File stackTraceFile, final String packageName, final File apkPath) {
-
-        final InterCFG interCFG = (InterCFG) graph;
-
-        // TODO: Make this crash reproduction util a real utility class
-        crashReproductionUtil = new CrashReproductionUtil(interCFG.getApk().getDexFiles(), interCFG);
-
+    /**
+     * Parses the stack trace from the given file.
+     *
+     * @param stackTraceFile The given stack trace file.
+     * @return Returns the parsed stack trace.
+     */
+    private StackTrace parseStackTraceFromFile(final File stackTraceFile) {
         try {
-            stackTrace = StackTraceParser.parse(Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()));
+            return StackTraceParser.parse(Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()));
         } catch (IOException e) {
             Log.printError("Could not read stack trace file from '" + stackTraceFile.getAbsolutePath() + "'!");
             throw new UncheckedIOException(e);
         }
+    }
 
-        // TODO: Comment this.
+    /**
+     * Initialises the target vertices for crash reproduction.
+     *
+     * @param stackTrace The target stack trace.
+     * @param packageName The package name of the AUT.
+     * @param apkPath The path to the APK.
+     * @return Returns the target vertices for crash reproduction.
+     */
+    private List<Vertex> getTargetVertices(final StackTrace stackTrace, final String packageName, final File apkPath) {
+
+        final CallTree callTree = (CallTree) graph;
+        final InterCFG interCFG = callTree.getInterCFG();
+
+        // TODO: Make this crash reproduction util a real utility class.
+        crashReproductionUtil = new CrashReproductionUtil(callTree);
+
+        // Analyse every 'at' stack trace line that belongs to the given package and comes in consecutive order.
         analyzedStackTraceLines = crashReproductionUtil.getLastConsecutiveLines(stackTrace.getStackTraceAtLines()
                 .collect(Collectors.toList()), packageName).stream()
                 .collect(Collectors.toMap(Function.identity(), line -> {
 
-                    // TODO: Fix method name (vertices vs traces).
-                    final var interVertices = crashReproductionUtil.getTargetTracesForStackTraceLine(line, interCFG);
+                    // TODO: Use CFGVertex type.
+                    // Retrieve the inter-procedural CFG vertices that are mapped to the given stack trace line.
+                    final Set<Vertex> targetInterCFGVertices
+                            = crashReproductionUtil.getTargetVerticesForStackTraceLine(line, interCFG);
 
-                    // TODO: Require a more intuitive name. Is this the target method?
-                    final String method = expectOne(interVertices.stream()
-                            // TODO: Is this cast correct?
+                    // TODO: Retrieve the target method name directly from the method name encoded in the stack trace line.
+                    final String targetMethod = expectOne(targetInterCFGVertices.stream()
                             .map(v -> (CFGVertex) v)
                             .map(CFGVertex::getMethod)
                             .collect(Collectors.toSet()));
 
-                    // TODO: Don't create intraCFG twice, retrieve intraCFG from interCFG!
-                    final IntraCFG intraCFG = new IntraCFG(apkPath, method, true, appsDir, packageName);
+                    // create the intraCFG matching the target method (method encoded in the stack trace line)
+                    final IntraCFG intraCFG = new IntraCFG(apkPath, targetMethod, true, appsDir, packageName);
 
-                    // TODO: Can't we simply retrieve the vertices from the intraCFG directly?
-                    final Set<Vertex> intraCFGVertices = interVertices.stream()
+                    // TODO: Use CFGVertex type.
+                    // TODO: Remove once we can assure that those vertices are identical to the interTargetVertices!
+                    final Set<Vertex> targetIntraCFGVertices = targetInterCFGVertices.stream()
                             .map(v -> (CFGVertex) v)
                             .flatMap(interVertex -> tracesForStatement(interVertex.getStatement()))
                             .map(intraCFG::lookupVertex)
                             .collect(Collectors.toSet());
 
+                    if (!targetInterCFGVertices.equals(targetIntraCFGVertices)) {
+                        Log.println("Not same set of vertices!");
+                        Log.println("InterCFG vertices: " + targetInterCFGVertices);
+                        Log.println("IntraCFG vertices: " + targetIntraCFGVertices);
+                    }
+
+                    // Retrieves the required constructors to properly call the target method in the stack trace line.
                     final var requiredConstructorCalls = crashReproductionUtil.getRequiredConstructorCalls(line);
 
-                    return new AnalyzedStackTraceLine(interVertices, intraCFG, intraCFGVertices, requiredConstructorCalls);
+                    return new AnalyzedStackTraceLine(targetInterCFGVertices, intraCFG,
+                            targetIntraCFGVertices, requiredConstructorCalls);
                 }));
 
-        targetComponents = getTargetComponents(packageName, ComponentType.ACTIVITY, ComponentType.FRAGMENT);
+        // Retrieves all activities or fragments that transitively invoke any of the methods contained in the stack trace.
+        targetComponents = getTargetComponents(callTree, packageName, ComponentType.ACTIVITY, ComponentType.FRAGMENT);
 
-        // retrieve the target vertices from the stack trace lines
-        final List<Vertex> targetVertices = stackTrace.getStackTraceAtLines()
+        // TODO: Use List<CFGVertex> type.
+        // Retrieve the target vertices from the stack trace lines.
+        final List<Vertex> targetInterCFGVertices = stackTrace.getStackTraceAtLines()
                 .filter(analyzedStackTraceLines::containsKey)
                 .map(analyzedStackTraceLines::get)
-                .map(AnalyzedStackTraceLine::getTargetInterVertices)
+                .map(AnalyzedStackTraceLine::getInterCFGVertices)
                 .flatMap(Collection::stream)
                 .collect(Collectors.toList());
 
-        // at least a single in the stack trace must refer to the AUT
-        if (targetVertices.isEmpty()) {
+        // At least a single line (target) in the stack trace must refer to the AUT.
+        if (targetInterCFGVertices.isEmpty()) {
             throw new IllegalStateException("No targets found for stack trace!");
         }
 
         // TODO: Store the call tree vertices in a global variable.
-        final var callTreeVertices = targetVertices.stream()
-                // TODO: Is this cast correct?
+        // Map the interCFG vertices to the callTree vertices.
+        final var callTreeVertices = targetInterCFGVertices.stream()
+                // TODO: Remove this cast once targetVertices have the correct type.
                 .map(v -> (CFGVertex) v)
                 .map(CFGVertex::getMethod)
                 .map(CallTreeVertex::new)
                 .collect(Collectors.toList());
+
         // TODO: Why do we reverse the list?
         Collections.reverse(callTreeVertices);
 
-        // the target vertices must be reachable in the call tree
+        // The target vertices must be reachable in the call tree.
         if (callTree.getShortestPathWithStops(callTreeVertices).isEmpty()) {
             throw new IllegalStateException("No path from root to target vertices!");
         }
-        return targetVertices;
+
+        return targetInterCFGVertices;
     }
 
+    /**
+     * Initialises the graph.
+     *
+     * @param request The request message.
+     * @return Returns a dummy response upon successful graph initialization.
+     */
     private Message initGraph(Message request) {
 
         String packageName = request.getParameter("packageName");
@@ -1603,50 +1651,88 @@ public class GraphEndpoint implements Endpoint {
             throw new IllegalArgumentException("Can't locate APK: " + apkPath.getAbsolutePath() + "!");
         }
 
-        boolean useBasicBlocks = Boolean.parseBoolean(request.getParameter("basic_blocks"));
-
         switch (graphType) {
-            case INTRA_CFG:
+            case INTRA_CFG: {
+                boolean useBasicBlocks = Boolean.parseBoolean(request.getParameter("basic_blocks"));
                 String methodName = request.getParameter("method");
-                initIntraCFG(apkPath, methodName, useBasicBlocks, packageName, target, request);
+                initIntraCFG(apkPath, methodName, useBasicBlocks, packageName, target);
                 break;
-            case INTER_CFG:
+            }
+            case INTER_CFG: {
+                boolean useBasicBlocks = Boolean.parseBoolean(request.getParameter("basic_blocks"));
                 boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
                 boolean resolveOnlyAUTClasses
                         = Boolean.parseBoolean(request.getParameter("resolve_only_aut_classes"));
-                initInterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses,
-                        packageName, target, request);
+                initInterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, packageName, target);
+
+                // TODO: Make this dependent on fitness function, only required for approach level + branch distance.
+                long start = System.currentTimeMillis();
+                initBranchDistanceCache(getInstrumentationPoints(packageName));
+                initApproachLevelCache(targetVertices);
+                long end = System.currentTimeMillis();
+                Log.println("Pre-Computing approach levels and branch distances took: " + (end - start) + "ms");
                 break;
-                // TODO: Introduce a graph type for the call graph
+            }
+            case CALL_TREE: {
+                boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
+                boolean resolveOnlyAUTClasses
+                        = Boolean.parseBoolean(request.getParameter("resolve_only_aut_classes"));
+                final String stackTracePath = request.getParameter("stack_trace_path");
+                initCallTree(apkPath, excludeARTClasses, resolveOnlyAUTClasses, packageName, target, stackTracePath);
+                break;
+            }
             default:
                 throw new UnsupportedOperationException("Graph type not yet supported!");
         }
 
-        long start = System.currentTimeMillis();
-        initBranchDistanceCache(getInstrumentationPoints(packageName));
-        initApproachLevelCache(targetVertices);
-        long end = System.currentTimeMillis();
-        Log.println("Pre-Computing approach levels and branch distances took: " + (end - start) + "ms");
         return new Message("/graph/init");
-
     }
 
-    private void initIntraCFG(File apkPath, String methodName, boolean useBasicBlocks,
-                                 String packageName, String target, Message request) {
+    /**
+     * Initialises the intraCFG with the given properties.
+     *
+     * @param apkPath The path to the APK file.
+     * @param methodName The method for which the intraCFG should be constructed.
+     * @param useBasicBlocks Whether to use basic blocks for the intraCFG.
+     * @param packageName The package name of the AUT.
+     * @param target Describes the target vertices.
+     */
+    private void initIntraCFG(final File apkPath, final String methodName, final boolean useBasicBlocks,
+                                 final String packageName, final String target) {
         graph = new IntraCFG(apkPath, methodName, useBasicBlocks, appsDir, packageName);
-        targetVertices = selectTargetVertices(target, packageName, apkPath, request);
+        targetVertices = selectTargetVertices(target, packageName, apkPath, null);
     }
 
+    /**
+     * Initialises the interCFG with the given properties.
+     *
+     * @param apkPath The path to the APK file.
+     * @param useBasicBlocks Whether to use basic blocks for the interCFG.
+     * @param excludeARTClasses Whether to exclude ART classes.
+     * @param resolveOnlyAUTClasses Whether to resolve only classes belonging to the AUT package.
+     * @param packageName The package name of the AUT.
+     * @param target Describes the target vertices.
+     */
     private void initInterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
-                                 boolean resolveOnlyAUTClasses, String packageName, String target, Message request) {
+                                 boolean resolveOnlyAUTClasses, String packageName, String target) {
         graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
-        // TODO: Only initialise call tree for crash reproduction.
-        // callTree = ((InterCFG) graph).getCallTree();
-        targetVertices = selectTargetVertices(target, packageName, apkPath, request);
+        targetVertices = selectTargetVertices(target, packageName, apkPath, null);
     }
 
-    private Message initCallTree() {
-        return new Message("/graph/init");
+    /**
+     * Initialises the call tree with the given properties.
+     *
+     * @param apkPath The path to the APK file.
+     * @param excludeARTClasses Whether to exclude ART classes.
+     * @param resolveOnlyAUTClasses Whether to resolve only classes belonging to the AUT package.
+     * @param packageName The package name of the AUT.
+     * @param target Describes the target vertices.
+     * @param stackTracePath The path to the stack trace.
+     */
+    private void initCallTree(File apkPath, boolean excludeARTClasses, boolean resolveOnlyAUTClasses,
+                              String packageName, String target, String stackTracePath) {
+        graph = new CallTree(apkPath, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
+        targetVertices = selectTargetVertices(target, packageName, apkPath, stackTracePath);
     }
 
     /**

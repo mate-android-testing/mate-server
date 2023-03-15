@@ -7,7 +7,22 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Models a stack trace.
+ * Models a stack trace. A stack trace consists of multiple lines as the following example shows:
+ *
+ * Exception in thread "main" com.myproject.module.MyProjectFooBarException: (optional exception message)
+ *     at com.myproject.module.MyProject.anotherMethod(MyProject.java:19)
+ *     at com.myproject.module.MyProject.someMethod(MyProject.java:12)
+ *     at com.myproject.module.MyProject.main(MyProject.java:8)
+ * Caused by: java.lang.ArithmeticException: The denominator must not be zero
+ *     at org.apache.commons.lang3.math.Fraction.getFraction(Fraction.java:143)
+ *     at com.myproject.module.MyProject.anotherMethod(MyProject.java:17)
+ *     ... 2 more
+ *
+ * We can observe essentially three different line types: 'at', 'caused by' and '... X more' stack trace lines.
+ * A regular stack trace line has the following format:
+ *
+ *  at com.myproject.module.MyProject.anotherMethod(MyProject.java:19)
+ *            |package name|class name|method name|file name|line number|
  */
 public class StackTrace {
 
@@ -28,7 +43,12 @@ public class StackTrace {
         this.stackTraceLines = stackTraceLines;
     }
 
-    // TODO: Document.
+    /**
+     * Retrieves all tokens from {@link AtStackTraceLine}s belonging to the specified package name.
+     *
+     * @param packageName The given package name.
+     * @return Returns the relevant tokens for the online-phase.
+     */
     public Set<String> getFuzzyTokens(String packageName) {
         return stackTraceLines.stream()
                 .filter(stackTraceLine -> stackTraceLine.isFromPackage(packageName))
@@ -38,7 +58,11 @@ public class StackTrace {
                 .collect(Collectors.toSet());
     }
 
-    // TODO: May rename.
+    /**
+     * Retrieves all tokens from {@link CausedByStackTraceLine}s.
+     *
+     * @return Returns the relevant tokens for the online-phase.
+     */
     public Set<String> getUserTokens() {
         return stackTraceLines.stream()
                 .filter(stackTraceLine -> stackTraceLine instanceof CausedByStackTraceLine)

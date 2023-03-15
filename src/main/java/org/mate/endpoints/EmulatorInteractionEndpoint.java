@@ -144,7 +144,7 @@ public class EmulatorInteractionEndpoint implements Endpoint {
         return new Message.MessageBuilder("/emulator/interaction").build();
     }
 
-    // TODO: Is this functionality relevant?
+    // TODO: Is this functionality relevant? - just for debugging
     private Message markOnScreenshots(Message request) {
 
         final var packageName = request.getParameter("packageName");

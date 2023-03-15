@@ -1,135 +1,211 @@
 package org.mate.graphs;
 
-import de.uni_passau.fim.auermich.android_graphs.core.app.APK;
-import de.uni_passau.fim.auermich.android_graphs.core.app.components.Component;
-import de.uni_passau.fim.auermich.android_graphs.core.app.components.ComponentType;
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.calltree.CallTree;
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.calltree.CallTreeVertex;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.ClassHierarchy;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.ClassUtils;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.BaseCFG;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.GraphUtils;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.InstructionUtils;
 import org.jf.dexlib2.builder.BuilderInstruction;
 import org.jf.dexlib2.iface.Method;
-import org.mate.crash_reproduction.AtStackTraceLine;
-import org.mate.crash_reproduction.CrashReproductionUtil;
 import org.mate.util.Log;
 
 import java.io.File;
-import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.function.BiPredicate;
-import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+/**
+ * Represents an inter-procedural CFG.
+ */
 public class InterCFG extends CFG {
-    private final CallTree callTree;
-    private final Set<Component> components;
-    private final ClassHierarchy classHierarchy;
-    private final APK apk;
 
-    public APK getApk() {
-        return apk;
+    /**
+     * Constructs an inter-procedural CFG.
+     *
+     * @param interCFG The inter-procedural CFG returned from the graph library.
+     * @param appsDir The apps directory.
+     * @param packageName The package name of the AUT.
+     */
+    public InterCFG(BaseCFG interCFG, Path appsDir, String packageName) {
+        super(interCFG, appsDir, packageName);
     }
 
+    /**
+     * Constructs an inter-procedural CFG with the given properties.
+     *
+     * @param apkPath The path to the APK file.
+     * @param useBasicBlocks Whether basic blocks should be used or not.
+     * @param excludeARTClasses Whether to exclude ART classes.
+     * @param resolveOnlyAUTClasses Whether to resolve only classes belonging to the AUT package.
+     * @param appsDir The apps directory.
+     * @param packageName The package name of the AUT.
+     */
     public InterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses, boolean resolveOnlyAUTClasses,
                     Path appsDir, String packageName) {
         super(GraphUtils.constructInterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses),
                 appsDir, packageName);
-        try {
-            Field componentsField = de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.InterCFG.class.getDeclaredField("components");
-            componentsField.setAccessible(true);
-            components = (Set<Component>) componentsField.get(baseCFG);
+    }
 
-            Field apkField = de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.InterCFG.class.getDeclaredField("apk");
-            apkField.setAccessible(true);
-            apk = (APK) apkField.get(baseCFG);
+    /**
+     * {@inheritDoc}
+     */
+    protected List<CFGVertex> mapBranchesToVertices(List<String> branches) {
 
-            Field classHierarchyField = de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.InterCFG.class.getDeclaredField("classHierarchy");
-            classHierarchyField.setAccessible(true);
-            classHierarchy = (ClassHierarchy) classHierarchyField.get(baseCFG);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            e.printStackTrace();
-            throw new IllegalStateException(e);
+        long start = System.currentTimeMillis();
+
+        List<CFGVertex> branchVertices = Collections.synchronizedList(new ArrayList<>());
+
+        branches.parallelStream().forEach(branch -> {
+
+            CFGVertex branchVertex = lookupVertex(branch);
+
+            if (branchVertex == null) {
+                Log.printWarning("Couldn't derive vertex for branch: " + branch);
+            } else {
+                branchVertices.add(branchVertex);
+            }
+        });
+
+        long end = System.currentTimeMillis();
+        Log.println("Mapping branches to vertices took: " + (end - start) + " ms.");
+
+        Log.println("Number of actual branches: " + branches.size());
+        Log.println("Number of branch vertices: " + branchVertices.size());
+
+        if (branchVertices.size() != branches.size()) {
+            throw new IllegalStateException("Couldn't derive for certain branches the corresponding branch vertices!");
         }
 
-        callTree = new CallTree((de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.InterCFG) baseCFG);
+        return branchVertices;
     }
 
-    public CallTree getCallTree() {
-        return callTree;
-    }
+    /**
+     * {@inheritDoc}
+     */
+    protected Map<String, CFGVertex> initTraceToVertexCache() {
 
-    public Set<String> getTargetComponents(List<AtStackTraceLine> stackTrace, ComponentType... componentTypes) {
-        Set<String> targetActivities = getTargets(stackTrace, stackTraceLine -> getTargetComponentsByClassUsage(stackTraceLine, componentTypes));
+        long start = System.currentTimeMillis();
 
-        Log.println("Target {" + Arrays.stream(componentTypes).map(ComponentType::name).collect(Collectors.joining(" or ")) + "} are: [" + String.join(", ", targetActivities) + "]");
-        return targetActivities;
-    }
+        Map<String, CFGVertex> traceToVertexCache = new HashMap<>();
 
-    private Set<String> getTargets(List<AtStackTraceLine> stackTrace, Function<AtStackTraceLine, Set<String>> stackTraceLineToUsages) {
-        return stackTrace.stream()
-                .map(stackTraceLineToUsages)
-                .filter(Predicate.not(Set::isEmpty))
-                .reduce(this::lenientComponentIntersection)
-                .map(this::keepMostSpecific)
-                .map(set -> set.stream().map(ClassUtils::dottedClassName).collect(Collectors.toSet()))
-                .orElse(Set.of());
-    }
+        // handle entry vertices
+        Set<CFGVertex> entryVertices = baseCFG.getVertices().stream().filter(CFGVertex::isEntryVertex).collect(Collectors.toSet());
 
-    public Set<String> keepMostSpecific(Set<String> components) {
-        Set<String> result = new HashSet<>(components);
+        for (CFGVertex entryVertex : entryVertices) {
+            // exclude global entry vertex
+            if (!entryVertex.equals(baseCFG.getEntry())) {
 
-        for (String component : components) {
-            classHierarchy.getSuperClasses(component).forEach(result::remove);
-        }
+                // virtual entry vertex
+                traceToVertexCache.put(entryVertex.getMethod() + "->entry", entryVertex);
 
-        return result;
-    }
+                // there are potentially several entry vertices when dealing with try-catch blocks at the beginning
+                Set<CFGVertex> entries = baseCFG.getOutgoingEdges(entryVertex).stream()
+                        .map(CFGEdge::getTarget).collect(Collectors.toSet());
 
-    public Set<String> lenientComponentIntersection(Set<String> components1, Set<String> components2) {
-        return intersection(components1, components2,
-                (comp1, comp2) -> comp1.equals(comp2)
-                        || classHierarchy.getSuperClasses(comp1).contains(comp2)
-                        || classHierarchy.getSuperClasses(comp2).contains(comp1));
-    }
+                for (CFGVertex entry : entries) {
+                    // exclude dummy CFGs solely consisting of entry and exit vertex
+                    if (!entry.isExitVertex()) {
+                        Statement statement = entry.getStatement();
 
-    public <T> Set<T> intersection(Set<T> set1, Set<T> set2, BiPredicate<T, T> equalityRelation) {
-        Set<T> result = new HashSet<>();
-
-        for (T elem1 : set1) {
-            for (T elem2 : set2) {
-                if (equalityRelation.test(elem1, elem2)) {
-                    result.add(elem1);
-                    result.add(elem2);
+                        // TODO: handle basic statements
+                        if (statement instanceof BlockStatement) {
+                            // each statement within a block statement is a basic statement
+                            BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
+                            traceToVertexCache.put(entry.getMethod() + "->entry->" + basicStatement.getInstructionIndex(), entry);
+                        }
+                    }
                 }
             }
         }
 
-        return result;
+        // handle exit vertices
+        Set<CFGVertex> exitVertices = baseCFG.getVertices().stream().filter(CFGVertex::isExitVertex).collect(Collectors.toSet());
+
+        for (CFGVertex exitVertex : exitVertices) {
+            // exclude global exit vertex
+            if (!exitVertex.equals(baseCFG.getExit())) {
+
+                // virtual exit vertex
+                traceToVertexCache.put(exitVertex.getMethod() + "->exit", exitVertex);
+
+                Set<CFGVertex> exits = baseCFG.getIncomingEdges(exitVertex).stream()
+                        .map(CFGEdge::getSource).collect(Collectors.toSet());
+
+                for (CFGVertex exit : exits) {
+                    // exclude dummy CFGs solely consisting of entry and exit vertex
+                    if (!exit.isEntryVertex()) {
+                        Statement statement = exit.getStatement();
+
+                        // TODO: handle basic statements
+                        if (statement instanceof BlockStatement) {
+                            // each statement within a block statement is a basic statement
+                            BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
+                            traceToVertexCache.put(exit.getMethod() + "->exit->" + basicStatement.getInstructionIndex(), exit);
+                        }
+                    }
+                }
+            }
+        }
+
+        // handle branch + if and switch stmt vertices
+        for (CFGVertex branchVertex : branchVertices) {
+
+            // a branch can potentially have multiple predecessors (shared branch)
+            Set<CFGVertex> ifOrSwitchVertices = baseCFG.getIncomingEdges(branchVertex).stream()
+                    .map(CFGEdge::getSource).filter(CFGVertex::isIfVertex).collect(Collectors.toSet());
+
+            // if or switch vertex
+            for (CFGVertex ifOrSwitchVertex : ifOrSwitchVertices) {
+
+                Statement statement = ifOrSwitchVertex.getStatement();
+
+                // TODO: handle basic statements
+                if (statement instanceof BlockStatement) {
+                    // the last statement is always a basic statement of an if vertex
+                    BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
+                    if (InstructionUtils.isBranchingInstruction(basicStatement.getInstruction())) {
+                        traceToVertexCache.put(ifOrSwitchVertex.getMethod()
+                                + "->if->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
+                    } else if (InstructionUtils.isSwitchInstruction(basicStatement.getInstruction())) {
+                        traceToVertexCache.put(ifOrSwitchVertex.getMethod()
+                                + "->switch->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
+                    }
+                    else {
+                        Log.printWarning("Unexpected block statement: " + statement + " for method " + ifOrSwitchVertex.getMethod());
+                    }
+                }
+            }
+
+            Statement statement = branchVertex.getStatement();
+
+            // TODO: handle basic statements
+            if (statement instanceof BlockStatement) {
+                // each statement within a block statement is a basic statement
+                BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
+                traceToVertexCache.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
+            }
+        }
+
+        long end = System.currentTimeMillis();
+        Log.println("TraceToVertexCache construction took: " + (end - start) + " ms.");
+        Log.println("Size of TraceToVertexCache: " + traceToVertexCache.size());
+
+        return traceToVertexCache;
     }
 
-    public Set<String> getTargetComponentsByClassUsage(AtStackTraceLine line, ComponentType... componentTypes) {
-        return getTargetsByClassUsage(line, method -> Arrays.stream(componentTypes).anyMatch(componentType -> getComponentOfClass(method.getClassName(), componentType).isPresent()))
-                .stream().map(CallTreeVertex::getClassName).collect(Collectors.toSet());
-    }
+    /**
+     * Looks up a vertex by method and instruction.
+     *
+     * @param method The method containing the instruction.
+     * @param builderInstruction The instruction to be looked up.
+     * @return Returns the vertex wrapping the given instruction.
+     */
+    public CFGVertex findVertexByInstruction(final Method method, final BuilderInstruction builderInstruction) {
 
-    public Set<CallTreeVertex> getTargetsByClassUsage(AtStackTraceLine line, Predicate<CallTreeVertex> methodSatisfies) {
-        String startMethod = CrashReproductionUtil.getInstructionsForLine(apk.getDexFiles(), line).orElseThrow().getX().toString();
-
-        return callTree.getMethodCallers(new CallTreeVertex(startMethod), methodSatisfies);
-    }
-
-    public Optional<Component> getComponentOfClass(String clazz, ComponentType componentType) {
-        return components.stream().filter(c -> c.getName().equals(clazz))
-                .filter(c -> c.getComponentType() == componentType)
-                .findAny();
-    }
-
-    public Vertex findVertexByInstruction(Method method, BuilderInstruction builderInstruction) {
-        Set<Vertex> vertices = getVertices().stream()
+        final Set<CFGVertex> vertices = getVertices().stream()
                 .filter(vertex -> vertex.containsInstruction(method.toString(),
                         builderInstruction.getLocation().getIndex()))
                 .collect(Collectors.toSet());
@@ -137,7 +213,7 @@ public class InterCFG extends CFG {
         if (vertices.size() == 1) {
             return vertices.stream().findAny().orElseThrow();
         } else {
-            throw new NoSuchElementException();
+            throw new NoSuchElementException("Instruction not resolvable in graph!");
         }
     }
 }

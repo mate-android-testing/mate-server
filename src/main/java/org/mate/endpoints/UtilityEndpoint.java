@@ -67,7 +67,7 @@ public class UtilityEndpoint implements Endpoint {
                 .build();
     }
 
-    // TODO: Is this functionality relevant?
+    // TODO: Is this functionality relevant? - see comment below
     private Message letUserPickOption(Message request) {
 
         final int numberOfOptions = Integer.parseInt(request.getParameter("options"));
@@ -82,7 +82,7 @@ public class UtilityEndpoint implements Endpoint {
                 .build();
     }
 
-    // TODO: Is this functionality relevant?
+    // TODO: Is this functionality relevant? - just for debugging to manually explore the AUT
     private int letUserPickOption(String[] options) {
 
         final JDialog dialog = new JDialog((JFrame) null, "Select one",true);
@@ -111,7 +111,7 @@ public class UtilityEndpoint implements Endpoint {
         return selected[0];
     }
 
-    // TODO: Is this functionality relevant?
+    // TODO: Is this functionality relevant? - just for debugging
     private Message writeFile(Message request) {
 
         final String content = request.getParameter("content");
