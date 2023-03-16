@@ -67,7 +67,12 @@ public class UtilityEndpoint implements Endpoint {
                 .build();
     }
 
-    // TODO: Is this functionality relevant? - see comment below
+    /**
+     * Lets the user pick an action from a dialog (manual exploration).
+     *
+     * @param request The request message.
+     * @return Returns the response message included the selected action.
+     */
     private Message letUserPickOption(Message request) {
 
         final int numberOfOptions = Integer.parseInt(request.getParameter("options"));
@@ -82,8 +87,13 @@ public class UtilityEndpoint implements Endpoint {
                 .build();
     }
 
-    // TODO: Is this functionality relevant? - just for debugging to manually explore the AUT
-    private int letUserPickOption(String[] options) {
+    /**
+     * Shows the user a dialog containing the applicable actions on the current screen.
+     * 
+     * @param options The applicable actions on the current screen.
+     * @return Returns the selected option.
+     */
+    private int letUserPickOption(final String[] options) {
 
         final JDialog dialog = new JDialog((JFrame) null, "Select one",true);
 
