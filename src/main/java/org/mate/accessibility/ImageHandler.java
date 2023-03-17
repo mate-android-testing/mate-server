@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+@Deprecated
 public class ImageHandler {
 
     public static int contImg = 0;

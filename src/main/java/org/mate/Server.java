@@ -45,7 +45,6 @@ public class Server {
     private Path appsDir;
 
     private AndroidEnvironment androidEnvironment;
-    private ImageHandler imageHandler;
 
     public static void main(String[] args) {
         Server server = new Server();
@@ -90,13 +89,13 @@ public class Server {
      */
     public void init() {
         androidEnvironment = new AndroidEnvironment();
-        imageHandler = new ImageHandler(androidEnvironment, appsDir);
+        ImageHandler imageHandler = new ImageHandler(androidEnvironment, appsDir);
         router.add("/legacy", new LegacyEndpoint(androidEnvironment, imageHandler));
         closeEndpoint = new CloseEndpoint();
         router.add("/close", closeEndpoint);
         router.add("/crash", new CrashEndpoint(androidEnvironment));
         router.add("/properties", new PropertiesEndpoint());
-        router.add("/emulator/interaction", new EmulatorInteractionEndpoint(androidEnvironment, imageHandler));
+        router.add("/emulator/interaction", new EmulatorInteractionEndpoint(androidEnvironment));
         router.add("/android", new AndroidEndpoint(androidEnvironment));
         router.add("/accessibility", new AccessibilityEndpoint(imageHandler));
         router.add("/coverage", new CoverageEndpoint(androidEnvironment, appsDir));
