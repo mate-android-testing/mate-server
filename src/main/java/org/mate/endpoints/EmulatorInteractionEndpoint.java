@@ -8,13 +8,6 @@ import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
 
-import java.awt.*;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
-
 public class EmulatorInteractionEndpoint implements Endpoint {
 
     private boolean disabledAutoRotate = false;
@@ -123,8 +116,6 @@ public class EmulatorInteractionEndpoint implements Endpoint {
                 return allocateEmulator(request);
             } else if ("take_screenshot".equals(request.getParameter("type"))) {
                 return takeScreenshot(request);
-            } else if ("mark_on_screenshot".equals(request.getParameter("type"))) {
-                return markOnScreenshots(request);
             }
         }
         throw new IllegalArgumentException("Message request with subject: "
@@ -140,34 +131,6 @@ public class EmulatorInteractionEndpoint implements Endpoint {
 
         Device device = Device.devices.get(deviceID);
         device.takeScreenshot(nodeID);
-
-        return new Message.MessageBuilder("/emulator/interaction").build();
-    }
-
-    // TODO: Is this functionality relevant? - just for debugging
-    private Message markOnScreenshots(Message request) {
-
-        final var packageName = request.getParameter("packageName");
-        final var stateId = request.getParameter("state");
-
-        final List<Rectangle> rectangles = Arrays.stream(request.getParameter("rectangles").split(";"))
-                .map(recString -> {
-                    String[] parts = recString.split(",");
-                    int x1 = Integer.parseInt(parts[0]);
-                    int y1 = Integer.parseInt(parts[1]);
-                    int x2 = Integer.parseInt(parts[2]);
-                    int y2 = Integer.parseInt(parts[3]);
-
-                    return new Rectangle(x1, y1, x2 - x1, y2 - y1);
-                }).collect(Collectors.toList());
-
-        try {
-            // TODO: Avoid ImageHandler if possible and use Device instead.
-            imageHandler.markImage(rectangles, stateId, packageName);
-        } catch (IOException e) {
-            // TODO: Prepend custom error message.
-            throw new UncheckedIOException(e);
-        }
 
         return new Message.MessageBuilder("/emulator/interaction").build();
     }
