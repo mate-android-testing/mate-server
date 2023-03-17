@@ -7,9 +7,6 @@ import org.mate.util.AndroidEnvironment;
 
 import javax.swing.*;
 import java.awt.*;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
@@ -37,7 +34,7 @@ public class UtilityEndpoint implements Endpoint {
         } else if (request.getSubject().startsWith("/utility/fetch_dot_graph")) {
             return fetchDotGraph(request);
         } else if (request.getSubject().startsWith("/utility/write_file")) {
-            return writeFile(request);
+            return writeContentToFile(request);
         } else if (request.getSubject().startsWith("/utility/let_user_pick")) {
             return letUserPickOption(request);
         }
@@ -121,17 +118,20 @@ public class UtilityEndpoint implements Endpoint {
         return selected[0];
     }
 
-    // TODO: Is this functionality relevant? - just for debugging
-    private Message writeFile(Message request) {
+    /**
+     * Writes the given content to a file.
+     *
+     * @param request The request message containing the content that should be written.
+     * @return Returns a dummy response message indicating success of the operation.
+     */
+    private Message writeContentToFile(Message request) {
 
-        final String content = request.getParameter("content");
+        final String deviceID = request.getParameter("deviceId");
+        final String fileContent = request.getParameter("content");
         final String fileName = request.getParameter("fileName");
 
-        try {
-            Files.writeString(Path.of("./results/").resolve(fileName), content);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        Device device = Device.devices.get(deviceID);
+        device.writeContentToFile(fileContent, fileName);
 
         return new Message.MessageBuilder("/utility/write_file").build();
     }
