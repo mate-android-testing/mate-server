@@ -571,6 +571,7 @@ public class Device {
         final Path filePath = appsDir.resolve(packageName).resolve(fileName);
 
         try {
+            Files.createDirectories(filePath.getParent());
             Files.writeString(filePath, fileContent);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
