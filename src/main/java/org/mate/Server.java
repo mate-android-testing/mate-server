@@ -33,7 +33,11 @@ public class Server {
     private final Router router;
     private int port;
     private boolean cleanup;
+
+    // TODO: Store results within app directory, e.g. apps/com.zola.bmi/results/.
+    @Deprecated
     private Path resultsPath;
+
     private final Log logger;
     private CloseEndpoint closeEndpoint;
 
@@ -57,7 +61,6 @@ public class Server {
         router = new Router();
         port = 12345;
         cleanup = true;
-        // TODO: store results within app directory, e.g. apps/com.zola.bmi/results/
         resultsPath = Path.of("results");
         appsDir = Path.of("apps");
         logger = new Log();
@@ -96,10 +99,10 @@ public class Server {
         router.add("/emulator/interaction", new EmulatorInteractionEndpoint(androidEnvironment, imageHandler));
         router.add("/android", new AndroidEndpoint(androidEnvironment));
         router.add("/accessibility", new AccessibilityEndpoint(imageHandler));
-        router.add("/coverage", new CoverageEndpoint(androidEnvironment, resultsPath, appsDir));
+        router.add("/coverage", new CoverageEndpoint(androidEnvironment, appsDir));
         router.add("/fuzzer", new FuzzerEndpoint(androidEnvironment));
-        router.add("/utility", new UtilityEndpoint(androidEnvironment, resultsPath, appsDir));
-        router.add("/fitness", new FitnessEndpoint(androidEnvironment, resultsPath, appsDir));
+        router.add("/utility", new UtilityEndpoint(androidEnvironment, appsDir));
+        router.add("/fitness", new FitnessEndpoint(androidEnvironment, appsDir));
         router.add("/graph", new GraphEndpoint(androidEnvironment, appsDir));
 
         cleanup();

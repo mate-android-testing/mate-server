@@ -27,16 +27,14 @@ import java.util.stream.Stream;
 public class FitnessEndpoint implements Endpoint {
 
     private final AndroidEnvironment androidEnvironment;
-    private final Path resultsPath;
     private final Path appsDir;
 
     private static final String BLOCKS_FILE = "blocks.txt";
     private static final String BRANCHES_FILE = "branches.txt";
     private static final String METHODS_FILE = "methods.txt";
 
-    public FitnessEndpoint(AndroidEnvironment androidEnvironment, Path resultsPath, Path appsDir) {
+    public FitnessEndpoint(AndroidEnvironment androidEnvironment, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
-        this.resultsPath = resultsPath;
         this.appsDir = appsDir;
     }
 
