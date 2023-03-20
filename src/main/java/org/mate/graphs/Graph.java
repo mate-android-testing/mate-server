@@ -16,10 +16,6 @@ public interface Graph<V extends Vertex, E extends Edge> {
     // package name of app
     String getAppName();
 
-    // TODO: Remove this method, there are no branch vertices for call trees for instance!
-    // the actual branch vertices
-    List<V> getBranchVertices();
-
     // get all vertices
     List<V> getVertices();
 

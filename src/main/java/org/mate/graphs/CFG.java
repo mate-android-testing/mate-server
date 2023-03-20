@@ -191,7 +191,6 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      *
      * @return Returns the branch vertices.
      */
-    @Override
     public List<CFGVertex> getBranchVertices() {
         return Collections.unmodifiableList(branchVertices);
     }

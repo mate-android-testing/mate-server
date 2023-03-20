@@ -399,7 +399,7 @@ public class GraphEndpoint implements Endpoint {
         long start = System.currentTimeMillis();
         final var traces = getTraces(packageName, chromosome);
         final var visitedVertices = mapTracesToVertices(traces);
-        final var branchVertices =  graph.getBranchVertices();
+        final var branchVertices =  ((CFG) graph).getBranchVertices();
         long start1 = System.currentTimeMillis();
         precomputeBranchDistances(traces);
         long end1 = System.currentTimeMillis();
@@ -420,14 +420,14 @@ public class GraphEndpoint implements Endpoint {
      * @param branchVertices The branch vertices (targets).
      * @return Returns the branch distance vector.
      */
-    private List<String> computeBranchDistanceVector(final List<Vertex> visitedVertices, final List<Vertex> branchVertices) {
+    private List<String> computeBranchDistanceVector(final List<Vertex> visitedVertices, final List<CFGVertex> branchVertices) {
 
         final var vector = new String[branchVertices.size()];
         IntStream.range(0, branchVertices.size())
                 .parallel()
                 .forEach(index -> {
                     final var vertex = branchVertices.get(index);
-                    final var distance = computeApproachLevelAndBranchDistance(visitedVertices, (CFGVertex) vertex);
+                    final var distance = computeApproachLevelAndBranchDistance(visitedVertices, vertex);
                     vector[index] = distance;
                 });
 
@@ -1320,10 +1320,10 @@ public class GraphEndpoint implements Endpoint {
 
         switch (target) {
             case "all_branches":
-                return graph.getBranchVertices();
+                return ((CFG) graph).getBranchVertices();
             case "random_target":
             case "random_branch":
-                List<CFGVertex> targets = target.equals("random_target") ? graph.getVertices() : graph.getBranchVertices();
+                List<CFGVertex> targets = target.equals("random_target") ? graph.getVertices() : ((CFG) graph).getBranchVertices();
 
                 while (true) {
                     Random rand = new Random();

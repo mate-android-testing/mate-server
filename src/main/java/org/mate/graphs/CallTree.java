@@ -153,14 +153,6 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      * {@inheritDoc}
      */
     @Override
-    public List<CallTreeVertex> getBranchVertices() {
-        throw new UnsupportedOperationException("No branch vertices available in the call tree!");
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
     public List<CallTreeVertex> getVertices() {
         return new ArrayList<>(callTree.getVertices());
     }
