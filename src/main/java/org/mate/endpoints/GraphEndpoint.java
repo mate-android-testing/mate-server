@@ -1319,8 +1319,7 @@ public class GraphEndpoint implements Endpoint {
         Log.println("Target vertex selection strategy: " + target);
 
         switch (target) {
-            // TODO: Rename to 'all_branches'/'branches'.
-            case "no_target":
+            case "all_branches":
                 return graph.getBranchVertices();
             case "random_target":
             case "random_branch":
