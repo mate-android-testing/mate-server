@@ -7,7 +7,9 @@ import org.mate.network.message.Messages;
 import org.mate.pdf.Report;
 import org.mate.util.AndroidEnvironment;
 
+@Deprecated
 public class LegacyEndpoint implements Endpoint {
+
     private final AndroidEnvironment androidEnvironment;
     private final ImageHandler imageHandler;
     private final boolean generatePDFReport = false;
