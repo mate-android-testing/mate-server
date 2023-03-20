@@ -168,8 +168,6 @@ public class GraphEndpoint implements Endpoint {
             return getBranchDistance(request);
         } else if (request.getSubject().startsWith("/graph/get_crash_distance")) {
             return getCrashDistance(request);
-        } else if (request.getSubject().startsWith("/graph/draw/call_tree")) {
-            return drawCallTree(request);
         } else if (request.getSubject().startsWith("/graph/draw")) {
             return drawGraph(request);
         } else if (request.getSubject().startsWith("/graph/stack_trace_tokens")) {
@@ -1255,6 +1253,7 @@ public class GraphEndpoint implements Endpoint {
      * @param request The request request.
      * @return Returns an empty response request.
      */
+    @SuppressWarnings("unused")
     private Message drawCallTree(Message request) {
 
         CallTree callTree = (CallTree) graph;
