@@ -8,6 +8,7 @@ import org.mate.util.Util;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -575,6 +576,24 @@ public class Device {
         synchronized (Device.class) {
             getTracesFromTracer();
             pullTraceFile(chromosome, entity);
+        }
+    }
+
+    /**
+     * Writes the given file content to the specified file within the app directory.
+     *
+     * @param fileContent The file content to be written.
+     * @param fileName The file to which should be written.
+     */
+    public void writeContentToFile(final String fileContent, final String fileName) {
+
+        final Path filePath = appsDir.resolve(packageName).resolve(fileName);
+
+        try {
+            Files.createDirectories(filePath.getParent());
+            Files.writeString(filePath, fileContent);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 

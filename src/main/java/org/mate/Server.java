@@ -33,7 +33,11 @@ public class Server {
     private final Router router;
     private int port;
     private boolean cleanup;
+
+    // TODO: Store results within app directory, e.g. apps/com.zola.bmi/results/.
+    @Deprecated
     private Path resultsPath;
+
     private final Log logger;
     private CloseEndpoint closeEndpoint;
 
@@ -41,7 +45,6 @@ public class Server {
     private Path appsDir;
 
     private AndroidEnvironment androidEnvironment;
-    private ImageHandler imageHandler;
 
     public static void main(String[] args) {
         Server server = new Server();
@@ -57,7 +60,6 @@ public class Server {
         router = new Router();
         port = 12345;
         cleanup = true;
-        // TODO: store results within app directory, e.g. apps/com.zola.bmi/results/
         resultsPath = Path.of("results");
         appsDir = Path.of("apps");
         logger = new Log();
@@ -87,19 +89,19 @@ public class Server {
      */
     public void init() {
         androidEnvironment = new AndroidEnvironment();
-        imageHandler = new ImageHandler(androidEnvironment, appsDir);
+        ImageHandler imageHandler = new ImageHandler(androidEnvironment, appsDir);
         router.add("/legacy", new LegacyEndpoint(androidEnvironment, imageHandler));
         closeEndpoint = new CloseEndpoint();
         router.add("/close", closeEndpoint);
         router.add("/crash", new CrashEndpoint(androidEnvironment));
         router.add("/properties", new PropertiesEndpoint());
-        router.add("/emulator/interaction", new EmulatorInteractionEndpoint(androidEnvironment, imageHandler));
+        router.add("/emulator/interaction", new EmulatorInteractionEndpoint(androidEnvironment));
         router.add("/android", new AndroidEndpoint(androidEnvironment));
         router.add("/accessibility", new AccessibilityEndpoint(imageHandler));
-        router.add("/coverage", new CoverageEndpoint(androidEnvironment, resultsPath, appsDir));
+        router.add("/coverage", new CoverageEndpoint(androidEnvironment, appsDir));
         router.add("/fuzzer", new FuzzerEndpoint(androidEnvironment));
-        router.add("/utility", new UtilityEndpoint(androidEnvironment, resultsPath, appsDir));
-        router.add("/fitness", new FitnessEndpoint(androidEnvironment, resultsPath, appsDir));
+        router.add("/utility", new UtilityEndpoint(androidEnvironment, appsDir));
+        router.add("/fitness", new FitnessEndpoint(androidEnvironment, appsDir));
         router.add("/graph", new GraphEndpoint(androidEnvironment, appsDir));
 
         cleanup();

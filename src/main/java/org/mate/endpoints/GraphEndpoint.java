@@ -1,15 +1,17 @@
 package org.mate.endpoints;
 
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.Edge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.calltree.CallTreeVertex;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
+import de.uni_passau.fim.auermich.android_graphs.core.utility.Tuple;
 import org.apache.commons.io.FileUtils;
-import org.mate.graphs.Graph;
-import org.mate.graphs.GraphType;
-import org.mate.graphs.InterCFG;
-import org.mate.graphs.IntraCFG;
+import org.jf.dexlib2.analysis.AnalyzedInstruction;
+import org.mate.crash_reproduction.*;
+import org.mate.graphs.*;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
@@ -17,11 +19,14 @@ import org.mate.util.Log;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -33,7 +38,8 @@ import static java.util.stream.Collectors.groupingBy;
  * to evaluate branch distance, but also a system dependence graph. The usage of this endpoint requires the
  * android-graphs-lib.jar as a dependency.
  */
-public final class GraphEndpoint implements Endpoint {
+
+public class GraphEndpoint implements Endpoint {
 
     @SuppressWarnings("unused")
     private final AndroidEnvironment androidEnvironment;
@@ -47,12 +53,6 @@ public final class GraphEndpoint implements Endpoint {
      * The path to the apps directory.
      */
     private final Path appsDir;
-
-    /**
-     * The target vertex, e.g. a random branch. If multiple targets exists, e.g. in a multi-objective search, this field
-     * is set to {@code null}.
-     */
-    private Vertex targetVertex = null;
 
     /**
      * Contains the instrumented branches but also the instrumented if and switch instructions. These instrumentation
@@ -69,7 +69,7 @@ public final class GraphEndpoint implements Endpoint {
      * Assigns each relevant vertex, i.e. a branch, case, if or switch statement, a unique id. This is required for
      * the addressing in the approach level cache, see {@link #approachLevels}.
      */
-    private Map<Vertex, Integer> relevantVertexToIndex = null;
+    private Map<CFGVertex, Integer> relevantVertexToIndex = null;
 
     /**
      * Describes whether the given vertex is a relevant vertex, i.e. a branch, case, if or switch vertex.
@@ -77,7 +77,7 @@ public final class GraphEndpoint implements Endpoint {
      * @param vertex The given vertex.
      * @return Returns {@code true} if the given vertex describes a relevant vertex, otherwise {@code false} is returned.
      */
-    private static boolean isRelevantVertex(final Vertex vertex) {
+    private static boolean isRelevantVertex(final CFGVertex vertex) {
         return vertex.isBranchVertex() || vertex.isIfVertex() || vertex.isSwitchVertex();
     }
 
@@ -133,21 +133,49 @@ public final class GraphEndpoint implements Endpoint {
      */
     private static short generation = Short.MAX_VALUE;
 
-    public GraphEndpoint(final AndroidEnvironment androidEnvironment, final Path appsDir) {
+    /**
+     * The list of target vertices, e.g. all branches.
+     */
+    private List<? extends Vertex> targetVertices;
+
+    /**
+     * Stores for each stack trace line detailed information.
+     */
+    private Map<AtStackTraceLine, AnalyzedStackTraceLine> analyzedStackTraceLines;
+
+    /**
+     * The stack trace used for crash reproduction.
+     */
+    private StackTrace stackTrace;
+
+    /**
+     * Provides mainly utility functions for crash reproduction.
+     */
+    private CrashReproductionUtil crashReproductionUtil;
+
+    public GraphEndpoint(AndroidEnvironment androidEnvironment, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
         this.appsDir = appsDir;
     }
 
     @Override
-    public Message handle(final Message request) {
+    public Message handle(Message request) {
         if (request.getSubject().startsWith("/graph/init")) {
             return initGraph(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector")) {
             return getBranchDistanceVector(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
             return getBranchDistance(request);
+        } else if (request.getSubject().startsWith("/graph/get_crash_distance")) {
+            return getCrashDistance(request);
         } else if (request.getSubject().startsWith("/graph/draw")) {
             return drawGraph(request);
+        } else if (request.getSubject().startsWith("/graph/stack_trace_tokens")) {
+            return getStackTraceTokens(request);
+        } else if(request.getSubject().startsWith("/graph/stack_trace_user_tokens")) {
+            return getStackTraceUserTokens(request);
+        } else if (request.getSubject().startsWith("/graph/stack_trace")) {
+            return getStackTrace(request);
         } else {
             throw new IllegalArgumentException("Message request with subject: "
                     + request.getSubject() + " can't be handled by GraphEndpoint!");
@@ -159,27 +187,27 @@ public final class GraphEndpoint implements Endpoint {
      *
      * @param branchVertices The list of branch vertices (targets).
      */
-    private void initApproachLevelCache(final List<Vertex> branchVertices) {
+    private void initApproachLevelCache(final List<CFGVertex> branchVertices) {
 
-        final var relevantVertices = graph.getVertices()
+        final var relevantVertices = ((List<CFGVertex>) graph.getVertices())
                 .stream()
                 .filter(GraphEndpoint::isRelevantVertex)
-                .toArray(Vertex[]::new);
+                .toArray(CFGVertex[]::new);
         final var relevantVerticesCount = relevantVertices.length;
 
         final var branchVerticesCount = branchVertices.size();
 
-        final var relevantVertexToIndex = new HashMap<Vertex, Integer>(relevantVerticesCount);
+        final var relevantVertexToIndex = new HashMap<CFGVertex, Integer>(relevantVerticesCount);
 
         // The branch vertices get assigned the ids 0 to n.
         for (int i = 0; i < branchVerticesCount; ++i) {
-            relevantVertexToIndex.put(branchVertices.get(i), i);
+            relevantVertexToIndex.put((CFGVertex) branchVertices.get(i), i);
         }
 
         // Defines the reverse mapping (index to vertex) for every relevant vertex.
-        final var indexToVertex = new Vertex[relevantVerticesCount];
+        final var indexToVertex = new CFGVertex[relevantVerticesCount];
 
-        for (final Vertex vertex : relevantVertices) {
+        for (final CFGVertex vertex : relevantVertices) {
             final int newIndex = relevantVertexToIndex.size();
             // The remaining relevant vertices, i.e. switch and if vertices, get assigned the indices (n+1) onwards.
             final var oldIndex = relevantVertexToIndex.putIfAbsent(vertex, newIndex);
@@ -187,7 +215,8 @@ public final class GraphEndpoint implements Endpoint {
         }
 
         final var approachLevels = new char[relevantVerticesCount * branchVerticesCount];
-        final var distances = graph.getDistances(Set.of(relevantVertices), Set.copyOf(branchVertices));
+        final BiFunction<CFGVertex, CFGVertex, Integer> distances
+                = graph.getDistances(Set.of(relevantVertices), Set.copyOf(branchVertices));
 
         IntStream.range(0, branchVerticesCount).parallel().forEach(i -> {
 
@@ -199,10 +228,10 @@ public final class GraphEndpoint implements Endpoint {
                 final var relevantVertex = indexToVertex[j];
 
                 /*
-                * To store the distance, which can be -1 if no path exists between two vertices, in an (unsigned) char,
-                * we need to add +1 to make it non-negative. Later, upon reading from the cache, we subtract -1 again.
+                 * To store the distance, which can be -1 if no path exists between two vertices, in an (unsigned) char,
+                 * we need to add +1 to make it non-negative. Later, upon reading from the cache, we subtract -1 again.
                  */
-                final var distance = distances.apply(relevantVertex, branchVertex) + 1;
+                final var distance = distances.apply(relevantVertex, (CFGVertex) branchVertex) + 1;
 
                 if (distance <= Character.MAX_VALUE) {
                     approachLevels[row + j] = (char) distance;
@@ -224,25 +253,25 @@ public final class GraphEndpoint implements Endpoint {
      * @param branchVertex The given branch vertex (target).
      * @return Returns the combined approach level + branch distance for the given branch vertex.
      */
-    private String computeApproachLevelAndBranchDistance(final List<Vertex> visitedVertices, final Vertex branchVertex) {
+    private String computeApproachLevelAndBranchDistance(final List<Vertex> visitedVertices, final CFGVertex branchVertex) {
 
         /*
-        * TODO: There can be multiple vertices with the same minimal distance (approach level) to the given target branch.
-        *  The current implementation simply picks an arbitrary vertex out of those, but this is not ideal. In fact, one
-        *  would need to perform further graph traversals to decide which is the most suited one. Right now we may pick
-        *  a switch or if statement that follows the target branch but not the one that is the direct predecessor (to
-        *  which the target branch is actually attached), see for more details the comments in the method
-        *  combineApproachLevelAndBranchDistance().
-        *
+         * TODO: There can be multiple vertices with the same minimal distance (approach level) to the given target branch.
+         *  The current implementation simply picks an arbitrary vertex out of those, but this is not ideal. In fact, one
+         *  would need to perform further graph traversals to decide which is the most suited one. Right now we may pick
+         *  a switch or if statement that follows the target branch but not the one that is the direct predecessor (to
+         *  which the target branch is actually attached), see for more details the comments in the method
+         *  combineApproachLevelAndBranchDistance().
+         *
          */
         int minDistance = Integer.MAX_VALUE;
-        Vertex minDistanceVertex = null;
+        CFGVertex minDistanceVertex = null;
 
         for (final Vertex visitedVertex : visitedVertices) {
 
-            final boolean isIfVertex = visitedVertex.isIfVertex();
-            final boolean isSwitchVertex = visitedVertex.isSwitchVertex();
-            final boolean isBranchVertex = visitedVertex.isBranchVertex();
+            final boolean isIfVertex = ((CFGVertex) visitedVertex).isIfVertex();
+            final boolean isSwitchVertex = ((CFGVertex) visitedVertex).isSwitchVertex();
+            final boolean isBranchVertex = ((CFGVertex) visitedVertex).isBranchVertex();
 
             /*
              * We are only interested in a direct hit (covered branch) or the distance to an if or switch statement.
@@ -255,8 +284,8 @@ public final class GraphEndpoint implements Endpoint {
                 final int index = branchVertexIndex * relevantVerticesCount + visitedVertexIndex;
 
                 /*
-                * We add here +1 to compensate the previous -1 subtraction in initApproachLevelCache(), which was
-                * necessary to store the cached approach level in a compact representation (char instead of int/short).
+                 * We add here +1 to compensate the previous -1 subtraction in initApproachLevelCache(), which was
+                 * necessary to store the cached approach level in a compact representation (char instead of int/short).
                  */
                 final int approachLevel = approachLevels[index] - 1;
 
@@ -264,15 +293,15 @@ public final class GraphEndpoint implements Endpoint {
                         // closest if or switch vertex
                         || (approachLevel != -1 && approachLevel < minDistance && (isIfVertex || isSwitchVertex))) {
                     minDistance = approachLevel;
-                    minDistanceVertex = visitedVertex;
+                    minDistanceVertex = (CFGVertex) visitedVertex;
                 }
             }
         }
 
         /*
-        * We return a distance of 1 if there exists no path to the branch vertex; a distance of 0 if the branch vertex
-        * could be covered; and otherwise we combine the approach level to the closest if or switch statement with the
-        * branch distance.
+         * We return a distance of 1 if there exists no path to the branch vertex; a distance of 0 if the branch vertex
+         * could be covered; and otherwise we combine the approach level to the closest if or switch statement with the
+         * branch distance.
          */
         return minDistanceVertex == null ? "1" : minDistance == 0 ? "0"
                 : combineApproachLevelAndBranchDistance(minDistance , minDistanceVertex, branchVertex);
@@ -341,7 +370,9 @@ public final class GraphEndpoint implements Endpoint {
         final var traces = getTraces(packageName, chromosome);
         final var visitedVertices = mapTracesToVertices(traces);
         precomputeBranchDistances(traces);
-        final var branchDistance = computeApproachLevelAndBranchDistance(visitedVertices, targetVertex);
+        final var branchDistance = computeApproachLevelAndBranchDistance(visitedVertices,
+                // there is only a single target
+                (CFGVertex) targetVertices.get(0));
         return new Message.MessageBuilder("/graph/get_branch_distance")
                 .withParameter("branch_distance", branchDistance)
                 .build();
@@ -366,7 +397,7 @@ public final class GraphEndpoint implements Endpoint {
         long start = System.currentTimeMillis();
         final var traces = getTraces(packageName, chromosome);
         final var visitedVertices = mapTracesToVertices(traces);
-        final var branchVertices = graph.getBranchVertices();
+        final var branchVertices =  ((CFG) graph).getBranchVertices();
         long start1 = System.currentTimeMillis();
         precomputeBranchDistances(traces);
         long end1 = System.currentTimeMillis();
@@ -387,7 +418,7 @@ public final class GraphEndpoint implements Endpoint {
      * @param branchVertices The branch vertices (targets).
      * @return Returns the branch distance vector.
      */
-    private List<String> computeBranchDistanceVector(final List<Vertex> visitedVertices, final List<Vertex> branchVertices) {
+    private List<String> computeBranchDistanceVector(final List<Vertex> visitedVertices, final List<CFGVertex> branchVertices) {
 
         final var vector = new String[branchVertices.size()];
         IntStream.range(0, branchVertices.size())
@@ -433,17 +464,17 @@ public final class GraphEndpoint implements Endpoint {
             final int midInstruction = -size;
 
             /*
-            * Recall that the row for the optimized case of exactly 3 IPs looks as follows:
-            *
-            * (1) negated instruction index of middle IP (branchDistances[rowIndex])
-            * (2) the three if branch distance values (branchDistances[rowIndex + 1] - [branchDistances[rowIndex + 3])
-            * (3) the three switch branch distance values (branchDistances[rowIndex + 4] - [branchDistances[rowIndex + 6])
-            * (4) the generation number (branchDistances[rowIndex + 7])
-            *
-            * That means that (rowIndex + 2) refers to index of the middle if branch distance value. The signum()
-            * computation either returns -1 when instruction < midInstruction, 0 if instruction == midInstruction or
-            * +1 if instruction > midInstruction. This offset defines the index to the given instruction. If we deal with
-            * a switch instruction, we need to add an offset of 3.
+             * Recall that the row for the optimized case of exactly 3 IPs looks as follows:
+             *
+             * (1) negated instruction index of middle IP (branchDistances[rowIndex])
+             * (2) the three if branch distance values (branchDistances[rowIndex + 1] - [branchDistances[rowIndex + 3])
+             * (3) the three switch branch distance values (branchDistances[rowIndex + 4] - [branchDistances[rowIndex + 6])
+             * (4) the generation number (branchDistances[rowIndex + 7])
+             *
+             * That means that (rowIndex + 2) refers to index of the middle if branch distance value. The signum()
+             * computation either returns -1 when instruction < midInstruction, 0 if instruction == midInstruction or
+             * +1 if instruction > midInstruction. This offset defines the index to the given instruction. If we deal with
+             * a switch instruction, we need to add an offset of 3.
              */
             final int branchDistanceIndex =
                     rowIndex + 2 + Integer.signum(instruction - midInstruction) + (isSwitchStatement ? 3 : 0);
@@ -459,19 +490,19 @@ public final class GraphEndpoint implements Endpoint {
     private static void initBranchDistanceCache(final List<String> instrumentationPoints) {
 
         /*
-        * TODO: Only allocate a branch distance entry for if and case statements since only for those statements a
-        *  branch distance is ever requested. Right now for every IP (branch, case, if and switch) such an entry is
-        *  reserved. Moreover, we could only allocate an entry for a switch branch distance if needed. We can check
-        *  for each branch, whether there are multiple predecessors that refer both to an if and switch statement.
+         * TODO: Only allocate a branch distance entry for if and case statements since only for those statements a
+         *  branch distance is ever requested. Right now for every IP (branch, case, if and switch) such an entry is
+         *  reserved. Moreover, we could only allocate an entry for a switch branch distance if needed. We can check
+         *  for each branch, whether there are multiple predecessors that refer both to an if and switch statement.
          */
 
         /*
-        * TODO: Theoretically it could happen that a case statement is shared between two switch statements similar to
-        *  the case of a shared branch between an if and a switch statement or two if statements. Since we store the
-        *  branch distance value directly at the case statement in our cache, there is only a entry for potentially two
-        *  distinct branch distance values. We would need to allocate for each switch statement an entry or store the
-        *  branch distance values of the case statements directly within the switch statement similar to if statements.
-        *  However, this would require then some additional addressing to refer to some individual case.
+         * TODO: Theoretically it could happen that a case statement is shared between two switch statements similar to
+         *  the case of a shared branch between an if and a switch statement or two if statements. Since we store the
+         *  branch distance value directly at the case statement in our cache, there is only a entry for potentially two
+         *  distinct branch distance values. We would need to allocate for each switch statement an entry or store the
+         *  branch distance values of the case statements directly within the switch statement similar to if statements.
+         *  However, this would require then some additional addressing to refer to some individual case.
          */
 
         final Map<String, Set<Short>> indicesPerMethod
@@ -483,10 +514,10 @@ public final class GraphEndpoint implements Endpoint {
         methodNameIndex = new HashMap<>(indicesPerMethod.size());
 
         /*
-        * We need to assign each method a unique id. Similar to the approach level array, we divide the array into
-        * rows/segments, where each row describes a method including the number of IPs, the indices of the IPs and its
-        * branch distance values for both if and switch instructions. Lastly, a generation number follows. The method
-        * index serves as the base address of a particular row.
+         * We need to assign each method a unique id. Similar to the approach level array, we divide the array into
+         * rows/segments, where each row describes a method including the number of IPs, the indices of the IPs and its
+         * branch distance values for both if and switch instructions. Lastly, a generation number follows. The method
+         * index serves as the base address of a particular row.
          */
         int total = 0;
         for (final var entry : indicesPerMethod.entrySet()) {
@@ -494,11 +525,11 @@ public final class GraphEndpoint implements Endpoint {
             final int size = entry.getValue().size(); // the number of IPs
 
             /*
-            * If the number of IPs is not equal 3, we require (3 * size) many entries for the indices of the IPs and if
-            * as well as switch branch distance values. In addition, one field is required for the number of IPs and
-            * one field for the generation number. If we have exactly 3 IPs for a method, an optimization can be applied
-            * which saves certain fields. In particular, we require only 8 fields for the 3 if and 3 switch branch
-            * distance values as well as the instruction index of the middle IP and the generation number.
+             * If the number of IPs is not equal 3, we require (3 * size) many entries for the indices of the IPs and if
+             * as well as switch branch distance values. In addition, one field is required for the number of IPs and
+             * one field for the generation number. If we have exactly 3 IPs for a method, an optimization can be applied
+             * which saves certain fields. In particular, we require only 8 fields for the 3 if and 3 switch branch
+             * distance values as well as the instruction index of the middle IP and the generation number.
              */
             final int add = size != 3 ? 3 * size + 2 : 8;
             total += add;
@@ -514,8 +545,8 @@ public final class GraphEndpoint implements Endpoint {
             if (size != 3) { // regular case
 
                 /*
-                * A row stores the number of IPs, followed by the indices of the IPs in ascending order, the if branch
-                * distance values, the switch branch distance values and lastly the generation number.
+                 * A row stores the number of IPs, followed by the indices of the IPs in ascending order, the if branch
+                 * distance values, the switch branch distance values and lastly the generation number.
                  */
                 branchDistances[rowIndex] = (short) size; // store the size of the IPs as first entry
 
@@ -531,9 +562,9 @@ public final class GraphEndpoint implements Endpoint {
                 Arrays.fill(branchDistances, i, i + 2 * size + 1, Short.MAX_VALUE);
             } else {
                 /*
-                * We can apply a special optimization if we deal exactly with three IPs. Instead of saving the number
-                * of IPs and its three indices, we store only the negated index of the middle instruction followed by
-                * dummy values for the 6 (if + switch) branch distance values and the generation number.
+                 * We can apply a special optimization if we deal exactly with three IPs. Instead of saving the number
+                 * of IPs and its three indices, we store only the negated index of the middle instruction followed by
+                 * dummy values for the 6 (if + switch) branch distance values and the generation number.
                  */
                 final List<Short> instructions = new ArrayList<>(value);
                 instructions.sort(Comparator.naturalOrder());
@@ -563,9 +594,9 @@ public final class GraphEndpoint implements Endpoint {
                 final short distance = (short) Integer.parseUnsignedInt(trace, colon + 1, trace.length(), 10);
 
                 /*
-                * We don't need to store a branch distance of 0 for neither if or switch statements, because we would
-                * have taken that branch or case statement (approach level of 0), thus never requesting the branch
-                * distance values at all.
+                 * We don't need to store a branch distance of 0 for neither if or switch statements, because we would
+                 * have taken that branch or case statement (approach level of 0), thus never requesting the branch
+                 * distance values at all.
                  */
                 if (distance == 0) {
                     continue;
@@ -635,8 +666,8 @@ public final class GraphEndpoint implements Endpoint {
      * @param branchVertex The given branch vertex (target).
      * @return Returns the normalised approach level + branch distance fitness value.
      */
-    private String combineApproachLevelAndBranchDistance(final int approachLevel, final Vertex minDistanceVertex,
-                                                         final Vertex branchVertex) {
+    private String combineApproachLevelAndBranchDistance(final int approachLevel, final CFGVertex minDistanceVertex,
+                                                         final CFGVertex branchVertex) {
 
         final int minBranchDistance;
 
@@ -652,9 +683,9 @@ public final class GraphEndpoint implements Endpoint {
              * an arbitrary if statement as the vertex with the closest distance.
              */
             final boolean directSuccessor
-                    = graph.getOutgoingEdges(minDistanceVertex)
+                    = ((Set<CFGEdge>) graph.getOutgoingEdges(minDistanceVertex))
                     .stream()
-                    .map(Edge::getTarget)
+                    .map(CFGEdge::getTarget)
                     .anyMatch(vertex -> vertex.equals(branchVertex));
 
             if (directSuccessor) {
@@ -676,9 +707,9 @@ public final class GraphEndpoint implements Endpoint {
 
             } else {
                 /*
-                * It can happen that there are multiple closest if statements and without a further graph traversal we
-                * don't know which one is the correct one. We simply assign here the highest possible distance to indicate
-                * that we need to choose a different path in the future.
+                 * It can happen that there are multiple closest if statements and without a further graph traversal we
+                 * don't know which one is the correct one. We simply assign here the highest possible distance to indicate
+                 * that we need to choose a different path in the future.
                  */
                 minBranchDistance = Integer.MAX_VALUE;
             }
@@ -691,18 +722,18 @@ public final class GraphEndpoint implements Endpoint {
              */
 
             /*
-            * Check if the target branch (case stmt) is a direct successor of the closest visited switch statement. One
-            * might think that we could check for approach level == 1, but this doesn't give us any direction. Consider
-            * the following counter example: The target branch (case stmt) can have both as predecessor and successor
-            * a switch statement, while the case stmt itself was not covered. That means the successor switch statement
-            * was reached through a different case of the predecessor switch statement. Both switch statements have an
-            * approach level of 1, but only the predecessor switch statement is the one we would be interested. However,
-            * the current implementation supplies an arbitrary switch statement as the vertex with the closest distance.
+             * Check if the target branch (case stmt) is a direct successor of the closest visited switch statement. One
+             * might think that we could check for approach level == 1, but this doesn't give us any direction. Consider
+             * the following counter example: The target branch (case stmt) can have both as predecessor and successor
+             * a switch statement, while the case stmt itself was not covered. That means the successor switch statement
+             * was reached through a different case of the predecessor switch statement. Both switch statements have an
+             * approach level of 1, but only the predecessor switch statement is the one we would be interested. However,
+             * the current implementation supplies an arbitrary switch statement as the vertex with the closest distance.
              */
             final boolean directSuccessor
-                    = graph.getOutgoingEdges(minDistanceVertex)
+                    = ((Set<CFGEdge>) graph.getOutgoingEdges(minDistanceVertex))
                     .stream()
-                    .map(Edge::getTarget)
+                    .map(CFGEdge::getTarget)
                     .anyMatch(vertex -> vertex.equals(branchVertex));
 
             if (directSuccessor) {
@@ -736,6 +767,451 @@ public final class GraphEndpoint implements Endpoint {
     }
 
     /**
+     * Retrieves the stack trace (lines).
+     *
+     * @param request The request message.
+     * @return Returns a response message containing the stack trace (lines).
+     */
+    private Message getStackTrace(Message request) {
+        return new Message.MessageBuilder("/graph/stack_trace")
+                .withParameter("stack_trace", String.join(",", stackTrace.getAtLines()))
+                .build();
+    }
+
+    /**
+     * Retrieves the stack trace tokens.
+     *
+     * @param request The request message.
+     * @return Returns a response message containing the stack trace tokens.
+     */
+    private Message getStackTraceTokens(Message request) {
+
+        final String packageName = request.getParameter("package");
+        final Set<String> stackTraceTokens = stackTrace.getFuzzyTokens(packageName);
+        final Stream<String> instructionTokens = crashReproductionUtil.getTokensForStackTrace(stackTrace, packageName);
+        final Set<String> tokens = Stream.concat(stackTraceTokens.stream(), instructionTokens).collect(Collectors.toSet());
+
+        final var builder = new Message.MessageBuilder("/graph/stack_trace_tokens")
+                .withParameter("tokens", String.valueOf(tokens.size()));
+
+        int pos = 0;
+        for (String token : tokens) {
+            builder.withParameter("token_" + pos, token);
+            pos++;
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * Retrieves the stack trace user tokens.
+     *
+     * @param request The request message.
+     * @return Returns a response message containing the stack trace user tokens.
+     */
+    private Message getStackTraceUserTokens(Message request) {
+        return new Message.MessageBuilder("/graph/stack_trace_user_tokens")
+                .withParameter("tokens", String.join(",", stackTrace.getUserTokens()))
+                .build();
+    }
+
+    /**
+     * Retrieves the traces for a single chromosome or all if unspecified.
+     *
+     * @param request The request message.
+     * @return Returns the traces for a single chromosome or all if unspecified.
+     */
+    private Set<String> getTraces(Message request) {
+        return new HashSet<>(readTraces(getTraceFiles(request)));
+    }
+
+    /**
+     * Retrieves the traces per file. One such file essentially represents the traces of a single action.
+     *
+     * @param request The request message.
+     * @return Returns the traces per file / action.
+     */
+    private List<Set<String>> getTracesPerFile(Message request) {
+        return getTraceFiles(request).stream()
+                .map(f -> new HashSet<>(readTraces(List.of(f))))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Retrieves the trace files for the given chromosome or all if unspecified.
+     *
+     * @param request The request message containing the chromosome identifier.
+     * @return Returns the trace files belonging to the chromosome.
+     */
+    private List<File> getTraceFiles(Message request) {
+
+        final String packageName = request.getParameter("packageName");
+        final String chromosome = request.getParameter("chromosome");
+
+        // collect the relevant traces files
+        final Path appDir = appsDir.resolve(packageName);
+        final File tracesDir = appDir.resolve("traces").toFile();
+        return getTraceFiles(tracesDir, chromosome);
+    }
+
+    /**
+     * Retrieves the visited methods described by the given traces.
+     *
+     * @param traces The given traces.
+     * @return Returns the set of visited methods.
+     */
+    private Set<String> getVisitedMethods(final Set<String> traces) {
+        return traces.stream().map(this::traceToMethod).collect(Collectors.toSet());
+    }
+
+    /**
+     * Computes the normalized basic block distance between the given traces and the target methods described by the
+     * stack trace.
+     *
+     * @param tracesPerFile The given traces per file. One file essentially represents the traces of a single action.
+     * @return Returns a mapping that describes for each stack trace line the normalized basic block distance.
+     */
+    private Map<AtStackTraceLine, Double> getNormalizedBasicBlockDistances(final List<Set<String>> tracesPerFile) {
+
+        // Look for the traces that reached most target methods.
+        final var bestTraces = tracesPerFile.stream()
+                .map(traces -> new Tuple<>(traces, reachedTargetMethods(traces)))
+                .max(Comparator.comparingLong(tuple -> tuple.getY().values().stream().filter(b -> b).count()))
+                .orElseThrow();
+
+        return bestTraces.getY().entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> {
+                    final int distance = e.getValue()
+                            // only need to compute distance if we reached the target method (stack trace line)
+                            ? getBasicBlockDistance(bestTraces.getX(), e.getKey())
+                            : Integer.MAX_VALUE;
+
+                    // normalize distance in [0,1]
+                    return distance == Integer.MAX_VALUE
+                            ? 1D
+                            : (double) distance / ((double) distance + 1);
+                }));
+    }
+
+    /**
+     * Retrieves the minimal basic block distance (approach level) between the given traces and the target method
+     * contained in the stack trace.
+     *
+     * @param traces The set of traces.
+     * @param stackTraceLine The stack trace line containing the target method.
+     * @return Returns the minimal basic block distance between the traces and the target method.
+     */
+    private int getBasicBlockDistance(final Set<String> traces, final AtStackTraceLine stackTraceLine) {
+
+        // retrieve the intra CFG corresponding to the given stack trace line
+        final var analyzedStackTraceLine = analyzedStackTraceLines.get(stackTraceLine);
+        final IntraCFG intraCFG = analyzedStackTraceLine.getIntraCFG();
+
+        final String targetMethod = analyzedStackTraceLine.getIntraCFGVertices().stream()
+                .map(v -> (CFGVertex) v)
+                .findAny().orElseThrow().getMethod();
+
+        int minDistance = Integer.MAX_VALUE;
+
+        for (String trace : traces) {
+            if (traceToMethod(trace).equals(targetMethod)) {
+                int distance = analyzedStackTraceLine.getIntraCFGVertices().stream()
+                        // TODO: Employ a cache for the distances!
+                        .map(targetVertex -> intraCFG.getDistance(intraCFG.lookupVertex(trace), (CFGVertex) targetVertex))
+                        .map(dist -> dist == -1 ? Integer.MAX_VALUE : dist) // -1 means not reachable
+                        .min(Integer::compare)
+                        .orElseThrow();
+
+                if (distance < minDistance) {
+                    minDistance = distance;
+                }
+            }
+        }
+
+        return minDistance;
+    }
+
+    /**
+     * Retrieves the normalized call tree distance for the given chromosome.
+     *
+     * @param chromosome The chromosome for which the call tree distance should be derived.
+     * @param tracesPerFile The traces per file (action).
+     * @return Returns the normalized call tree distance for the given chromosome.
+     */
+    private double getCallTreeDistance(final String chromosome, final List<Set<String>> tracesPerFile) {
+
+        Log.println("Computing the call tree distance for the chromosome: " + chromosome);
+
+        // We don't want to mix the traces of different actions, since our target action should produce all traces
+        // necessary to cover the stack trace methods.
+        // If we mix the traces then it's possible that we get a call tree distance of zero even if the target methods
+        // are called from different actions
+        // (and never just by one action). Then we have technically reached all target methods, but not in the right sequence
+        double callTreeDistance = tracesPerFile.stream()
+                .map(traces -> traces.stream().map(this::traceToMethod).collect(Collectors.toSet()))
+                .mapToInt(this::getCallTreeDistance)
+                .min().orElseThrow();
+
+        double normalizedCallTreeDistance = callTreeDistance == Integer.MAX_VALUE
+                ? 1
+                : callTreeDistance / (callTreeDistance + 1);
+
+        Log.println("Call tree distance for " + chromosome + " is: abs. distance " + callTreeDistance
+                + ", rel. distance " + normalizedCallTreeDistance);
+
+        return normalizedCallTreeDistance;
+    }
+
+    /**
+     * Retrieves the normalized (average) basic block distance between the traces and the target methods.
+     *
+     * @param chromosome The chromosome for which the basic block distance should be derived.
+     * @param tracesPerFile The traces per file (action).
+     * @return Returns the normalized basic block distance for the given chromosome.
+     */
+    private double getBasicBlockDistance(final String chromosome, final List<Set<String>> tracesPerFile) {
+
+        Log.println("Computing the call tree distance for the chromosome: " + chromosome);
+
+        final Map<AtStackTraceLine, Double> basicBlockDistances = getNormalizedBasicBlockDistances(tracesPerFile);
+
+        // computes the average basic block distance
+        double sum = basicBlockDistances.values().stream().mapToDouble(d -> d).sum();
+        double averageBasicBlockDistance = sum / basicBlockDistances.size();
+
+        Log.println("Basic block distance for " + chromosome + " is: " + averageBasicBlockDistance);
+
+        return averageBasicBlockDistance;
+    }
+
+    /**
+     * Retrieves the number (percentage) of reached constructors for the given chromosome.
+     *
+     * @param chromosome The chromosome for which the number of reached constructors should be derived.
+     * @param traces The traces for the given chromosome.
+     * @return Returns the number of reached constructors for the given chromosome.
+     */
+    private double getNumberOfReachedConstructors(final String chromosome, final Set<String> traces) {
+
+        Log.println("Computing number of reached constructors for the chromosome: " + chromosome);
+
+        // track which methods have been visited by the traces
+        final Set<String> reachedMethods = traces.stream().map(this::traceToMethod).collect(Collectors.toSet());
+
+        // TODO: Cache this computation when initialising the call graph.
+        // track the set of required constructors by iterating over the stack trace lines
+        final Set<String> requiredConstructors = analyzedStackTraceLines.values().stream()
+                .map(AnalyzedStackTraceLine::getRequiredConstructorCalls)
+                .flatMap(Collection::stream)
+                .collect(Collectors.toSet());
+
+        // count how many constructors have been reached
+        double reachedConstructors = requiredConstructors.stream().filter(reachedMethods::contains).count();
+
+        // normalize in the range [0,1]
+        double normalisedNumberOfReachedConstructors = requiredConstructors.size() == 0
+                ? 1
+                : reachedConstructors / requiredConstructors.size();
+
+        Log.println("Number of reached constructors for " + chromosome + " is: " + normalisedNumberOfReachedConstructors);
+
+        return normalisedNumberOfReachedConstructors;
+    }
+
+    /**
+     * Retrieves the crash distance for the given chromosome.
+     *
+     * @param request The request message.
+     * @return Returns a response message containing the computed crash distance.
+     */
+    private Message getCrashDistance(final Message request) {
+
+        final String chromosome = request.getParameter("chromosome");
+        final List<Set<String>> tracesPerFile = getTracesPerFile(request);
+        final Set<String> traces = getTraces(request);
+
+        double callTreeDistance = getCallTreeDistance(chromosome, tracesPerFile);
+        double basicBlockDistance = getBasicBlockDistance(chromosome, tracesPerFile);
+        double reachedConstructorsPercentage = getNumberOfReachedConstructors(chromosome, traces);
+
+        double crashDistance = (basicBlockDistance + callTreeDistance + reachedConstructorsPercentage) / 3;
+
+        return new Message.MessageBuilder("/graph/get_crash_distance")
+                .withParameter("crash_distance", String.valueOf(crashDistance))
+                .build();
+    }
+
+    /**
+     * Computes the call tree distance between the target vertices and the given traces.
+     *
+     * @param traces The given traces.
+     * @return Returns the call tree distance.
+     */
+    private int getCallTreeDistance(final Set<String> traces) {
+
+        CallTree callTree = (CallTree) graph;
+
+        // TODO: Cache this computation.
+        // the call tree vertices describing the stack trace in reversed order
+        final List<CallTreeVertex> callTreeVertices = targetVertices.stream()
+                .map(v -> (CFGVertex) v)
+                .map(CFGVertex::getMethod)
+                .map(CallTreeVertex::new)
+                .collect(Collectors.toList());
+        Collections.reverse(callTreeVertices);
+
+        Optional<CallTreeVertex> lastCoveredVertex = Optional.empty();
+
+        while (!callTreeVertices.isEmpty() && traces.contains(callTreeVertices.get(0).getMethod())) {
+            // remove target vertices that we have already covered
+            lastCoveredVertex = Optional.of(callTreeVertices.remove(0));
+        }
+
+        if (callTreeVertices.isEmpty()) {
+            // We have already reached all targets, thus a distance of 0.
+            return 0;
+        } else if (lastCoveredVertex.isPresent()) {
+            // We partially covered the targets, thus the distance is defined as the minimal path length from the last
+            // covered vertex through the remaining targets.
+            return callTree.getShortestPathWithStops(lastCoveredVertex.get(), callTreeVertices).orElseThrow().getLength();
+        } else {
+            // TODO: Computing the minimal path between every single trace and the targets can be expensive. Track it
+            //  or compute the distance in advance. Alternatively, use a different metric in this case.
+            // We have not found any targets yet, thus the distance is defined as the minimal path length from a trace
+            // through the targets.
+            int minDistance = Integer.MAX_VALUE;
+
+            for (String trace : traces) {
+                var path
+                        = callTree.getShortestPathWithStops(new CallTreeVertex(trace), callTreeVertices);
+                if (path.isPresent()) {
+                    final int distance = path.get().getLength();
+
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                    }
+                }
+            }
+            return minDistance;
+        }
+    }
+
+    /**
+     * Computes a mapping that describes which stack trace line (target method) has been covered by the given traces.
+     *
+     * @param traces The given traces.
+     * @return Returns a mapping that tracks which target method (stack trace line) has been covered by the traces.
+     */
+    private Map<AtStackTraceLine, Boolean> reachedTargetMethods(final Set<String> traces) {
+
+        final Set<String> reachedMethods = traces.stream().map(this::traceToMethod).collect(Collectors.toSet());
+
+        final Map<AtStackTraceLine, Boolean> reachedTargetMethods = analyzedStackTraceLines.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, stackTraceLine -> {
+                    final String method = expectOne(stackTraceLine.getValue().getInterCFGVertices().stream()
+                            .map(CFGVertex::getMethod)
+                            .collect(Collectors.toSet()));
+                    return reachedMethods.contains(method);
+                }));
+        onlyAllowCoveredIfPredecessorCoveredAsWell(reachedTargetMethods);
+        return reachedTargetMethods;
+    }
+
+    // TODO: Need help here for understanding!
+    private void onlyAllowCoveredIfPredecessorCoveredAsWell(Map<AtStackTraceLine, Boolean> map) {
+        // We are only interested in a covered method if its predecessor from the stack trace was reached as well
+        // TODO Does not consider the following case:
+        // Stack trace from crash we are trying to reproduce:
+        // at com.example.Class2.method2()
+        // at com.example.Class1.method1()
+        //
+        // Traces
+        // - com.example.Class2.method2() covered
+        // - com.example.Class1.method1() covered
+        //
+        // Result
+        // - com.example.Class1.method1() will be marked as reached -> fine
+        // - com.example.Class2.method2() will be marked as reached
+        //      -> Case: method2 is called by method3
+        //      -> should ideally not be marked as reached (since it was not called by method1)
+
+        var orderedEntries = stackTrace.getStackTraceAtLines()
+                .filter(map::containsKey)
+                .map(line -> map.entrySet().stream().filter(e -> e.getKey().equals(line)).findAny())
+                .map(Optional::orElseThrow)
+                .collect(Collectors.toList());
+        Collections.reverse(orderedEntries);
+
+        Iterator<Map.Entry<AtStackTraceLine, Boolean>> coveredStackTraceLineIterator = orderedEntries.listIterator();
+
+        while (coveredStackTraceLineIterator.hasNext() && coveredStackTraceLineIterator.next().getValue()) {
+            // Run from bottom to top of stack trace lines until an uncovered line is reached
+        }
+
+        // Set remaining lines to not covered, since predecessor is also not covered
+        while (coveredStackTraceLineIterator.hasNext()) {
+            coveredStackTraceLineIterator.next().setValue(false);
+        }
+    }
+
+    /**
+     * Checks whether the given collection contains exactly one element.
+     *
+     * @param collection The collection to be verified.
+     * @param <T> The element type of the collection entries.
+     * @return Returns the single element in the collection or throws an exception otherwise.
+     */
+    private static <T> T expectOne(final Collection<T> collection) {
+        if (collection.isEmpty()) {
+            throw new NoSuchElementException("Empty collection!");
+        } else if (collection.size() > 1) {
+            throw new IllegalArgumentException("Collection contains more than one element!");
+        } else {
+            return collection.stream().findAny().orElseThrow();
+        }
+    }
+
+    /**
+     * Computes the traces for the given statement. A trace encodes the full-qualified method name and the instruction
+     * index, e.g. Lcom/zola/bmi/onStop()V->3.
+     *
+     * @param statement The given statement.
+     * @return Returns the traces for the statement.
+     */
+    private Stream<String> tracesForStatement(final Statement statement) {
+        return getInstructions(statement)
+                .map(instruction -> statement.getMethod() + "->" + instruction.getInstructionIndex());
+    }
+
+    /**
+     * Retrieves the instructions of the given statement.
+     *
+     * @param statement The given statement.
+     * @return Returns the instructions belonging to the statement.
+     */
+    private static Stream<AnalyzedInstruction> getInstructions(final Statement statement) {
+        if (statement instanceof BasicStatement) {
+            return Stream.of(((BasicStatement) statement).getInstruction());
+        } else if (statement instanceof BlockStatement) { // basic block, unroll instructions
+            return ((BlockStatement) statement).getStatements()
+                    .stream().flatMap(GraphEndpoint::getInstructions);
+        } else {
+            return Stream.empty();
+        }
+    }
+
+    /**
+     * Retrieves the fully-qualified method name from the given trace.
+     *
+     * @param trace The given trace.
+     * @return Returns the method name encapsulated in the trace.
+     */
+    private String traceToMethod(final String trace) {
+        final String[] parts = trace.split("->");
+        return parts[0] + "->" + parts[1];
+    }
+
+    /**
      * Draws the graph and saves it inside the app directory.
      *
      * @param request The request message.
@@ -747,10 +1223,10 @@ public final class GraphEndpoint implements Endpoint {
             throw new IllegalStateException("Graph hasn't been initialised!");
         }
 
-        boolean raw = Boolean.parseBoolean(request.getParameter("raw"));
+        final boolean raw = Boolean.parseBoolean(request.getParameter("raw"));
 
-        File appDir = new File(appsDir.toFile(), graph.getAppName());
-        File drawDir = new File(appDir, "graph-drawings");
+        final File appDir = new File(appsDir.toFile(), graph.getAppName());
+        final File drawDir = new File(appDir, "graph-drawings");
         drawDir.mkdirs();
 
         if (raw) {
@@ -759,17 +1235,10 @@ public final class GraphEndpoint implements Endpoint {
         } else {
             Log.println("Drawing graph...");
 
-            // determine the target vertices (e.g. single branch or all branches)
-            Set<Vertex> targetVertices = new HashSet<>();
-
-            if (targetVertex != null) {
-                targetVertices.add(targetVertex);
-            } else {
-                targetVertices.addAll(new HashSet<>(graph.getBranchVertices()));
-            }
+            final Set<Vertex> targetVertices = new HashSet<>(this.targetVertices);
 
             // retrieve the visited vertices
-            Set<Vertex> visitedVertices = new HashSet<>(getVisitedVertices(appDir));
+            final Set<Vertex> visitedVertices = new HashSet<>(getVisitedVertices(appDir, null));
 
             // draw the graph where target and visited vertices are marked in different colours
             graph.draw(drawDir, visitedVertices, targetVertices);
@@ -779,326 +1248,315 @@ public final class GraphEndpoint implements Endpoint {
     }
 
     /**
+     * Draws the call tree.
+     *
+     * @param request The request request.
+     * @return Returns an empty response request.
+     */
+    @SuppressWarnings("unused")
+    private Message drawCallTree(Message request) {
+
+        CallTree callTree = (CallTree) graph;
+
+        final Set<String> traces = getTraces(request);
+        final Set<String> visitedMethods = getVisitedMethods(traces);
+
+        final File appDir = new File(appsDir.toFile(), graph.getAppName());
+        final File drawDir = new File(appDir, "graph-drawings");
+        drawDir.mkdirs();
+
+        final String id = request.getParameter("id");
+        final File dotFile = new File(drawDir, id + ".dot");
+
+        // highlight the visited methods in red and the target methods in blue
+        final Map<String, String> highlightMethods = visitedMethods.stream()
+                .collect(Collectors.toMap(Function.identity(), a -> "red"));
+        targetVertices.stream()
+                .map(v -> (CFGVertex) v)
+                .map(CFGVertex::getMethod)
+                .forEach(target -> highlightMethods.put(target, "blue"));
+
+        // export the call tree to a dot file
+        callTree.toDot(dotFile, highlightMethods);
+
+        return new Message("/graph/draw/call_tree");
+    }
+
+    /**
      * Retrieves the set (actually a list without duplicates due to performance reasons) of visited vertices by
-     * traversing over all traces contained in the app directory.
+     * traversing over the specified chromosome traces contained in the app directory.
      *
      * @param appDir The app directory.
+     * @param chromosomes A list of chromosomes separated by '+' or {@code null} if all traces should be considered.
      * @return Returns the visited vertices.
      */
-    private List<Vertex> getVisitedVertices(File appDir) {
+    private List<Vertex> getVisitedVertices(final File appDir, final String chromosomes) {
 
         // get list of traces file
-        File tracesDir = new File(appDir, "traces");
+        final File tracesDir = new File(appDir, "traces");
 
         // collect the relevant traces files
-        List<File> tracesFiles = getTraceFiles(tracesDir, null);
+        final List<File> tracesFiles = getTraceFiles(tracesDir, chromosomes);
 
         // read traces from trace file(s)
-        List<String> traces = readTraces(tracesFiles);
+        final List<String> traces = readTraces(tracesFiles);
 
         return mapTracesToVertices(traces);
     }
 
     /**
-     * Selects a target vertex based on the given target criterion.
+     * Selects one or more target vertices based on the given target criterion.
      *
      * @param target Describes how a target should be selected.
+     * @param packageName The package name of the AUT.
+     * @param apkPath The path to the APK file.
+     * @param stackTracePath The path to the stack trace file, {@code null} if not required.
      * @return Returns the selected target vertex.
      */
-    private Vertex selectTargetVertex(String target) {
+    private List<? extends Vertex> selectTargetVertices(String target, String packageName, File apkPath, String stackTracePath) {
 
         Log.println("Target vertex selection strategy: " + target);
 
         switch (target) {
-            case "no_target":
-                return null; // for multiple targets
+            case "all_branches":
+                return ((CFG) graph).getBranchVertices();
             case "random_target":
             case "random_branch":
-                List<Vertex> targets = target.equals("random_target") ? graph.getVertices() : graph.getBranchVertices();
+                final List<? extends Vertex> targets = target.equals("random_target")
+                        ? graph.getVertices() : ((CFG) graph).getBranchVertices();
 
-                final Random rand = new Random();
                 while (true) {
+                    Random rand = new Random();
                     Vertex randomVertex = targets.get(rand.nextInt(targets.size()));
 
                     if (graph.isReachable(randomVertex)) {
-                        Log.println("Randomly selected target vertex: " + randomVertex + " [" + randomVertex.getMethod() + "]");
-                        return randomVertex;
+                        Log.println("Randomly selected target vertex: " + randomVertex);
+                        return List.of(randomVertex);
                     }
                 }
-            default:
-                Vertex targetVertex = graph.lookupVertex(target); // look up target by supplied trace
+            case "stack_trace":
+                final File appDir = new File(appsDir.toFile(), packageName);
 
-                if (targetVertex == null) {
-                    throw new UnsupportedOperationException("Custom target vertex not found: " + target);
+                // the stack_trace.txt should be located within the app directory
+                final File stackTraceFile = new File(appDir, stackTracePath);
+
+                if (!stackTraceFile.exists()) {
+                    throw new IllegalArgumentException("Stack trace file does not exist at: " + stackTraceFile.getAbsolutePath());
                 }
-                return targetVertex;
+
+                stackTrace = parseStackTraceFromFile(stackTraceFile);
+
+                return getTargetVertices(stackTrace, packageName, apkPath);
+            default:
+                // look up target vertex/vertices by supplied trace(s)
+                final List<Vertex> targetVertices = Arrays.stream(target.split(","))
+                        .map(graph::lookupVertex)
+                        .collect(Collectors.toList());
+
+                if (targetVertices.isEmpty()) {
+                    throw new UnsupportedOperationException("Custom target vertex/vertices not found: " + target);
+                }
+                return targetVertices;
         }
     }
 
     /**
-     * Initialises the graph and pre-computes approach levels and branch distances when dealing with multiple targets.
+     * Parses the stack trace from the given file.
+     *
+     * @param stackTraceFile The given stack trace file.
+     * @return Returns the parsed stack trace.
+     */
+    private StackTrace parseStackTraceFromFile(final File stackTraceFile) {
+        try {
+            return StackTraceParser.parse(Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()));
+        } catch (IOException e) {
+            Log.printError("Could not read stack trace file from '" + stackTraceFile.getAbsolutePath() + "'!");
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * Initialises the target vertices for crash reproduction.
+     *
+     * @param stackTrace The target stack trace.
+     * @param packageName The package name of the AUT.
+     * @param apkPath The path to the APK.
+     * @return Returns the target vertices for crash reproduction.
+     */
+    private List<? extends Vertex> getTargetVertices(final StackTrace stackTrace, final String packageName, final File apkPath) {
+
+        final CallTree callTree = (CallTree) graph;
+        final InterCFG interCFG = callTree.getInterCFG();
+
+        // TODO: Make this crash reproduction util a real utility class.
+        crashReproductionUtil = new CrashReproductionUtil(callTree);
+
+        // Analyse every 'at' stack trace line that belongs to the given package and comes in consecutive order.
+        analyzedStackTraceLines = crashReproductionUtil.getLastConsecutiveLines(stackTrace.getStackTraceAtLines()
+                .collect(Collectors.toList()), packageName).stream()
+                .collect(Collectors.toMap(Function.identity(), line -> {
+
+                    // Retrieve the inter-procedural CFG vertices that are mapped to the given stack trace line.
+                    final Set<CFGVertex> targetInterCFGVertices
+                            = crashReproductionUtil.getTargetVerticesForStackTraceLine(line, interCFG);
+
+                    // TODO: Retrieve the target method name directly from the method name encoded in the stack trace line.
+                    final String targetMethod = expectOne(targetInterCFGVertices.stream()
+                            .map(CFGVertex::getMethod)
+                            .collect(Collectors.toSet()));
+
+                    // create the intraCFG matching the target method (method encoded in the stack trace line)
+                    final IntraCFG intraCFG = new IntraCFG(apkPath, targetMethod, true, appsDir, packageName);
+
+                    // TODO: Remove once we can assure that those vertices are identical to the interTargetVertices!
+                    final Set<CFGVertex> targetIntraCFGVertices = targetInterCFGVertices.stream()
+                            .flatMap(interVertex -> tracesForStatement(interVertex.getStatement()))
+                            .map(intraCFG::lookupVertex)
+                            .collect(Collectors.toSet());
+
+                    if (!targetInterCFGVertices.equals(targetIntraCFGVertices)) {
+                        Log.println("Not same set of vertices!");
+                        Log.println("InterCFG vertices: " + targetInterCFGVertices);
+                        Log.println("IntraCFG vertices: " + targetIntraCFGVertices);
+                    }
+
+                    // Retrieves the required constructors to properly call the target method in the stack trace line.
+                    final var requiredConstructorCalls = crashReproductionUtil.getRequiredConstructorCalls(line);
+
+                    return new AnalyzedStackTraceLine(targetInterCFGVertices, intraCFG,
+                            targetIntraCFGVertices, requiredConstructorCalls);
+                }));
+
+        // Retrieve the target vertices from the stack trace lines.
+        final List<CFGVertex> targetInterCFGVertices = stackTrace.getStackTraceAtLines()
+                .filter(analyzedStackTraceLines::containsKey)
+                .map(analyzedStackTraceLines::get)
+                .map(AnalyzedStackTraceLine::getInterCFGVertices)
+                .flatMap(Collection::stream)
+                .collect(Collectors.toList());
+
+        // At least a single line (target) in the stack trace must refer to the AUT.
+        if (targetInterCFGVertices.isEmpty()) {
+            throw new IllegalStateException("No targets found for stack trace!");
+        }
+
+        // TODO: Store the call tree vertices in a global variable.
+        // Map the interCFG vertices to the callTree vertices.
+        final var callTreeVertices = targetInterCFGVertices.stream()
+                .map(CFGVertex::getMethod)
+                .map(CallTreeVertex::new)
+                .collect(Collectors.toList());
+
+        // TODO: Why do we reverse the list?
+        Collections.reverse(callTreeVertices);
+
+        // The target vertices must be reachable in the call tree.
+        if (callTree.getShortestPathWithStops(callTreeVertices).isEmpty()) {
+            throw new IllegalStateException("No path from root to target vertices!");
+        }
+
+        return targetInterCFGVertices;
+    }
+
+    /**
+     * Initialises the graph.
      *
      * @param request The request message.
-     * @return Returns a message indicating that the graph could be constructed.
+     * @return Returns a dummy response upon successful graph initialization.
      */
     private Message initGraph(Message request) {
 
-        final String packageName = request.getParameter("packageName");
-        final GraphType graphType = GraphType.valueOf(request.getParameter("graph_type"));
-        final File apkPath = new File(request.getParameter("apk"));
-        final String target = request.getParameter("target");
+        String packageName = request.getParameter("packageName");
+        GraphType graphType = GraphType.valueOf(request.getParameter("graph_type"));
+        File apkPath = new File(request.getParameter("apk"));
+        String target = request.getParameter("target");
 
         if (!apkPath.exists()) {
             throw new IllegalArgumentException("Can't locate APK: " + apkPath.getAbsolutePath() + "!");
         }
 
-        final boolean useBasicBlocks = Boolean.parseBoolean(request.getParameter("basic_blocks"));
-
         switch (graphType) {
-            case INTRA_CFG:
-                final String methodName = request.getParameter("method");
-                graph = new IntraCFG(apkPath, methodName, useBasicBlocks, appsDir, packageName);
+            case INTRA_CFG: {
+                boolean useBasicBlocks = Boolean.parseBoolean(request.getParameter("basic_blocks"));
+                String methodName = request.getParameter("method");
+                initIntraCFG(apkPath, methodName, useBasicBlocks, packageName, target);
                 break;
-            case INTER_CFG:
-                final boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
-                final boolean resolveOnlyAUTClasses
+            }
+            case INTER_CFG: {
+                boolean useBasicBlocks = Boolean.parseBoolean(request.getParameter("basic_blocks"));
+                boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
+                boolean resolveOnlyAUTClasses
                         = Boolean.parseBoolean(request.getParameter("resolve_only_aut_classes"));
-                graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses,
-                        appsDir, packageName);
+                initInterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, packageName, target);
+
+                // TODO: Make this dependent on fitness function, only required for approach level + branch distance.
+                long start = System.currentTimeMillis();
+                initBranchDistanceCache(getInstrumentationPoints(packageName));
+                initApproachLevelCache((List<CFGVertex>) targetVertices);
+                long end = System.currentTimeMillis();
+                Log.println("Pre-Computing approach levels and branch distances took: " + (end - start) + "ms");
                 break;
+            }
+            case CALL_TREE: {
+                boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
+                boolean resolveOnlyAUTClasses
+                        = Boolean.parseBoolean(request.getParameter("resolve_only_aut_classes"));
+                final String stackTracePath = request.getParameter("stack_trace_path");
+                initCallTree(apkPath, excludeARTClasses, resolveOnlyAUTClasses, packageName, target, stackTracePath);
+                break;
+            }
             default:
                 throw new UnsupportedOperationException("Graph type not yet supported!");
         }
-
-        targetVertex = selectTargetVertex(target);
-
-        long start = System.currentTimeMillis();
-        initBranchDistanceCache(getInstrumentationPoints(packageName));
-        initApproachLevelCache(targetVertex != null ? List.of(targetVertex) : graph.getBranchVertices());
-        long end = System.currentTimeMillis();
-        Log.println("Pre-Computing approach levels and branch distances took: " + (end - start) + "ms");
 
         return new Message("/graph/init");
     }
 
     /**
-     * Computes the fitness value vector for a given chromosome combining approach level + branch distance.
+     * Initialises the intraCFG with the given properties.
      *
-     * @param request The request message.
-     * @return Returns a message containing the branch distance fitness vector.
+     * @param apkPath The path to the APK file.
+     * @param methodName The method for which the intraCFG should be constructed.
+     * @param useBasicBlocks Whether to use basic blocks for the intraCFG.
+     * @param packageName The package name of the AUT.
+     * @param target Describes the target vertices.
      */
-    @SuppressWarnings("unused")
-    @Deprecated
-    private Message getBranchDistanceVectorOld(final Message request) {
-
-        final String packageName = request.getParameter("packageName");
-        final String chromosome = request.getParameter("chromosome");
-
-        Log.println("Computing the branch distance vector for the chromosome: " + chromosome);
-
-        if (graph == null) {
-            throw new IllegalStateException("Graph hasn't been initialised!");
-        }
-
-        long start = System.currentTimeMillis();
-        final List<String> traces = getTraces(packageName, chromosome);
-        final List<Vertex> visitedVertices = mapTracesToVertices(traces);
-        final var branchVertices = graph.getBranchVertices();
-        final List<String> branchDistanceVector = computeBranchDistanceVectorOld(traces, visitedVertices, branchVertices);
-        long end = System.currentTimeMillis();
-        Log.println("Computing branch distance vector took: " + (end-start) + "ms");
-        return new Message.MessageBuilder("/graph/get_branch_distance_vector")
-                .withParameter("branch_distance_vector", String.join("+", branchDistanceVector))
-                .build();
+    private void initIntraCFG(final File apkPath, final String methodName, final boolean useBasicBlocks,
+                                 final String packageName, final String target) {
+        graph = new IntraCFG(apkPath, methodName, useBasicBlocks, appsDir, packageName);
+        targetVertices = selectTargetVertices(target, packageName, apkPath, null);
     }
 
     /**
-     * Computes the branch distance vector combining approach level + branch distance.
+     * Initialises the interCFG with the given properties.
      *
-     * @param traces The set of traces.
-     * @param visitedVertices The visited vertices.
-     * @param branchVertices The branch vertices.
-     * @return Returns the branch distance vector.
+     * @param apkPath The path to the APK file.
+     * @param useBasicBlocks Whether to use basic blocks for the interCFG.
+     * @param excludeARTClasses Whether to exclude ART classes.
+     * @param resolveOnlyAUTClasses Whether to resolve only classes belonging to the AUT package.
+     * @param packageName The package name of the AUT.
+     * @param target Describes the target vertices.
      */
-    @Deprecated
-    private List<String> computeBranchDistanceVectorOld(final List<String> traces, final List<Vertex> visitedVertices,
-                                                        final List<Vertex> branchVertices) {
-        final var vector = new String[branchVertices.size()];
-        IntStream.range(0, branchVertices.size())
-                .parallel()
-                .forEach(index -> {
-                    final var branchVertex = branchVertices.get(index);
-                    final var distance = computeBranchDistanceOld(traces, visitedVertices, branchVertex);
-                    vector[index] = distance;
-                });
-        final var branchDistanceVector = Arrays.asList(vector);
-        return Collections.unmodifiableList(branchDistanceVector);
+    private void initInterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
+                                 boolean resolveOnlyAUTClasses, String packageName, String target) {
+        graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
+        targetVertices = selectTargetVertices(target, packageName, apkPath, null);
     }
 
     /**
-     * Computes the branch distance (approach level + branch distance) for the given branch.
+     * Initialises the call tree with the given properties.
      *
-     * @param traces The set of vertices.
-     * @param visitedVertices The visited vertices.
-     * @param branchVertex The given branch vertex.
-     * @return Returns the branch distance for the given branch.
+     * @param apkPath The path to the APK file.
+     * @param excludeARTClasses Whether to exclude ART classes.
+     * @param resolveOnlyAUTClasses Whether to resolve only classes belonging to the AUT package.
+     * @param packageName The package name of the AUT.
+     * @param target Describes the target vertices.
+     * @param stackTracePath The path to the stack trace.
      */
-    @Deprecated
-    private String computeBranchDistanceOld(final List<String> traces, final List<Vertex> visitedVertices, Vertex branchVertex) {
-
-        long start = System.currentTimeMillis();
-        final var minEntry = computeMinEntry(visitedVertices, branchVertex);
-        long end = System.currentTimeMillis();
-        Log.println("Computing min entry took: " + (end - start) + "ms");
-
-        if (minEntry == null) {
-            // branch not reachable by execution path
-            return String.valueOf(1);
-        } else {
-            final int minDistance = minEntry.getValue();
-
-            if (minDistance == 0) {
-                // covered target branch
-                return String.valueOf(0);
-            } else {
-                final Vertex minDistanceVertex = minEntry.getKey();
-                return combineApproachLevelAndBranchDistanceOld(traces, minDistance, minDistanceVertex, branchVertex);
-            }
-        }
-    }
-
-    /**
-     * Computes the combined approach level + branch distance for the given vertex (if or switch vertex).
-     *
-     * @param traces The set of traces.
-     * @param minDistance The minimal distance (approach level) from the target branch to the if or switch statement.
-     * @param minDistanceVertex The closest if or switch statement.
-     * @param branchVertex The branch vertex for which the distance should be computed.
-     * @return Returns the combined approach level + branch distance metric.
-     */
-    @Deprecated
-    private String combineApproachLevelAndBranchDistanceOld(final List<String> traces, final int minDistance,
-                                                            final Vertex minDistanceVertex, final Vertex branchVertex) {
-        /*
-         * The vertex with the closest distance represents an if or switch stmt, at which the execution path took the wrong
-         * direction. We need to find the shortest branch distance value for the given if or switch stmt. Note that the
-         * if or switch stmt could have been visited multiple times.
-         */
-        final Statement stmt = minDistanceVertex.getStatement();
-
-        int minBranchDistance = Integer.MAX_VALUE;
-
-        if (minDistanceVertex.isIfVertex()) {
-
-            // the if stmt is located the last position of the block
-            final BasicStatement ifStmt = (BasicStatement) ((BlockStatement) stmt).getLastStatement();
-
-            // find the branch distance trace(s) that describes the if stmt
-            final String prefix = minDistanceVertex.getMethod() + "->" + ifStmt.getInstructionIndex() + ":";
-
-            /*
-             * We need to look for branch distance traces that refer to the if statement. A branch distance trace is
-             * produced for both branches, but we only need to consider those traces that describe the branch that
-             * couldn't be covered, otherwise we would have actually taken the right branch. Thus, the relevant
-             * distance traces (we may have visited the if statement multiple times) must contain a distance > 0,
-             * since a branch with a distance of 0 would have be taken. We simply need to pick the minimum of those
-             * distance traces.
-             */
-            long start1 = System.currentTimeMillis();
-            minBranchDistance = traces.stream()
-                    .filter(trace -> trace.startsWith(prefix))
-                    .map(trace -> Integer.parseInt(trace.split(":")[1]))
-                    .filter(distance -> distance > 0)
-                    .min(Comparator.naturalOrder())
-                    .orElse(Integer.MAX_VALUE);
-            long end1 = System.currentTimeMillis();
-            Log.println("Computing branch distance took: " + (end1 - start1) + "ms");
-        } else if (minDistanceVertex.isSwitchVertex()) {
-
-            /*
-            * TODO: Improve the branch distance metric for switch case statements. Right now, the branch distance for
-            *  an individual case statement can be only 1, since we only differentiate between covered (0) and not
-            *  covered (1), and we already filtered out direct hits.
-             */
-
-            // check if the branch vertex is a direct successor of the closest visited switch case statement
-            Set<Edge> outgoingEdges = graph.getOutgoingEdges(minDistanceVertex);
-
-            boolean directSuccessor = outgoingEdges.stream()
-                    .map(Edge::getTarget)
-                    .anyMatch(vertex -> vertex.equals(branchVertex));
-
-            if (directSuccessor) {
-
-                // find the branch distance trace(s) that describe(s) the case stmt
-                final BasicStatement caseStmt = (BasicStatement) ((BlockStatement) branchVertex.getStatement()).getFirstStatement();
-                final String prefix = minDistanceVertex.getMethod() + "->switch->" + caseStmt.getInstructionIndex() + ":";
-
-                /*
-                 * Since we potentially traversed the switch statement multiple times, there are multiple branch distance
-                 * traces for each case statement. We need to pick the minimum out of those.
-                 */
-                long start1 = System.currentTimeMillis();
-                minBranchDistance = traces.stream()
-                        .filter(trace -> trace.startsWith(prefix))
-                        .map(trace -> Integer.parseInt(trace.split(":")[1]))
-                        .min(Comparator.naturalOrder())
-                        .orElse(Integer.MAX_VALUE);
-                long end1 = System.currentTimeMillis();
-                Log.println("Computing branch distance took: " + (end1 - start1) + "ms");
-            } else {
-                /*
-                * It can happen that the branch vertex is not a direct successor of the closest switch statement. In
-                * such a case, there are no branch distance traces. Or to be more precise, we don't know which traces
-                * are the relevant ones without performing a further graph traversal. We would have to look up through
-                * which case statement a path goes from the switch to the branch vertex. Moreover, there might be
-                * multiple case statements through which a path goes to the branch vertex. We simply assign here the
-                * highest possible distance to indicate that we need to choose a different path in the future.
-                 */
-                minBranchDistance = Integer.MAX_VALUE;
-            }
-        }
-
-        // combine and normalise
-        final float normalisedBranchDistance = minBranchDistance != Integer.MAX_VALUE
-                ? (float) minBranchDistance / (minBranchDistance + 1) : 1.0f;
-        final float combined = minDistance + normalisedBranchDistance;
-        final float combinedNormalized = combined / (combined + 1);
-        return String.valueOf(combinedNormalized);
-    }
-
-    /**
-     * Computes the vertex with the closest distance to the given branch vertex. Note that a parallelized version using
-     * streams is actually slower. In addition, using an early abort in case of a distance of 0 turns out to be slower
-     * as well.
-     *
-     * @param visitedVertices The list of visited vertices.
-     * @param branchVertex The given branch vertex.
-     * @return Returns the vertex that comes closest to the given branch vertex.
-     */
-    @Deprecated
-    private Map.Entry<Vertex, Integer> computeMinEntry(final List<Vertex> visitedVertices, final Vertex branchVertex) {
-
-        int minDistance = Integer.MAX_VALUE;
-        Vertex minEntry = null;
-
-        /*
-         * We are only interested in a direct hit (covered branch) or the distance to an if or switch statement.
-         * This equals distances of either if or switch statements or branches and excludes distances to visited entry
-         * or exit vertices.
-         */
-        for (final Vertex visitedVertex : visitedVertices) {
-            final int distance = graph.getDistance(branchVertex, visitedVertex);
-            // TODO: there can be multiple minima having the same approach level (distance)
-            if (distance < minDistance
-                    && ((distance == 0 && visitedVertex.isBranchVertex())
-                    || (distance != -1 && (visitedVertex.isIfVertex() || visitedVertex.isSwitchVertex())))) {
-                minDistance = distance;
-                minEntry = visitedVertex;
-            }
-        }
-
-        return minEntry != null ? Map.entry(minEntry, minDistance) : null;
+    private void initCallTree(File apkPath, boolean excludeARTClasses, boolean resolveOnlyAUTClasses,
+                              String packageName, String target, String stackTracePath) {
+        graph = new CallTree(apkPath, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
+        targetVertices = selectTargetVertices(target, packageName, apkPath, stackTracePath);
     }
 
     /**
@@ -1113,31 +1571,6 @@ public final class GraphEndpoint implements Endpoint {
         final File tracesDir = appDir.resolve("traces").toFile();
         final List<File> tracesFiles = getTraceFiles(tracesDir, chromosome);
         return readTraces(tracesFiles);
-    }
-
-    /**
-     * Computes the fitness value for the given chromosome combining approach level + branch distance.
-     *
-     * @param request The request message.
-     * @return Returns a message containing the branch distance information.
-     */
-    @Deprecated
-    private Message getBranchDistanceOld(final Message request) {
-
-        final String packageName = request.getParameter("packageName");
-        final String chromosome = request.getParameter("chromosome");
-        Log.println("Computing the branch distance for the chromosome: " + chromosome);
-
-        if (graph == null) {
-            throw new IllegalStateException("Graph hasn't been initialised!");
-        }
-
-        final List<String> traces = getTraces(packageName, chromosome);
-        final List<Vertex> visitedVertices = mapTracesToVertices(traces);
-        final var branchDistance = computeBranchDistanceOld(traces, visitedVertices, targetVertex);
-        return new Message.MessageBuilder("/graph/get_branch_distance")
-                .withParameter("branch_distance", branchDistance)
-                .build();
     }
 
     /**
