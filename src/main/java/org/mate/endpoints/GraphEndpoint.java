@@ -1323,15 +1323,15 @@ public class GraphEndpoint implements Endpoint {
                 return ((CFG) graph).getBranchVertices();
             case "random_target":
             case "random_branch":
-                List<CFGVertex> targets = target.equals("random_target") ? graph.getVertices() : ((CFG) graph).getBranchVertices();
+                final List<? extends Vertex> targets = target.equals("random_target")
+                        ? graph.getVertices() : ((CFG) graph).getBranchVertices();
 
                 while (true) {
                     Random rand = new Random();
-                    // TODO: Is this cast correct?
-                    CFGVertex randomVertex = targets.get(rand.nextInt(targets.size()));
+                    Vertex randomVertex = targets.get(rand.nextInt(targets.size()));
 
                     if (graph.isReachable(randomVertex)) {
-                        Log.println("Randomly selected target vertex: " + randomVertex + " [" + randomVertex.getMethod() + "]");
+                        Log.println("Randomly selected target vertex: " + randomVertex);
                         return List.of(randomVertex);
                     }
                 }
