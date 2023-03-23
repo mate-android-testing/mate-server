@@ -1351,6 +1351,7 @@ public class GraphEndpoint implements Endpoint {
                 // look up target vertex/vertices by supplied trace(s)
                 final List<Vertex> targetVertices = Arrays.stream(target.split(","))
                         .map(graph::lookupVertex)
+                        .filter(Objects::nonNull)
                         .collect(Collectors.toList());
 
                 if (targetVertices.isEmpty()) {
