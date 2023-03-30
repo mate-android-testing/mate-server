@@ -39,10 +39,10 @@ public class UtilityEndpoint implements Endpoint {
             return writeContentToFile(request);
         } else if (request.getSubject().startsWith("/utility/let_user_pick")) {
             return letUserPickOption(request);
+        } else {
+            throw new IllegalArgumentException("Message request with subject: "
+                    + request.getSubject() + " can't be handled by UtilityEndpoint!");
         }
-
-        throw new IllegalArgumentException("Message request with subject: "
-                + request.getSubject() + " can't be handled by UtilityEndpoint!");
     }
 
     /**

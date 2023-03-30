@@ -135,13 +135,11 @@ public class Device {
     }
 
     /**
-     * Fetches a serialized test case from the internal storage.
-     * Afterwards, the test case file is erased from the emulator.
+     * Fetches a serialized test case from the internal storage. Afterwards, the test case file is erased from the emulator.
      *
      * @param testCaseDir The test case directory on the emulator.
      * @param testCase The name of the test case file.
-     * @return Returns {@code true} if the test case file could be fetched,
-     *         otherwise {@code false} is returned.
+     * @return Returns {@code true} if the test case file could be fetched, otherwise {@code false} is returned.
      */
     public boolean fetchTestCase(String testCaseDir, String testCase) {
         return fetchFile(testCaseDir, testCase, "test-cases");
@@ -162,23 +160,24 @@ public class Device {
     /**
      * Fetches a file from the internal storage. Afterwards, the file is erased from the emulator.
      *
-     * @param baseDir  The directory on the emulator.
+     * @param emulatorDir The directory on the emulator from which the file should be fetched.
      * @param fileName The name of the file.
+     * @param localDirName The local directory name to which the file should be stored.
      * @return Returns {@code true} if the file could be fetched, otherwise {@code false} is returned.
      */
-    private boolean fetchFile(final String baseDir, final String fileName, final String resultDirName) {
+    private boolean fetchFile(final String emulatorDir, final String fileName, final String localDirName) {
 
-        // check whether the test exists
-        Result<List<String>, String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
-                "-s", deviceID, "shell", "ls", baseDir);
+        // check whether the file exists on the emulator
+        Result<List<String>, String> listFilesOp = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "shell", "ls", emulatorDir);
 
-        if (result.isErr() || result.getOk().stream().noneMatch(str -> str.trim().equals(fileName))) {
+        if (listFilesOp.isErr() || listFilesOp.getOk().stream().noneMatch(str -> str.trim().equals(fileName))) {
             // the file couldn't be found, retry once
-            Log.println("Couldn't locate file: " + result);
+            Log.println("Couldn't locate file: " + listFilesOp);
             Util.sleep(3);
 
             List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID,
-                    "shell", "ls", baseDir).getOk();
+                    "shell", "ls", emulatorDir).getOk();
 
             if (files.stream().noneMatch(str -> str.trim().equals(fileName))) {
                 Log.println("Couldn't locate file: " + files);
@@ -186,18 +185,18 @@ public class Device {
             }
         }
 
-        File appDir = new File(appsDir.toFile(), packageName);
-        File resultDir = new File(appDir, resultDirName);
-        File resultFile = new File(resultDir, fileName);
+        final File appDir = new File(appsDir.toFile(), packageName);
+        final File resultDir = new File(appDir, localDirName);
+        final File resultFile = new File(resultDir, fileName);
 
         // create local test-cases directory if not present
         if (!resultDir.exists()) {
             Log.println("Creating directory: " + resultDir.mkdirs());
         }
 
-        // fetch the test case file
+        // fetch the file from the emulator and store it to a local directory
         var pullOp = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s",
-                deviceID, "pull", baseDir + "/" + fileName, String.valueOf(resultFile));
+                deviceID, "pull", emulatorDir + "/" + fileName, String.valueOf(resultFile));
 
         Log.println("Pull Operation: " + pullOp);
 
@@ -208,7 +207,7 @@ public class Device {
         // remove file from emulator
         var removeOp = ProcessRunner.runProcess(
                 androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
-                "rm", "-f", baseDir + "/" + fileName);
+                "rm", "-f", emulatorDir + "/" + fileName);
 
         Log.println("Removal of file succeeded: " + removeOp.isOk());
         return resultFile.exists();
