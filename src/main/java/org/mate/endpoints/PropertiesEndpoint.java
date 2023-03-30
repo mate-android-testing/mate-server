@@ -1,10 +1,9 @@
 package org.mate.endpoints;
 
-import org.mate.network.message.Message;
 import org.mate.network.Endpoint;
+import org.mate.network.message.Message;
 import org.mate.util.Log;
 
-import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Map;
@@ -27,7 +26,7 @@ public class PropertiesEndpoint implements Endpoint {
 
         Properties properties = new Properties();
         try {
-            properties.load(new FileReader(new File("mate.properties")));
+            properties.load(new FileReader("mate.properties"));
         } catch (IOException e) {
             Log.println("WARNING: Failed to load mate.properties file: " + e.getLocalizedMessage());
         }

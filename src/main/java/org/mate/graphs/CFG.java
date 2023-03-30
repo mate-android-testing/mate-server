@@ -1,12 +1,8 @@
 package org.mate.graphs;
 
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.Edge;
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.BaseCFG;
-import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
-import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
-import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.InstructionUtils;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
 import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ManyToManyShortestPathsAlgorithm;
 import org.mate.graphs.util.VertexPair;
@@ -23,7 +19,7 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public abstract class CFG implements Graph {
+public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
 
     /**
      * The underlying CFG.
@@ -33,17 +29,17 @@ public abstract class CFG implements Graph {
     /**
      * The package name of the AUT, e.g. com.zola.bmi.
      */
-    private final String appName;
+    protected final String appName;
 
     // cache the list of branches (the order must be consistent when requesting the branch distance vector)
-    protected List<Vertex> branchVertices;
+    protected List<CFGVertex> branchVertices;
 
     /**
      * The employed shortest path algorithm. For individual vertices the bi-directional dijkstra seems to be the fastest
      * option, while for resolving the shortest paths between many vertices, the CH many-to-many shortest path algorithm
      * appears to be the best option.
      */
-    private final ManyToManyShortestPathsAlgorithm<Vertex, Edge> shortestPathAlgorithm;
+    private final ManyToManyShortestPathsAlgorithm<CFGVertex, CFGEdge> shortestPathAlgorithm;
 
     /**
      * The path to the 'apps' folder.
@@ -58,7 +54,7 @@ public abstract class CFG implements Graph {
     /**
      * Caches a mapping from trace to vertex for the most relevant vertices, e.g. branch, case, if and switch vertices.
      */
-    private Map<String, Vertex> traceToVertexCache;
+    private Map<String, CFGVertex> traceToVertexCache;
 
     /**
      * Caches already computed distances between two arbitrary vertices. Note that the order of the vertex pair doesn't
@@ -88,12 +84,14 @@ public abstract class CFG implements Graph {
      *
      * @return Returns the branch vertices.
      */
-    private List<Vertex> initBranchVertices() {
+    protected List<CFGVertex> initBranchVertices() {
 
-        Path appDir = appsDir.resolve(appName);
-        File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
+        // TODO: Read from blocks.txt if branches.txt is not present.
 
-        List<String> branches = new ArrayList<>();
+        final Path appDir = appsDir.resolve(appName);
+        final File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
+
+        final List<String> branches = new ArrayList<>();
 
         try (Stream<String> stream = Files.lines(branchesFile.toPath(), StandardCharsets.UTF_8)) {
             // hopefully this preserves the order (remove blank line at end)
@@ -107,40 +105,19 @@ public abstract class CFG implements Graph {
     }
 
     /**
+     * Pre-computes a mapping between certain traces and its vertices in the graph.
+     *
+     * @return Returns a mapping between a trace and its vertex in the graph.
+     */
+    abstract Map<String, CFGVertex> initTraceToVertexCache();
+
+    /**
      * Maps the given list of branches to the corresponding vertices in the graph.
      *
      * @param branches The list of branches that should be mapped to vertices.
      * @return Returns the branch vertices.
      */
-    private List<Vertex> mapBranchesToVertices(List<String> branches) {
-
-        long start = System.currentTimeMillis();
-
-        List<Vertex> branchVertices = Collections.synchronizedList(new ArrayList<>());
-
-        branches.parallelStream().forEach(branch -> {
-
-            Vertex branchVertex = lookupVertex(branch);
-
-            if (branchVertex == null) {
-                Log.printWarning("Couldn't derive vertex for branch: " + branch);
-            } else {
-                branchVertices.add(branchVertex);
-            }
-        });
-
-        long end = System.currentTimeMillis();
-        Log.println("Mapping branches to vertices took: " + (end - start) + " ms.");
-
-        Log.println("Number of actual branches: " + branches.size());
-        Log.println("Number of branch vertices: " + branchVertices.size());
-
-        if (branchVertices.size() != branches.size()) {
-            throw new IllegalStateException("Couldn't derive for certain branches the corresponding branch vertices!");
-        }
-
-        return branchVertices;
-    }
+    abstract List<CFGVertex> mapBranchesToVertices(List<String> branches);
 
     /**
      * Checks whether the given vertex is reachable from the global entry point.
@@ -149,7 +126,7 @@ public abstract class CFG implements Graph {
      * @return Returns whether the given vertex is reachable or not.
      */
     @Override
-    public boolean isReachable(Vertex vertex) {
+    public boolean isReachable(CFGVertex vertex) {
         return shortestPathAlgorithm.getPath(baseCFG.getEntry(), vertex) != null;
     }
 
@@ -159,7 +136,7 @@ public abstract class CFG implements Graph {
      * @return Returns all vertices in the graph.
      */
     @Override
-    public List<Vertex> getVertices() {
+    public List<CFGVertex> getVertices() {
         return new ArrayList<>(baseCFG.getVertices());
     }
 
@@ -183,7 +160,7 @@ public abstract class CFG implements Graph {
      * @param targets         The list of target vertices.
      */
     @Override
-    public void draw(File outputPath, Set<Vertex> visitedVertices, Set<Vertex> targets) {
+    public void draw(File outputPath, Set<CFGVertex> visitedVertices, Set<CFGVertex> targets) {
         baseCFG.drawGraph(outputPath, visitedVertices, targets);
     }
 
@@ -194,7 +171,7 @@ public abstract class CFG implements Graph {
      * @return Returns the outgoing edges from the given vertex.
      */
     @Override
-    public Set<Edge> getOutgoingEdges(Vertex vertex) {
+    public Set<CFGEdge> getOutgoingEdges(CFGVertex vertex) {
         return baseCFG.getOutgoingEdges(vertex);
     }
 
@@ -205,124 +182,8 @@ public abstract class CFG implements Graph {
      * @return Returns the incoming edges from the given vertex.
      */
     @Override
-    public Set<Edge> getIncomingEdges(Vertex vertex) {
+    public Set<CFGEdge> getIncomingEdges(CFGVertex vertex) {
         return baseCFG.getIncomingEdges(vertex);
-    }
-
-    /**
-     * Pre-computes a mapping between certain traces and its vertices in the graph.
-     *
-     * @return Returns a mapping between a trace and its vertex in the graph.
-     */
-    private Map<String, Vertex> initTraceToVertexCache() {
-
-        long start = System.currentTimeMillis();
-
-        Map<String, Vertex> traceToVertexCache = new HashMap<>();
-
-        // handle entry vertices
-        Set<Vertex> entryVertices = baseCFG.getVertices().stream().filter(Vertex::isEntryVertex).collect(Collectors.toSet());
-
-        for (Vertex entryVertex : entryVertices) {
-            // exclude global entry vertex
-            if (!entryVertex.equals(baseCFG.getEntry())) {
-
-                // virtual entry vertex
-                traceToVertexCache.put(entryVertex.getMethod() + "->entry", entryVertex);
-
-                // there are potentially several entry vertices when dealing with try-catch blocks at the beginning
-                Set<Vertex> entries = baseCFG.getOutgoingEdges(entryVertex).stream()
-                        .map(Edge::getTarget).collect(Collectors.toSet());
-
-                for (Vertex entry : entries) {
-                    // exclude dummy CFGs solely consisting of entry and exit vertex
-                    if (!entry.isExitVertex()) {
-                        Statement statement = entry.getStatement();
-
-                        // TODO: handle basic statements
-                        if (statement instanceof BlockStatement) {
-                            // each statement within a block statement is a basic statement
-                            BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
-                            traceToVertexCache.put(entry.getMethod() + "->entry->" + basicStatement.getInstructionIndex(), entry);
-                        }
-                    }
-                }
-            }
-        }
-
-        // handle exit vertices
-        Set<Vertex> exitVertices = baseCFG.getVertices().stream().filter(Vertex::isExitVertex).collect(Collectors.toSet());
-
-        for (Vertex exitVertex : exitVertices) {
-            // exclude global exit vertex
-            if (!exitVertex.equals(baseCFG.getExit())) {
-
-                // virtual exit vertex
-                traceToVertexCache.put(exitVertex.getMethod() + "->exit", exitVertex);
-
-                Set<Vertex> exits = baseCFG.getIncomingEdges(exitVertex).stream()
-                        .map(Edge::getSource).collect(Collectors.toSet());
-
-                for (Vertex exit : exits) {
-                    // exclude dummy CFGs solely consisting of entry and exit vertex
-                    if (!exit.isEntryVertex()) {
-                        Statement statement = exit.getStatement();
-
-                        // TODO: handle basic statements
-                        if (statement instanceof BlockStatement) {
-                            // each statement within a block statement is a basic statement
-                            BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
-                            traceToVertexCache.put(exit.getMethod() + "->exit->" + basicStatement.getInstructionIndex(), exit);
-                        }
-                    }
-                }
-            }
-        }
-
-        // handle branch + if and switch stmt vertices
-        for (Vertex branchVertex : branchVertices) {
-
-            // a branch can potentially have multiple predecessors (shared branch)
-            Set<Vertex> ifOrSwitchVertices = baseCFG.getIncomingEdges(branchVertex).stream()
-                    .map(Edge::getSource).filter(Vertex::isIfVertex).collect(Collectors.toSet());
-
-            // if or switch vertex
-            for (Vertex ifOrSwitchVertex : ifOrSwitchVertices) {
-
-                Statement statement = ifOrSwitchVertex.getStatement();
-
-                // TODO: handle basic statements
-                if (statement instanceof BlockStatement) {
-                    // the last statement is always a basic statement of an if vertex
-                    BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
-                    if (InstructionUtils.isBranchingInstruction(basicStatement.getInstruction())) {
-                        traceToVertexCache.put(ifOrSwitchVertex.getMethod()
-                                        + "->if->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
-                    } else if (InstructionUtils.isSwitchInstruction(basicStatement.getInstruction())) {
-                        traceToVertexCache.put(ifOrSwitchVertex.getMethod()
-                                + "->switch->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
-                    }
-                    else {
-                        Log.printWarning("Unexpected block statement: " + statement + " for method " + ifOrSwitchVertex.getMethod());
-                    }
-                }
-            }
-
-            Statement statement = branchVertex.getStatement();
-
-            // TODO: handle basic statements
-            if (statement instanceof BlockStatement) {
-                // each statement within a block statement is a basic statement
-                BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
-                traceToVertexCache.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
-            }
-        }
-
-        long end = System.currentTimeMillis();
-        Log.println("TraceToVertexCache construction took: " + (end - start) + " ms.");
-        Log.println("Size of TraceToVertexCache: " + traceToVertexCache.size());
-
-        return traceToVertexCache;
     }
 
     /**
@@ -330,8 +191,7 @@ public abstract class CFG implements Graph {
      *
      * @return Returns the branch vertices.
      */
-    @Override
-    public List<Vertex> getBranchVertices() {
+    public List<CFGVertex> getBranchVertices() {
         return Collections.unmodifiableList(branchVertices);
     }
 
@@ -342,7 +202,7 @@ public abstract class CFG implements Graph {
      * @return Returns the vertex corresponding to the trace or {@code null} if no vertex matches the trace.
      */
     @Override
-    public Vertex lookupVertex(String trace) {
+    public CFGVertex lookupVertex(String trace) {
         if (traceToVertexCache.containsKey(trace)) {
             return traceToVertexCache.get(trace);
         } else {
@@ -364,7 +224,7 @@ public abstract class CFG implements Graph {
      *          a negative distance of {@code -1} is returned.
      */
     @Override
-    public int getDistance(Vertex source, Vertex target) {
+    public int getDistance(CFGVertex source, CFGVertex target) {
 
         VertexPair distancePair = new VertexPair(source, target);
 
@@ -372,7 +232,7 @@ public abstract class CFG implements Graph {
             return cachedDistances.get(distancePair);
         }
 
-        GraphPath<Vertex, Edge> path = shortestPathAlgorithm.getPath(source, target);
+        GraphPath<CFGVertex, CFGEdge> path = shortestPathAlgorithm.getPath(source, target);
 
         // a negative path length indicates that there is no path between the given vertices
         int distance = path != null ? path.getLength() : -1;
@@ -392,7 +252,7 @@ public abstract class CFG implements Graph {
      *          source and target vertex exists, a negative distance of {@code -1} is returned.
      */
     @Override
-    public BiFunction<Vertex, Vertex, Integer> getDistances(final Set<Vertex> sources, final Set<Vertex> targets) {
+    public BiFunction<CFGVertex, CFGVertex, Integer> getDistances(final Set<CFGVertex> sources, final Set<CFGVertex> targets) {
         final var distances
                 = shortestPathAlgorithm.getManyToManyPaths(sources, targets);
         return (s, t) -> {

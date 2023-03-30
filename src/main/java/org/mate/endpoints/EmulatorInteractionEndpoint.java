@@ -1,6 +1,5 @@
 package org.mate.endpoints;
 
-import org.mate.accessibility.ImageHandler;
 import org.mate.io.Device;
 import org.mate.io.ProcessRunner;
 import org.mate.network.Endpoint;
@@ -13,11 +12,9 @@ public class EmulatorInteractionEndpoint implements Endpoint {
     private boolean disabledAutoRotate = false;
     private boolean isInPortraitMode = true;
     private final AndroidEnvironment androidEnvironment;
-    private final ImageHandler imageHandler;
 
-    public EmulatorInteractionEndpoint(AndroidEnvironment androidEnvironment, ImageHandler imageHandler) {
+    public EmulatorInteractionEndpoint(AndroidEnvironment androidEnvironment) {
         this.androidEnvironment = androidEnvironment;
-        this.imageHandler = imageHandler;
     }
 
     @Override

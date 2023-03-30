@@ -8,14 +8,12 @@ import org.mate.util.Log;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.Writer;
+import java.io.*;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+@Deprecated
 public class ImageHandler {
 
     public static int contImg = 0;
@@ -102,6 +100,25 @@ public class ImageHandler {
         }
 
         return AccessibilityUtils.checkFlickering(targetDir, screenshotName, samples);
+    }
+
+    // TODO: Document.
+    public void markImage(List<Rectangle> rectangles, String stateId, String packageName) throws IOException {
+
+        final Path targetDir = appsDir.resolve(packageName).resolve(SCREENSHOT_FOLDER);
+        final File imageFile = targetDir.resolve(stateId + ".png").toFile();
+
+        BufferedImage img = ImageIO.read(imageFile);
+        Graphics2D g2d = img.createGraphics();
+        g2d.setColor(Color.RED);
+        g2d.setStroke(new BasicStroke(5));
+
+        for (Rectangle rectangle : rectangles) {
+            g2d.drawRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+        }
+
+        ImageIO.write(img, "PNG", imageFile);
+        g2d.dispose();
     }
 
     @Deprecated
