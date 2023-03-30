@@ -100,8 +100,7 @@ public class Server {
         router.add("/accessibility", new AccessibilityEndpoint(imageHandler));
         router.add("/coverage", new CoverageEndpoint(androidEnvironment, appsDir));
         router.add("/fuzzer", new FuzzerEndpoint(androidEnvironment));
-        router.add("/utility", new UtilityEndpoint(androidEnvironment,
-                                                   appsDir, resultsPath));
+        router.add("/utility", new UtilityEndpoint(androidEnvironment, appsDir));
         router.add("/fitness", new FitnessEndpoint(androidEnvironment, appsDir));
         router.add("/graph", new GraphEndpoint(androidEnvironment, appsDir));
 

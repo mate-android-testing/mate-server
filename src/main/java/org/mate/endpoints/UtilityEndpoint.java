@@ -16,12 +16,10 @@ import java.nio.file.Path;
 public class UtilityEndpoint implements Endpoint {
 
     private final AndroidEnvironment androidEnvironment;
-    private final Path resultsPath;
     private final Path appsDir;
 
-    public UtilityEndpoint(AndroidEnvironment androidEnvironment, Path resultsPath, Path appsDir) {
+    public UtilityEndpoint(AndroidEnvironment androidEnvironment, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
-        this.resultsPath = resultsPath;
         this.appsDir = appsDir;
     }
 
