@@ -663,8 +663,8 @@ public class Device {
         Result<List<String>, String> content = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
                 "-s", deviceID, "shell", "cat", EXTERNAL_STORAGE + "/info.txt");
 
-        if (content.isErr()) {
-            throw new IllegalStateException("Couldn't read info.txt from emulator: " + content);
+        if (content.isErr() || content.getOk().isEmpty()) {
+            Log.println("Couldn't read info.txt from emulator: " + content);
         }
 
         // request files from external storage (sd card)
@@ -761,8 +761,10 @@ public class Device {
             long numberOfLines = Files.lines(tracesFile.toPath()).count();
             Log.println("Number of traces according to traces.txt: " + numberOfLines);
 
-            int numberOfTraces = Integer.parseInt(content.getOk().get(0).trim());
-            Log.println("Number of traces according to info.txt: " + numberOfTraces);
+            if (!content.getOk().isEmpty()) {
+                int numberOfTraces = Integer.parseInt(content.getOk().get(0).trim());
+                Log.println("Number of traces according to info.txt: " + numberOfTraces);
+            }
         } catch (IOException e) {
             Log.println("Couldn't count lines in traces.txt:", e);
         } catch (NumberFormatException e) {
