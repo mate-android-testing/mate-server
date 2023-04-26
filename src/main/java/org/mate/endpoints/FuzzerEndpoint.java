@@ -3,6 +3,7 @@ package org.mate.endpoints;
 import org.mate.io.Device;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
+import org.mate.network.message.Messages;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
 
@@ -48,12 +49,9 @@ public class FuzzerEndpoint implements Endpoint {
         boolean dynamicReceiver = Boolean.parseBoolean(request.getParameter("dynamic"));
 
         Device device = Device.devices.get(deviceID);
-        boolean response = device.executeSystemEvent(packageName, receiver, action, dynamicReceiver);
-        Log.println("System event broadcast: " + response);
-
-        return new Message.MessageBuilder("/fuzzer/execute_system_event")
-                .withParameter("response", String.valueOf(response))
-                .build();
+        boolean success = device.executeSystemEvent(packageName, receiver, action, dynamicReceiver);
+        Log.println("System event broadcast: " + success);
+        return Messages.buildResponse(request, success);
     }
 
     /**
@@ -64,15 +62,10 @@ public class FuzzerEndpoint implements Endpoint {
      * @return Returns a message containing the result of the push operation.
      */
     private Message pushDummyFiles(Message request) {
-
         String deviceID = request.getParameter("deviceId");
-
         Device device = Device.devices.get(deviceID);
-        boolean response = device.pushDummyFiles();
-        Log.println("Pushing dummy files: " + response);
-
-        return new Message.MessageBuilder("/fuzzer/push_dummy_files")
-                .withParameter("response", String.valueOf(response))
-                .build();
+        boolean success = device.pushDummyFiles();
+        Log.println("Pushing dummy files: " + success);
+        return Messages.buildResponse(request, success);
     }
 }

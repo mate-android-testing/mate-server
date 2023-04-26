@@ -19,6 +19,11 @@ public class Messages {
         return new Message.MessageBuilder("/error").withParameter("info", info).build();
     }
 
+    public static Message buildResponse(final Message request, final boolean success) {
+        return success ? new Message.MessageBuilder(request.getSubject()).build()
+                : Messages.errorMessage(request.getSubject());
+    }
+
     public static void addMetadata(Message message) {
         message.addParameter(
                 METADATA_PREFIX + MESSAGE_PROTOCOL_VERSION_KEY, MESSAGE_PROTOCOL_VERSION);

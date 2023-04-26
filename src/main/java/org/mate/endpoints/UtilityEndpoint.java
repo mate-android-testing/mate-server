@@ -3,6 +3,7 @@ package org.mate.endpoints;
 import org.mate.io.Device;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
+import org.mate.network.message.Messages;
 import org.mate.util.AndroidEnvironment;
 
 import javax.swing.*;
@@ -58,6 +59,8 @@ public class UtilityEndpoint implements Endpoint {
         String testCase = request.getParameter("testcase");
 
         Device device = Device.devices.get(deviceID);
+        boolean success = device.fetchTestCase(testCaseDir, testCase);
+        return Messages.buildResponse(request, success);
         boolean response = device.fetchTestCase(testCaseDir, testCase);
 
         return new Message.MessageBuilder("/utility/fetch_test_case")
@@ -108,7 +111,7 @@ public class UtilityEndpoint implements Endpoint {
 
     /**
      * Shows the user a dialog containing the applicable actions on the current screen.
-     *
+     * 
      * @param options The applicable actions on the current screen.
      * @return Returns the selected option.
      */
@@ -171,11 +174,8 @@ public class UtilityEndpoint implements Endpoint {
         String testCase = request.getParameter("testcase");
 
         Device device = Device.devices.get(deviceID);
-        boolean response = device.fetchEspressoTest(espressoDir, testCase);
-
-        return new Message.MessageBuilder("/utility/fetch_espresso_test")
-                .withParameter("response", String.valueOf(response))
-                .build();
+        boolean success = device.fetchEspressoTest(espressoDir, testCase);
+        return Messages.buildResponse(request, success);
     }
 
     /**
@@ -191,10 +191,7 @@ public class UtilityEndpoint implements Endpoint {
         String fileName = request.getParameter("fileName");
 
         Device device = Device.devices.get(deviceID);
-        boolean response = device.fetchDotGraph(dirName, fileName);
-
-        return new Message.MessageBuilder("/utility/fetch_dot_graph")
-                .withParameter("response", String.valueOf(response))
-                .build();
+        boolean success = device.fetchDotGraph(dirName, fileName);
+        return Messages.buildResponse(request, success);
     }
 }
