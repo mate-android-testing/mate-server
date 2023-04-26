@@ -135,64 +135,82 @@ public class Device {
     }
 
     /**
-     * Fetches a serialized test case from the internal storage.
-     * Afterwards, the test case file is erased from the emulator.
+     * Fetches a serialized test case from the internal storage. Afterwards, the test case file is erased from the emulator.
      *
      * @param testCaseDir The test case directory on the emulator.
      * @param testCase The name of the test case file.
-     * @return Returns {@code true} if the test case file could be fetched,
-     *         otherwise {@code false} is returned.
+     * @return Returns {@code true} if the test case file could be fetched, otherwise {@code false} is returned.
      */
     public boolean fetchTestCase(String testCaseDir, String testCase) {
+        return fetchFile(testCaseDir, testCase, "test-cases");
+    }
 
-        Log.println("TestCaseDir: " + testCaseDir);
-        Log.println("TestCase: " + testCase);
+    /**
+     * Fetches a serialized transition system from the internal storage. Afterwards, the transition system file is
+     * erased from the emulator.
+     *
+     * @param transitionSystemDir The transition system directory on the emulator.
+     * @param fileName            The name of the transition system file.
+     * @return Returns {@code true} if the transition system file could be fetched, otherwise {@code false} is returned.
+     */
+    public boolean fetchTransitionSystem(String transitionSystemDir, String fileName) {
+        return fetchFile(transitionSystemDir, fileName, "transition-systems");
+    }
 
-        // check whether the test case file exists
-        Result<List<String>, String> result = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
-                "-s", deviceID, "shell", "ls", testCaseDir);
+    /**
+     * Fetches a file from the internal storage. Afterwards, the file is erased from the emulator.
+     *
+     * @param emulatorDir The directory on the emulator from which the file should be fetched.
+     * @param fileName The name of the file.
+     * @param localDirName The local directory name to which the file should be stored.
+     * @return Returns {@code true} if the file could be fetched, otherwise {@code false} is returned.
+     */
+    private boolean fetchFile(final String emulatorDir, final String fileName, final String localDirName) {
 
-        if (result.isErr() || !result.getOk().stream().anyMatch(str -> str.trim().equals(testCase))) {
+        // check whether the file exists on the emulator
+        Result<List<String>, String> listFilesOp = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
+                "-s", deviceID, "shell", "ls", emulatorDir);
 
-            // the test case file couldn't be found, retry once
-            Log.println("Couldn't locate test case file: " + result);
+        if (listFilesOp.isErr() || listFilesOp.getOk().stream().noneMatch(str -> str.trim().equals(fileName))) {
+            // the file couldn't be found, retry once
+            Log.println("Couldn't locate file: " + listFilesOp);
             Util.sleep(3);
 
             List<String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s", deviceID,
-                    "shell", "ls", testCaseDir).getOk();
+                    "shell", "ls", emulatorDir).getOk();
 
-            if (!files.stream().anyMatch(str -> str.trim().equals(testCase))) {
-                Log.println("Couldn't locate test case file: " + files);
+            if (files.stream().noneMatch(str -> str.trim().equals(fileName))) {
+                Log.println("Couldn't locate file: " + files);
                 return false;
             }
         }
 
-        File appDir = new File(appsDir.toFile(), packageName);
-        File testCasesDir = new File(appDir, "test-cases");
-        File testCaseFile = new File(testCasesDir, testCase);
+        final File appDir = new File(appsDir.toFile(), packageName);
+        final File resultDir = new File(appDir, localDirName);
+        final File resultFile = new File(resultDir, fileName);
 
         // create local test-cases directory if not present
-        if (!testCasesDir.exists()) {
-            Log.println("Creating test-cases directory: " + testCasesDir.mkdirs());
+        if (!resultDir.exists()) {
+            Log.println("Creating directory: " + resultDir.mkdirs());
         }
 
-        // fetch the test case file
+        // fetch the file from the emulator and store it to a local directory
         var pullOp = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(), "-s",
-                deviceID, "pull", testCaseDir + "/" + testCase, String.valueOf(testCaseFile));
+                deviceID, "pull", emulatorDir + "/" + fileName, String.valueOf(resultFile));
 
         Log.println("Pull Operation: " + pullOp);
 
-        if (!testCaseFile.exists()) {
-            Log.println("Pulling test case file " + testCaseFile + " failed!");
+        if (!resultFile.exists()) {
+            Log.println("Pulling file " + resultFile + " failed!");
         }
 
-        // remove test case file from emulator
+        // remove file from emulator
         var removeOp = ProcessRunner.runProcess(
                 androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
-                "rm", "-f", testCaseDir + "/" + testCase);
+                "rm", "-f", emulatorDir + "/" + fileName);
 
-        Log.println("Removal of test case file succeeded: " + removeOp.isOk());
-        return testCaseFile.exists();
+        Log.println("Removal of file succeeded: " + removeOp.isOk());
+        return resultFile.exists();
     }
 
     /**

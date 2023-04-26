@@ -32,13 +32,16 @@ public class UtilityEndpoint implements Endpoint {
             return fetchEspressoTest(request);
         } else if (request.getSubject().startsWith("/utility/fetch_dot_graph")) {
             return fetchDotGraph(request);
+        } else if (request.getSubject().startsWith("/utility/fetch_transition_system")) {
+            return fetchTransitionSystem(request);
         } else if (request.getSubject().startsWith("/utility/write_file")) {
             return writeContentToFile(request);
         } else if (request.getSubject().startsWith("/utility/let_user_pick")) {
             return letUserPickOption(request);
+        } else {
+            throw new IllegalArgumentException("Message request with subject: "
+                    + request.getSubject() + " can't be handled by UtilityEndpoint!");
         }
-        throw new IllegalArgumentException("Message request with subject: "
-                + request.getSubject() + " can't be handled by UtilityEndpoint!");
     }
 
     /**
@@ -57,6 +60,24 @@ public class UtilityEndpoint implements Endpoint {
 
         Device device = Device.devices.get(deviceID);
         boolean success = device.fetchTestCase(testCaseDir, testCase);
+        return Messages.buildResponse(request, success);
+    }
+
+    /**
+     * Fetches a serialized transition system from the internal storage and removes the transition system afterwards
+     * to keep memory clean.
+     *
+     * @param request A message containing the device id, the test case directory and the name of the test case file.
+     * @return Returns a message wrapping the outcome of the operation, i.e. success or failure.
+     */
+    private Message fetchTransitionSystem(Message request) {
+
+        String deviceID = request.getParameter("deviceId");
+        String transitionSystemDir = request.getParameter("transitionSystemDir");
+        String transitionSystemFile = request.getParameter("transitionSystemFile");
+
+        Device device = Device.devices.get(deviceID);
+        boolean success = device.fetchTransitionSystem(transitionSystemDir, transitionSystemFile);
         return Messages.buildResponse(request, success);
     }
 
