@@ -8,7 +8,7 @@ import java.util.Map;
 
 public class Messages {
     private static final String METADATA_PREFIX = "__meta__";
-    private static final String MESSAGE_PROTOCOL_VERSION = "3.2";
+    private static final String MESSAGE_PROTOCOL_VERSION = "3.3";
     private static final String MESSAGE_PROTOCOL_VERSION_KEY = "version";
 
     //util class
@@ -17,6 +17,11 @@ public class Messages {
 
     public static Message errorMessage(String info) {
         return new Message.MessageBuilder("/error").withParameter("info", info).build();
+    }
+
+    public static Message buildResponse(final Message request, final boolean success) {
+        return success ? new Message.MessageBuilder(request.getSubject()).build()
+                : Messages.errorMessage(request.getSubject());
     }
 
     public static void addMetadata(Message message) {

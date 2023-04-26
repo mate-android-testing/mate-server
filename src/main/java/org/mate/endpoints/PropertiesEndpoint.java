@@ -30,7 +30,7 @@ public class PropertiesEndpoint implements Endpoint {
         } catch (IOException e) {
             Log.println("WARNING: Failed to load mate.properties file: " + e.getLocalizedMessage());
         }
-        Message.MessageBuilder mb = new Message.MessageBuilder("/properties");
+        Message.MessageBuilder mb = new Message.MessageBuilder("/properties/get_mate_properties");
         for (Map.Entry<Object, Object> propertyEntry : properties.entrySet()) {
             mb.withParameter((String) propertyEntry.getKey(), (String) propertyEntry.getValue());
         }

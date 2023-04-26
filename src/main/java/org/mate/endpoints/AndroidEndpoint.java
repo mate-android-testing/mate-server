@@ -22,12 +22,7 @@ public class AndroidEndpoint implements Endpoint {
     @Override
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/android/clearApp")) {
-            var errMsg = clearApp(request);
-            if (errMsg == null) {
-                return new Message("/android/clearApp");
-            } else {
-                return Messages.errorMessage(errMsg);
-            }
+            return clearApp(request);
         } else if (request.getSubject().startsWith("/android/get_activities")) {
             return getActivities(request);
         } else if (request.getSubject().startsWith("/android/get_current_activity")) {
@@ -53,12 +48,9 @@ public class AndroidEndpoint implements Endpoint {
         String packageName = request.getParameter("packageName");
 
         Device device = Device.devices.get(deviceID);
-        boolean response = device.grantPermissions(packageName);
-        Log.println("Granted runtime permissions: " + response);
-
-        return new Message.MessageBuilder("/android/grant_runtime_permissions")
-                .withParameter("response", String.valueOf(response))
-                .build();
+        boolean success = device.grantPermissions(packageName);
+        Log.println("Granted runtime permissions: " + success);
+        return Messages.buildResponse(request, success);
     }
 
     /**
@@ -98,9 +90,10 @@ public class AndroidEndpoint implements Endpoint {
      * Clears the app cache of the AUT.
      *
      * @param request The request message.
-     * @return Returns {@code null} if the operation succeeded, otherwise an error message is returned.
+     * @return Returns the response message.
      */
-    private String clearApp(Message request) {
+    private Message clearApp(Message request) {
+
         var deviceId = request.getParameter("deviceId");
         var packageName = Device.getDevice(deviceId).getPackageName();
 
@@ -112,7 +105,7 @@ public class AndroidEndpoint implements Endpoint {
                 "clear",
                 packageName);
         if (result.isErr()) {
-            return result.getErr();
+            return Messages.errorMessage(result.getErr());
         }
 
         // pipe into stdin of 'adb shell'
@@ -130,9 +123,9 @@ public class AndroidEndpoint implements Endpoint {
                 androidEnvironment.getAdbExecutable(), "-s", deviceId, "shell");
 
         if (result.isErr()) {
-            return result.getErr();
+            return Messages.errorMessage(result.getErr());
         }
 
-        return null;
+        return Messages.buildResponse(request, true);
     }
 }
