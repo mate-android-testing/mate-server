@@ -61,11 +61,6 @@ public class UtilityEndpoint implements Endpoint {
         Device device = Device.devices.get(deviceID);
         boolean success = device.fetchTestCase(testCaseDir, testCase);
         return Messages.buildResponse(request, success);
-        boolean response = device.fetchTestCase(testCaseDir, testCase);
-
-        return new Message.MessageBuilder("/utility/fetch_test_case")
-            .withParameter("response", String.valueOf(response))
-            .build();
     }
 
     /**
@@ -82,11 +77,8 @@ public class UtilityEndpoint implements Endpoint {
         String transitionSystemFile = request.getParameter("transitionSystemFile");
 
         Device device = Device.devices.get(deviceID);
-        boolean response = device.fetchTransitionSystem(transitionSystemDir, transitionSystemFile);
-
-        return new Message.MessageBuilder("/utility/fetch_transition_system")
-            .withParameter("response", String.valueOf(response))
-            .build();
+        boolean success = device.fetchTransitionSystem(transitionSystemDir, transitionSystemFile);
+        return Messages.buildResponse(request, success);
     }
 
     /**
