@@ -205,7 +205,7 @@ public class GraphEndpoint implements Endpoint {
         }
 
         // Defines the reverse mapping (index to vertex) for every relevant vertex.
-        final var indexToVertex = new CFGVertex[relevantVerticesCount];
+        final var indexToVertex = new CFGVertex[relevantVerticesCount + 1];
 
         for (final CFGVertex vertex : relevantVertices) {
             final int newIndex = relevantVertexToIndex.size();
@@ -226,6 +226,11 @@ public class GraphEndpoint implements Endpoint {
             for (int j = 0; j < relevantVerticesCount; ++j) { // store the distance to every other vertex
 
                 final var relevantVertex = indexToVertex[j];
+
+                if (relevantVertex == null) {
+                    approachLevels[row + j] = (char) -1;
+                    continue;
+                }
 
                 /*
                  * To store the distance, which can be -1 if no path exists between two vertices, in an (unsigned) char,
