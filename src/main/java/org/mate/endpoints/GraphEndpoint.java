@@ -205,10 +205,10 @@ public class GraphEndpoint implements Endpoint {
         }
 
         // Defines the reverse mapping (index to vertex) for every relevant vertex.
-        final var indexToVertex = new CFGVertex[relevantVerticesCount + 1];
+        final var indexToVertex = new CFGVertex[relevantVerticesCount];
 
         for (final CFGVertex vertex : relevantVertices) {
-            final int newIndex = relevantVertexToIndex.size();
+            final int newIndex = relevantVertexToIndex.size() - 1;
             // The remaining relevant vertices, i.e. switch and if vertices, get assigned the indices (n+1) onwards.
             final var oldIndex = relevantVertexToIndex.putIfAbsent(vertex, newIndex);
             indexToVertex[oldIndex != null ? oldIndex : newIndex] = vertex;
