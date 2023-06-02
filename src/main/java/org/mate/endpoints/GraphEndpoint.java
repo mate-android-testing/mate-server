@@ -1570,7 +1570,7 @@ public class GraphEndpoint implements Endpoint {
     private void initInterCDG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
                               boolean resolveOnlyAUTClasses, String packageName, String target) {
         graph = new InterCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
-        //targetVertices = selectTargetVertices(target, packageName, apkPath, null);
+        targetVertices = selectTargetVertices(target, packageName, apkPath, null);
     }
 
     /**
