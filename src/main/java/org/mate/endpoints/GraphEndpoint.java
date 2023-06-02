@@ -1503,6 +1503,14 @@ public class GraphEndpoint implements Endpoint {
                 Log.println("Pre-Computing approach levels and branch distances took: " + (end - start) + "ms");
                 break;
             }
+            case INTER_CDG: {
+                boolean useBasicBlocks = Boolean.parseBoolean(request.getParameter("basic_blocks"));
+                boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
+                boolean resolveOnlyAUTClasses
+                        = Boolean.parseBoolean(request.getParameter("resolve_only_aut_classes"));
+                initInterCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, packageName, target);
+                break;
+            }
             case CALL_TREE: {
                 boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
                 boolean resolveOnlyAUTClasses
@@ -1547,6 +1555,22 @@ public class GraphEndpoint implements Endpoint {
                                  boolean resolveOnlyAUTClasses, String packageName, String target) {
         graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
         targetVertices = selectTargetVertices(target, packageName, apkPath, null);
+    }
+
+    /**
+     * Initialises the interCDG with the given properties.
+     *
+     * @param apkPath The path to the APK file.
+     * @param useBasicBlocks Whether to use basic blocks for the interCFG.
+     * @param excludeARTClasses Whether to exclude ART classes.
+     * @param resolveOnlyAUTClasses Whether to resolve only classes belonging to the AUT package.
+     * @param packageName The package name of the AUT.
+     * @param target Describes the target vertices.
+     */
+    private void initInterCDG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
+                              boolean resolveOnlyAUTClasses, String packageName, String target) {
+        graph = new InterCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
+        //targetVertices = selectTargetVertices(target, packageName, apkPath, null);
     }
 
     /**

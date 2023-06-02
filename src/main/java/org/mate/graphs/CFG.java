@@ -24,7 +24,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
     /**
      * The underlying CFG.
      */
-    protected final BaseCFG baseCFG;
+    protected final BaseCFG graph;
 
     /**
      * The package name of the AUT, e.g. com.zola.bmi.
@@ -65,17 +65,17 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
     /**
      * Constructs a wrapper for a given control-flow graph.
      *
-     * @param baseCFG The actual control flow graph.
+     * @param graph The actual control flow graph.
      * @param appsDir The path to the apps directory.
      * @param appName The name of the app (the package name).
      */
-    public CFG(BaseCFG baseCFG, Path appsDir, String appName) {
-        this.baseCFG = baseCFG;
+    public CFG(BaseCFG graph, Path appsDir, String appName) {
+        this.graph = graph;
         this.appName = appName;
         this.appsDir = appsDir;
         this.traceToVertexCache = new HashMap<>(); // pre-init for initBranchVertices()!
         branchVertices = initBranchVertices();
-        shortestPathAlgorithm = baseCFG.initCHManyToManyShortestPathAlgorithm();
+        shortestPathAlgorithm = graph.initCHManyToManyShortestPathAlgorithm();
         traceToVertexCache = initTraceToVertexCache();
     }
 
@@ -127,7 +127,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public boolean isReachable(CFGVertex vertex) {
-        return shortestPathAlgorithm.getPath(baseCFG.getEntry(), vertex) != null;
+        return shortestPathAlgorithm.getPath(graph.getEntry(), vertex) != null;
     }
 
     /**
@@ -137,7 +137,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public List<CFGVertex> getVertices() {
-        return new ArrayList<>(baseCFG.getVertices());
+        return new ArrayList<>(graph.getVertices());
     }
 
     /**
@@ -145,7 +145,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public void draw(File outputPath) {
-        baseCFG.drawGraph(outputPath);
+        graph.drawGraph(outputPath);
     }
 
     /**
@@ -161,7 +161,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public void draw(File outputPath, Set<CFGVertex> visitedVertices, Set<CFGVertex> targets) {
-        baseCFG.drawGraph(outputPath, visitedVertices, targets);
+        graph.drawGraph(outputPath, visitedVertices, targets);
     }
 
     /**
@@ -172,7 +172,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public Set<CFGEdge> getOutgoingEdges(CFGVertex vertex) {
-        return baseCFG.getOutgoingEdges(vertex);
+        return graph.getOutgoingEdges(vertex);
     }
 
     /**
@@ -183,7 +183,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public Set<CFGEdge> getIncomingEdges(CFGVertex vertex) {
-        return baseCFG.getIncomingEdges(vertex);
+        return graph.getIncomingEdges(vertex);
     }
 
     /**
@@ -207,7 +207,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
             return traceToVertexCache.get(trace);
         } else {
             try {
-                return baseCFG.lookUpVertex(trace);
+                return graph.lookUpVertex(trace);
             } catch (Exception e) {
                 Log.printWarning(e.getMessage());
                 return null;
@@ -268,7 +268,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public int size() {
-        return baseCFG.size();
+        return graph.size();
     }
 
     /**
