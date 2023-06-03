@@ -162,10 +162,10 @@ public class GraphEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/graph/init")) {
             return initGraph(request);
-        } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector")) {
+        } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector_cfg")) {
             return getBranchDistanceVector(request);
-        } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
-            return getBranchDistance(request);
+        } else if (request.getSubject().startsWith("/graph/get_branch_distance_cfg")) {
+            return getBranchDistCFG(request);
         } else if (request.getSubject().startsWith("/graph/get_crash_distance")) {
             return getCrashDistance(request);
         } else if (request.getSubject().startsWith("/graph/draw")) {
@@ -357,12 +357,12 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Computes the fitness value for a given chromosome combining approach level + branch distance.
+     * Computes the fitness value for a given chromosome by combining approach level + branch distance and using the CFG.
      *
      * @param request The request message.
      * @return Returns a message containing the branch distance information.
      */
-    private Message getBranchDistance(final Message request) {
+    private Message getBranchDistCFG(final Message request) {
 
         final String packageName = request.getParameter("packageName");
         final String chromosome = request.getParameter("chromosome");
@@ -378,13 +378,14 @@ public class GraphEndpoint implements Endpoint {
         final var branchDistance = computeApproachLevelAndBranchDistance(visitedVertices,
                 // there is only a single target
                 (CFGVertex) targetVertices.get(0));
-        return new Message.MessageBuilder("/graph/get_branch_distance")
+        return new Message.MessageBuilder("/graph/get_branch_distance_cfg")
                 .withParameter("branch_distance", branchDistance)
                 .build();
     }
 
     /**
-     * Computes the branch distance vector for a given chromosome combining approach level + branch distance.
+     * Computes the branch distance vector for a given chromosome
+     * by combining approach level + branch distance using the CFG.
      *
      * @param request The request message.
      * @return Returns a message containing the branch distance vector.
@@ -411,7 +412,7 @@ public class GraphEndpoint implements Endpoint {
         long end = System.currentTimeMillis();
         Log.println("Computing branch distance vector took: " + (end - start) + "ms");
 
-        return new Message.MessageBuilder("/graph/get_branch_distance_vector")
+        return new Message.MessageBuilder("/graph/get_branch_distance_vector_cfg")
                 .withParameter("branch_distance_vector", String.join("+", branchDistanceVector))
                 .build();
     }
