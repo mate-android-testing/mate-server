@@ -1,17 +1,21 @@
 package org.mate.graphs;
 
+import org.jgrapht.GraphPath;
 import org.mate.util.Log;
+import org.mate.util.Pair;
 
 import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.BaseCFG;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
@@ -23,6 +27,11 @@ import de.uni_passau.fim.auermich.android_graphs.core.utility.GraphUtils;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.InstructionUtils;
 
 public class InterCDG extends CFG {
+
+    /**
+     * Maps vertices to their corresponding traces.
+     */
+    private Map<CFGVertex, String> vertexToTraceMap;
 
 
     /**
@@ -51,17 +60,92 @@ public class InterCDG extends CFG {
         super(GraphUtils.constructInterCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses), appsDir, packageName);
     }
 
+    /**
+     * Computes the approach level by finding the minimum distance between the target vertex and any covered vertex.
+     *
+     * @param targetVertex    vertex that should be covered.
+     * @param coveredVertices set of covered vertices.
+     * @return approach level toward the targeted vertex.
+     */
+    public Pair<CFGVertex, Integer> computeApproachLevel(CFGVertex targetVertex, List<Vertex> coveredVertices) {
+        int min = Integer.MAX_VALUE;
+        CFGVertex shortestPathVertex = graph.getEntry();
+        for (Vertex visitedVertex : coveredVertices) {
+            GraphPath<CFGVertex, CFGEdge> path = shortestPathAlgorithm.getPath((CFGVertex) visitedVertex, targetVertex);
+
+            // Check if there exists a path.
+            if (path != null) {
+                int length = path.getLength();
+                if (length < min) {
+                    min = length;
+                    shortestPathVertex = (CFGVertex) visitedVertex;
+                }
+            }
+        }
+
+        // The approach level has an offset of -1, since the approach level is zero if a direct parent is covered.
+        return new Pair<>(shortestPathVertex, min - 1);
+    }
+
+    /**
+     * Computes the branch distance on the supplied branching vertex.
+     *
+     * @param branchVertex vertex on which the branch distance is to be determined.
+     * @param traces       collected trace from the executed chromosome.
+     * @return branch distance on the supplied branching vertex.
+     */
+    public double computeBranchDistance(CFGVertex branchVertex, List<String> traces) {
+        // Find the right trace record for our branching vertex.
+        Set<String> branchingTraces = new HashSet<>();
+        String branchVertexPattern = traceMatchingPattern(this.lookupTrace(branchVertex));
+        for (String trace : traces) {
+            if (trace.startsWith(branchVertexPattern)) {
+                branchingTraces.add(trace);
+            }
+        }
+
+        if (branchingTraces.isEmpty()) {
+            throw new IllegalStateException("Could not find matching trace for branch vertex: " + branchVertex);
+        }
+
+        Set<Double> branchDistances = branchingTraces.stream().map(this::getBranchDistanceFromTrace).collect(Collectors.toSet());
+        return Collections.max(branchDistances);
+    }
+
+    /**
+     * Transform the trace of a vertex into a pattern that can be used to match branching traces from a test execution.
+     *
+     * @param branchVertexTrace vertex trace to be transformed into a comparison pattern suitable for execution traces.
+     * @return pattern suitable for comparing execution traces.
+     */
+    private String traceMatchingPattern(String branchVertexTrace) {
+        String[] splitVertexBranch = branchVertexTrace.split("->");
+        return splitVertexBranch[0] + "->" + splitVertexBranch[1] + "->" + splitVertexBranch[3];
+    }
+
+    private double getBranchDistanceFromTrace(String trace) {
+        final int arrow = trace.lastIndexOf('>');
+        final int colon = trace.indexOf(':', arrow);
+
+        if (colon != -1) {
+            return Integer.parseUnsignedInt(trace, colon + 1, trace.length(), 10);
+        } else {
+            Log.printWarning("Could not infer branch distance for trace " + trace);
+            return 0;
+        }
+    }
+
 
     /**
      * Pre-computes a mapping between certain traces and its vertices in the graph.
      *
      * @return Returns a mapping between a trace and its vertex in the graph.
      */
-    protected Map<String, CFGVertex> initTraceToVertexCache() {
-
+    public Map<String, CFGVertex> initTraceToVertexCache() {
         long start = System.currentTimeMillis();
 
         Map<String, CFGVertex> traceToVertexCache = new HashMap<>();
+        vertexToTraceMap = new HashMap<>();
 
         // handle entry vertices
         Set<CFGVertex> entryVertices = graph.getVertices().stream().filter(CFGVertex::isEntryVertex).collect(Collectors.toSet());
@@ -72,6 +156,7 @@ public class InterCDG extends CFG {
 
                 // virtual entry vertex
                 traceToVertexCache.put(entryVertex.getMethod() + "->entry", entryVertex);
+                vertexToTraceMap.put(entryVertex, entryVertex.getMethod() + "->entry");
 
                 // there are potentially several entry vertices when dealing with try-catch blocks at the beginning
                 Set<CFGVertex> entries = graph.getOutgoingEdges(entryVertex).stream()
@@ -87,6 +172,7 @@ public class InterCDG extends CFG {
                             // each statement within a block statement is a basic statement
                             BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
                             traceToVertexCache.put(entry.getMethod() + "->entry->" + basicStatement.getInstructionIndex(), entry);
+                            vertexToTraceMap.put(entry, entry.getMethod() + "->entry->" + basicStatement.getInstructionIndex());
                         }
                     }
                 }
@@ -102,6 +188,7 @@ public class InterCDG extends CFG {
 
                 // virtual exit vertex
                 traceToVertexCache.put(exitVertex.getMethod() + "->exit", exitVertex);
+                vertexToTraceMap.put(exitVertex, exitVertex.getMethod() + "->exit");
 
                 Set<CFGVertex> exits = graph.getIncomingEdges(exitVertex).stream()
                         .map(CFGEdge::getSource).collect(Collectors.toSet());
@@ -116,6 +203,7 @@ public class InterCDG extends CFG {
                             // each statement within a block statement is a basic statement
                             BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
                             traceToVertexCache.put(exit.getMethod() + "->exit->" + basicStatement.getInstructionIndex(), exit);
+                            vertexToTraceMap.put(exit, exit.getMethod() + "->exit->" + basicStatement.getInstructionIndex());
                         }
                     }
                 }
@@ -141,9 +229,13 @@ public class InterCDG extends CFG {
                     if (InstructionUtils.isBranchingInstruction(basicStatement.getInstruction())) {
                         traceToVertexCache.put(ifOrSwitchVertex.getMethod()
                                 + "->if->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
+                        vertexToTraceMap.put(ifOrSwitchVertex, ifOrSwitchVertex.getMethod()
+                                + "->if->" + basicStatement.getInstructionIndex());
                     } else if (InstructionUtils.isSwitchInstruction(basicStatement.getInstruction())) {
                         traceToVertexCache.put(ifOrSwitchVertex.getMethod()
                                 + "->switch->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
+                        vertexToTraceMap.put(ifOrSwitchVertex, ifOrSwitchVertex.getMethod()
+                                + "->switch->" + basicStatement.getInstructionIndex());
                     } else {
                         Log.printWarning("Unexpected block statement: " + statement + " for method " + ifOrSwitchVertex.getMethod());
                     }
@@ -160,11 +252,13 @@ public class InterCDG extends CFG {
                 if (firstStatement.getType() != Statement.StatementType.RETURN_STATEMENT) {
                     BasicStatement basicStatement = (BasicStatement) firstStatement;
                     traceToVertexCache.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
+                    vertexToTraceMap.put(branchVertex, branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex());
                 }
                 // Special handling for Return statements since they have no instruction index.
                 else if (firstStatement.getType() == Statement.StatementType.RETURN_STATEMENT) {
                     ReturnStatement returnStatement = (ReturnStatement) firstStatement;
                     traceToVertexCache.put(branchVertex.getMethod() + "->" + returnStatement.getTargetMethod(), branchVertex);
+                    vertexToTraceMap.put(branchVertex, branchVertex.getMethod() + "->" + returnStatement.getTargetMethod());
                 }
             }
         }
@@ -211,5 +305,14 @@ public class InterCDG extends CFG {
         }
 
         return branchVertices;
+    }
+
+    /**
+     * Fetches the corresponding trace string for the supplied vertex.
+     * @param vertex {@link CFGVertex} whose trace string is to be determined.
+     * @return trace string corresponding to the supplied {@link CFGVertex}
+     */
+    public String lookupTrace(CFGVertex vertex) {
+        return vertexToTraceMap.get(vertex);
     }
 }

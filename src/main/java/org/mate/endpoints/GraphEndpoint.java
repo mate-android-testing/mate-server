@@ -16,6 +16,7 @@ import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
+import org.mate.util.Pair;
 
 import java.io.File;
 import java.io.IOException;
@@ -162,6 +163,8 @@ public class GraphEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/graph/init")) {
             return initGraph(request);
+        } else if (request.getSubject().startsWith("/graph/get_approach_and_branch")){
+            return getApproachLevelAndBranchDist(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector_cfg")) {
             return getBranchDistanceVector(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_cfg")) {
@@ -354,6 +357,56 @@ public class GraphEndpoint implements Endpoint {
         }
 
         return instrumentationPoints;
+    }
+
+    /**
+     * Computes the fitness value for a given chromosome by combining approach level + branch distance.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the branch distance information.
+     */
+    private Message getApproachLevelAndBranchDist(final Message request) {
+        final String packageName = request.getParameter("packageName");
+        final String chromosome = request.getParameter("chromosome");
+        Log.println("Computing the approach level and branch distance for the chromosome: " + chromosome);
+
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        } else if (!(graph instanceof InterCDG)) {
+            throw new IllegalStateException("The generated Graph does not correspond to a CDG");
+        }
+        if (targetVertices.size() != 1) {
+            throw new IllegalStateException("There should exactly be one single target." +
+                    "If you want to use a multi-objective algorithm please adjust your settings!");
+        }
+
+        InterCDG cdg = (InterCDG) graph;
+        final var traces = getTraces(packageName, chromosome);
+        final var visitedVertices = mapTracesToVertices(traces);
+        CFGVertex targetVertex = (CFGVertex) targetVertices.iterator().next();
+
+        int approachLevel;
+        double branchDistance;
+        // Shortcut: if we covered the target approach level and branch distance is zero.
+        if (visitedVertices.contains(targetVertex)) {
+            approachLevel = 0;
+            branchDistance = 0.0;
+        } else {
+
+            // Compute Approach Level
+            Pair<CFGVertex, Integer> approachLevelPair = cdg.computeApproachLevel(targetVertex, visitedVertices);
+            approachLevel = approachLevelPair.snd();
+
+            // This is the branching statement from which an incorrect branch toward the target was taken.
+            // Hence, we will use this vertex to compute the branch distance.
+            CFGVertex branchingVertex = approachLevelPair.fst();
+            branchDistance = cdg.computeBranchDistance(branchingVertex, traces);
+        }
+
+        return new Message.MessageBuilder("/graph/get_approach_and_branch")
+                .withParameter("approach_level", String.valueOf(approachLevel))
+                .withParameter("branch_distance", String.valueOf(branchDistance))
+                .build();
     }
 
     /**

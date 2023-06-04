@@ -39,7 +39,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      * option, while for resolving the shortest paths between many vertices, the CH many-to-many shortest path algorithm
      * appears to be the best option.
      */
-    private final ManyToManyShortestPathsAlgorithm<CFGVertex, CFGEdge> shortestPathAlgorithm;
+    protected final ManyToManyShortestPathsAlgorithm<CFGVertex, CFGEdge> shortestPathAlgorithm;
 
     /**
      * The path to the 'apps' folder.

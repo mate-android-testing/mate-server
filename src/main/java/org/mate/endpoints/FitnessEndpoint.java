@@ -485,6 +485,7 @@ public class FitnessEndpoint implements Endpoint {
             case BRANCH_MULTI_OBJECTIVE:
             case BRANCH_DISTANCE_CFG:
             case BRANCH_DISTANCE_MULTI_OBJECTIVE_CFG:
+            case APPROACH_LEVEL_AND_BRANCH_DISTANCE:
                 return copyBranchFitnessData(request);
             case LINE_COVERAGE:
             case LINE_PERCENTAGE_COVERAGE:
@@ -736,6 +737,7 @@ public class FitnessEndpoint implements Endpoint {
             case BRANCH_MULTI_OBJECTIVE:
             case BRANCH_DISTANCE_CFG:
             case BRANCH_DISTANCE_MULTI_OBJECTIVE_CFG:
+            case APPROACH_LEVEL_AND_BRANCH_DISTANCE:
                 return storeBranchFitnessData(request);
             case LINE_COVERAGE:
             case LINE_PERCENTAGE_COVERAGE:
