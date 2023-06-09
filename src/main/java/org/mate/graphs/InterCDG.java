@@ -21,18 +21,11 @@ import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
-import de.uni_passau.fim.auermich.android_graphs.core.statements.ReturnStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.GraphUtils;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.InstructionUtils;
 
 public class InterCDG extends CFG {
-
-    /**
-     * Maps vertices to their corresponding traces.
-     */
-    private Map<CFGVertex, String> vertexToTraceMap;
-
 
     /**
      * Constructs a wrapper for a given control dependence graph.
@@ -55,8 +48,7 @@ public class InterCDG extends CFG {
      * @param appsDir               The apps directory.
      * @param packageName           The package name of the AUT.
      */
-    public InterCDG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses, boolean resolveOnlyAUTClasses,
-                    Path appsDir, String packageName) {
+    public InterCDG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses, boolean resolveOnlyAUTClasses, Path appsDir, String packageName) {
         super(GraphUtils.constructInterCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses), appsDir, packageName);
     }
 
@@ -95,43 +87,54 @@ public class InterCDG extends CFG {
      * @return branch distance on the supplied branching vertex.
      */
     public double computeBranchDistance(CFGVertex branchVertex, List<String> traces) {
+        // In Android control dependencies might not always be related to branches.
+        if (!branchVertices.contains(branchVertex)) {
+            return 0.0;
+        }
+
         // Find the right trace record for our branching vertex.
-        Set<String> branchingTraces = new HashSet<>();
-        String branchVertexPattern = traceMatchingPattern(this.lookupTrace(branchVertex));
+        int currIndex = -1;
+        double branchValue = -1;
+        Set<String> potentialVertices = this.lookupTrace(traces, branchVertex).stream().map(this::transformToComparePattern).collect(Collectors.toSet());
+
         for (String trace : traces) {
-            if (trace.startsWith(branchVertexPattern)) {
-                branchingTraces.add(trace);
+            String tracePattern = transformToComparePattern(trace);
+            if (potentialVertices.contains(tracePattern) && trace.contains(":")) {
+
+                // We may have multiple indicators within several branches. Thus, we search for the deepest branch with
+                // the highest branchDistance.
+                String lastArrowElement = trace.split("->")[2];
+                if (branchValue == -1) {
+                    currIndex = Integer.parseInt(lastArrowElement.split(":")[0]);
+                    branchValue = Double.parseDouble(lastArrowElement.split(":")[1]);
+                } else {
+                    int traceIndex = Integer.parseInt(lastArrowElement.split(":")[0]);
+                    double traceBranchValue = Double.parseDouble(lastArrowElement.split(":")[1]);
+
+                    if (traceIndex > currIndex || (traceIndex == currIndex && traceBranchValue > branchValue)) {
+                        currIndex = traceIndex;
+                        branchValue = traceBranchValue;
+                    }
+
+                }
             }
         }
 
-        if (branchingTraces.isEmpty()) {
-            throw new IllegalStateException("Could not find matching trace for branch vertex: " + branchVertex);
-        }
-
-        Set<Double> branchDistances = branchingTraces.stream().map(this::getBranchDistanceFromTrace).collect(Collectors.toSet());
-        return Collections.max(branchDistances);
+        return branchValue;
     }
 
     /**
-     * Transform the trace of a vertex into a pattern that can be used to match branching traces from a test execution.
+     * Transform the trace of a vertex into a pattern that can universally be used for comparing traces.
      *
-     * @param branchVertexTrace vertex trace to be transformed into a comparison pattern suitable for execution traces.
+     * @param trace vertex trace to be transformed into a comparison pattern.
      * @return pattern suitable for comparing execution traces.
      */
-    private String traceMatchingPattern(String branchVertexTrace) {
-        String[] splitVertexBranch = branchVertexTrace.split("->");
-        return splitVertexBranch[0] + "->" + splitVertexBranch[1] + "->" + splitVertexBranch[3];
-    }
-
-    private double getBranchDistanceFromTrace(String trace) {
-        final int arrow = trace.lastIndexOf('>');
-        final int colon = trace.indexOf(':', arrow);
-
-        if (colon != -1) {
-            return Integer.parseUnsignedInt(trace, colon + 1, trace.length(), 10);
+    private String transformToComparePattern(String trace) {
+        String[] splitTrace = trace.split(":")[0].split("->");
+        if (splitTrace.length == 3) {
+            return String.join("->", splitTrace);
         } else {
-            Log.printWarning("Could not infer branch distance for trace " + trace);
-            return 0;
+            return splitTrace[0] + "->" + splitTrace[1] + "->" + splitTrace[3];
         }
     }
 
@@ -145,7 +148,6 @@ public class InterCDG extends CFG {
         long start = System.currentTimeMillis();
 
         Map<String, CFGVertex> traceToVertexCache = new HashMap<>();
-        vertexToTraceMap = new HashMap<>();
 
         // handle entry vertices
         Set<CFGVertex> entryVertices = graph.getVertices().stream().filter(CFGVertex::isEntryVertex).collect(Collectors.toSet());
@@ -156,7 +158,6 @@ public class InterCDG extends CFG {
 
                 // virtual entry vertex
                 traceToVertexCache.put(entryVertex.getMethod() + "->entry", entryVertex);
-                vertexToTraceMap.put(entryVertex, entryVertex.getMethod() + "->entry");
 
                 // there are potentially several entry vertices when dealing with try-catch blocks at the beginning
                 Set<CFGVertex> entries = graph.getOutgoingEdges(entryVertex).stream()
@@ -172,7 +173,6 @@ public class InterCDG extends CFG {
                             // each statement within a block statement is a basic statement
                             BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
                             traceToVertexCache.put(entry.getMethod() + "->entry->" + basicStatement.getInstructionIndex(), entry);
-                            vertexToTraceMap.put(entry, entry.getMethod() + "->entry->" + basicStatement.getInstructionIndex());
                         }
                     }
                 }
@@ -188,7 +188,6 @@ public class InterCDG extends CFG {
 
                 // virtual exit vertex
                 traceToVertexCache.put(exitVertex.getMethod() + "->exit", exitVertex);
-                vertexToTraceMap.put(exitVertex, exitVertex.getMethod() + "->exit");
 
                 Set<CFGVertex> exits = graph.getIncomingEdges(exitVertex).stream()
                         .map(CFGEdge::getSource).collect(Collectors.toSet());
@@ -203,7 +202,6 @@ public class InterCDG extends CFG {
                             // each statement within a block statement is a basic statement
                             BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
                             traceToVertexCache.put(exit.getMethod() + "->exit->" + basicStatement.getInstructionIndex(), exit);
-                            vertexToTraceMap.put(exit, exit.getMethod() + "->exit->" + basicStatement.getInstructionIndex());
                         }
                     }
                 }
@@ -229,13 +227,9 @@ public class InterCDG extends CFG {
                     if (InstructionUtils.isBranchingInstruction(basicStatement.getInstruction())) {
                         traceToVertexCache.put(ifOrSwitchVertex.getMethod()
                                 + "->if->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
-                        vertexToTraceMap.put(ifOrSwitchVertex, ifOrSwitchVertex.getMethod()
-                                + "->if->" + basicStatement.getInstructionIndex());
                     } else if (InstructionUtils.isSwitchInstruction(basicStatement.getInstruction())) {
                         traceToVertexCache.put(ifOrSwitchVertex.getMethod()
                                 + "->switch->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
-                        vertexToTraceMap.put(ifOrSwitchVertex, ifOrSwitchVertex.getMethod()
-                                + "->switch->" + basicStatement.getInstructionIndex());
                     } else {
                         Log.printWarning("Unexpected block statement: " + statement + " for method " + ifOrSwitchVertex.getMethod());
                     }
@@ -248,18 +242,15 @@ public class InterCDG extends CFG {
             if (statement instanceof BlockStatement) {
                 Statement firstStatement = ((BlockStatement) statement).getFirstStatement();
 
-                // each statement within a block statement is a basic statement
+                // Find first basic statement in given statement to infer the instruction index.
+                BasicStatement basicStatement;
                 if (firstStatement.getType() != Statement.StatementType.RETURN_STATEMENT) {
-                    BasicStatement basicStatement = (BasicStatement) firstStatement;
-                    traceToVertexCache.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
-                    vertexToTraceMap.put(branchVertex, branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex());
+                    basicStatement = (BasicStatement) firstStatement;
+                } else {
+                    basicStatement = (BasicStatement) ((BlockStatement) statement).getStatements().get(1);
                 }
-                // Special handling for Return statements since they have no instruction index.
-                else if (firstStatement.getType() == Statement.StatementType.RETURN_STATEMENT) {
-                    ReturnStatement returnStatement = (ReturnStatement) firstStatement;
-                    traceToVertexCache.put(branchVertex.getMethod() + "->" + returnStatement.getTargetMethod(), branchVertex);
-                    vertexToTraceMap.put(branchVertex, branchVertex.getMethod() + "->" + returnStatement.getTargetMethod());
-                }
+
+                traceToVertexCache.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
             }
         }
 
@@ -309,10 +300,18 @@ public class InterCDG extends CFG {
 
     /**
      * Fetches the corresponding trace string for the supplied vertex.
+     *
      * @param vertex {@link CFGVertex} whose trace string is to be determined.
      * @return trace string corresponding to the supplied {@link CFGVertex}
      */
-    public String lookupTrace(CFGVertex vertex) {
-        return vertexToTraceMap.get(vertex);
+    public Set<String> lookupTrace(List<String> traces, CFGVertex vertex) {
+        Set<String> vertexTraces = new HashSet<>();
+        for (String trace : traces) {
+            CFGVertex currVertex = lookupVertex(trace);
+            if (currVertex != null && currVertex.equals(vertex)) {
+                vertexTraces.add(trace);
+            }
+        }
+        return vertexTraces;
     }
 }

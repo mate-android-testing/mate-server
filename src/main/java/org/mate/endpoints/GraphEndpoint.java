@@ -1379,6 +1379,8 @@ public class GraphEndpoint implements Endpoint {
         switch (target) {
             case "all_branches":
                 return ((CFG) graph).getBranchVertices();
+            case "all_statements":
+                return ((CFG) graph).getVertices();
             case "random_target":
             case "random_branch":
                 final List<? extends Vertex> targets = target.equals("random_target")
