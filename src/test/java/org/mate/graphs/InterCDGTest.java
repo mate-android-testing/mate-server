@@ -19,8 +19,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
-import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
-import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
 
 public class InterCDGTest {
     private final File RESOURCES = new File("./src/test/java/resources/");

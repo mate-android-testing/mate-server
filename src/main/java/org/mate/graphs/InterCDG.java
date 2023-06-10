@@ -149,116 +149,145 @@ public class InterCDG extends CFG {
 
         Map<String, CFGVertex> traceToVertexCache = new HashMap<>();
 
-        // handle entry vertices
-        Set<CFGVertex> entryVertices = graph.getVertices().stream().filter(CFGVertex::isEntryVertex).collect(Collectors.toSet());
-
-        for (CFGVertex entryVertex : entryVertices) {
-            // exclude global entry vertex
-            if (!entryVertex.equals(graph.getEntry())) {
-
-                // virtual entry vertex
-                traceToVertexCache.put(entryVertex.getMethod() + "->entry", entryVertex);
-
-                // there are potentially several entry vertices when dealing with try-catch blocks at the beginning
-                Set<CFGVertex> entries = graph.getOutgoingEdges(entryVertex).stream()
-                        .map(CFGEdge::getTarget).collect(Collectors.toSet());
-
-                for (CFGVertex entry : entries) {
-                    // exclude dummy CFGs solely consisting of entry and exit vertex
-                    if (!entry.isExitVertex()) {
-                        Statement statement = entry.getStatement();
-
-                        // TODO: handle basic statements
-                        if (statement instanceof BlockStatement) {
-                            // each statement within a block statement is a basic statement
-                            BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
-                            traceToVertexCache.put(entry.getMethod() + "->entry->" + basicStatement.getInstructionIndex(), entry);
-                        }
-                    }
-                }
+        for (CFGVertex vertex : getVertices()) {
+            // Handle entry vertices
+            if (vertex.isEntryVertex()) {
+                initEntryVertexToVertexCache(vertex, traceToVertexCache);
             }
-        }
 
-        // handle exit vertices
-        Set<CFGVertex> exitVertices = graph.getVertices().stream().filter(CFGVertex::isExitVertex).collect(Collectors.toSet());
+            // Handle exit vertices
+            if (vertex.isExitVertex()) {
+                initExitVertexToVertexCache(vertex, traceToVertexCache);
+            }
 
-        for (CFGVertex exitVertex : exitVertices) {
-            // exclude global exit vertex
-            if (!exitVertex.equals(graph.getExit())) {
-
-                // virtual exit vertex
-                traceToVertexCache.put(exitVertex.getMethod() + "->exit", exitVertex);
-
-                Set<CFGVertex> exits = graph.getIncomingEdges(exitVertex).stream()
-                        .map(CFGEdge::getSource).collect(Collectors.toSet());
-
-                for (CFGVertex exit : exits) {
-                    // exclude dummy CFGs solely consisting of entry and exit vertex
-                    if (!exit.isEntryVertex()) {
-                        Statement statement = exit.getStatement();
-
-                        // TODO: handle basic statements
-                        if (statement instanceof BlockStatement) {
-                            // each statement within a block statement is a basic statement
-                            BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
-                            traceToVertexCache.put(exit.getMethod() + "->exit->" + basicStatement.getInstructionIndex(), exit);
-                        }
-                    }
-                }
+            // Handle branch vertices
+            if (branchVertices.contains(vertex)) {
+                initBranchVertexToVertexCache(vertex, traceToVertexCache);
             }
         }
 
         // handle branch + if and switch stmt vertices
-        for (CFGVertex branchVertex : branchVertices) {
 
-            // a branch can potentially have multiple predecessors (shared branch)
-            Set<CFGVertex> ifOrSwitchVertices = graph.getIncomingEdges(branchVertex).stream()
-                    .map(CFGEdge::getSource).filter(CFGVertex::isIfVertex).collect(Collectors.toSet());
-
-            // if or switch vertex
-            for (CFGVertex ifOrSwitchVertex : ifOrSwitchVertices) {
-
-                Statement statement = ifOrSwitchVertex.getStatement();
-
-                // TODO: handle basic statements
-                if (statement instanceof BlockStatement) {
-                    // the last statement is always a basic statement of an if vertex
-                    BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
-                    if (InstructionUtils.isBranchingInstruction(basicStatement.getInstruction())) {
-                        traceToVertexCache.put(ifOrSwitchVertex.getMethod()
-                                + "->if->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
-                    } else if (InstructionUtils.isSwitchInstruction(basicStatement.getInstruction())) {
-                        traceToVertexCache.put(ifOrSwitchVertex.getMethod()
-                                + "->switch->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
-                    } else {
-                        Log.printWarning("Unexpected block statement: " + statement + " for method " + ifOrSwitchVertex.getMethod());
-                    }
-                }
-            }
-
-            Statement statement = branchVertex.getStatement();
-
-            // TODO: handle basic statements
-            if (statement instanceof BlockStatement) {
-                Statement firstStatement = ((BlockStatement) statement).getFirstStatement();
-
-                // Find first basic statement in given statement to infer the instruction index.
-                BasicStatement basicStatement;
-                if (firstStatement.getType() != Statement.StatementType.RETURN_STATEMENT) {
-                    basicStatement = (BasicStatement) firstStatement;
-                } else {
-                    basicStatement = (BasicStatement) ((BlockStatement) statement).getStatements().get(1);
-                }
-
-                traceToVertexCache.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
-            }
-        }
 
         long end = System.currentTimeMillis();
         Log.println("TraceToVertexCache construction took: " + (end - start) + " ms.");
         Log.println("Size of TraceToVertexCache: " + traceToVertexCache.size());
 
         return traceToVertexCache;
+    }
+
+    /**
+     * Initialises the trace to vertex mapping for entry vertices.
+     *
+     * @param entryVertex        entry vertex to be added to the trace to vertex cache.
+     * @param traceToVertexCache the mapping to which the given entry vertex is to be added.
+     */
+    private void initEntryVertexToVertexCache(CFGVertex entryVertex, Map<String, CFGVertex> traceToVertexCache) {
+        // exclude global entry vertex
+        if (!entryVertex.equals(graph.getEntry())) {
+
+            // virtual entry vertex
+            traceToVertexCache.put(entryVertex.getMethod() + "->entry", entryVertex);
+
+            // there are potentially several entry vertices when dealing with try-catch blocks at the beginning
+            Set<CFGVertex> entries = graph.getOutgoingEdges(entryVertex).stream()
+                    .map(CFGEdge::getTarget).collect(Collectors.toSet());
+
+            for (CFGVertex entry : entries) {
+                // exclude dummy CFGs solely consisting of entry and exit vertex
+                if (!entry.isExitVertex()) {
+                    Statement statement = entry.getStatement();
+
+                    // TODO: handle basic statements
+                    if (statement instanceof BlockStatement) {
+                        // each statement within a block statement is a basic statement
+                        BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
+                        traceToVertexCache.put(entry.getMethod() + "->entry->" + basicStatement.getInstructionIndex(), entry);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Initialises the trace to vertex mapping for exit vertices.
+     *
+     * @param exitVertex         exit vertex to be added to the trace to vertex cache.
+     * @param traceToVertexCache the mapping to which the given exit vertex is to be added.
+     */
+    private void initExitVertexToVertexCache(CFGVertex exitVertex, Map<String, CFGVertex> traceToVertexCache) {
+        if (!exitVertex.equals(graph.getExit())) {
+
+            // virtual exit vertex
+            traceToVertexCache.put(exitVertex.getMethod() + "->exit", exitVertex);
+
+            Set<CFGVertex> exits = graph.getIncomingEdges(exitVertex).stream()
+                    .map(CFGEdge::getSource).collect(Collectors.toSet());
+
+            for (CFGVertex exit : exits) {
+                // exclude dummy CFGs solely consisting of entry and exit vertex
+                if (!exit.isEntryVertex()) {
+                    Statement statement = exit.getStatement();
+
+                    // TODO: handle basic statements
+                    if (statement instanceof BlockStatement) {
+                        // each statement within a block statement is a basic statement
+                        BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
+                        traceToVertexCache.put(exit.getMethod() + "->exit->" + basicStatement.getInstructionIndex(), exit);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Initialises the trace to vertex mapping for branch vertices.
+     *
+     * @param branchVertex       branch vertex to be added to the trace to vertex cache.
+     * @param traceToVertexCache the mapping to which the given branch vertex is to be added.
+     */
+    private void initBranchVertexToVertexCache(CFGVertex branchVertex, Map<String, CFGVertex> traceToVertexCache) {
+        // a branch can potentially have multiple predecessors (shared branch)
+        Set<CFGVertex> ifOrSwitchVertices = graph.getIncomingEdges(branchVertex).stream()
+                .map(CFGEdge::getSource).filter(CFGVertex::isIfVertex).collect(Collectors.toSet());
+
+        // if or switch vertex
+        for (CFGVertex ifOrSwitchVertex : ifOrSwitchVertices) {
+
+            Statement statement = ifOrSwitchVertex.getStatement();
+
+            // TODO: handle basic statements
+            if (statement instanceof BlockStatement) {
+                // the last statement is always a basic statement of an if vertex
+                BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
+                if (InstructionUtils.isBranchingInstruction(basicStatement.getInstruction())) {
+                    traceToVertexCache.put(ifOrSwitchVertex.getMethod()
+                            + "->if->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
+                } else if (InstructionUtils.isSwitchInstruction(basicStatement.getInstruction())) {
+                    traceToVertexCache.put(ifOrSwitchVertex.getMethod()
+                            + "->switch->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
+                } else {
+                    Log.printWarning("Unexpected block statement: " + statement + " for method " + ifOrSwitchVertex.getMethod());
+                }
+            }
+        }
+
+        Statement statement = branchVertex.getStatement();
+
+        // TODO: handle basic statements
+        if (statement instanceof BlockStatement) {
+            Statement firstStatement = ((BlockStatement) statement).getFirstStatement();
+
+            // Find first basic statement in given statement to infer the instruction index.
+            BasicStatement basicStatement;
+            if (firstStatement.getType() != Statement.StatementType.RETURN_STATEMENT) {
+                basicStatement = (BasicStatement) firstStatement;
+            } else {
+                basicStatement = (BasicStatement) ((BlockStatement) statement).getStatements().get(1);
+            }
+
+            traceToVertexCache.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
+        }
     }
 
 
