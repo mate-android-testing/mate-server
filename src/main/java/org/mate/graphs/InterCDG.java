@@ -13,9 +13,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.BaseCFG;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
@@ -59,11 +59,11 @@ public class InterCDG extends CFG {
      * @param coveredVertices set of covered vertices.
      * @return approach level toward the targeted vertex.
      */
-    public Pair<CFGVertex, Integer> computeApproachLevel(CFGVertex targetVertex, List<Vertex> coveredVertices) {
+    public Pair<CFGVertex, Integer> computeApproachLevel(CFGVertex targetVertex, Set<CFGVertex> coveredVertices) {
         int min = Integer.MAX_VALUE;
         CFGVertex shortestPathVertex = graph.getEntry();
-        for (Vertex visitedVertex : coveredVertices) {
-            GraphPath<CFGVertex, CFGEdge> path = shortestPathAlgorithm.getPath((CFGVertex) visitedVertex, targetVertex);
+        for (CFGVertex visitedVertex : coveredVertices) {
+            GraphPath<CFGVertex, CFGEdge> path = shortestPathAlgorithm.getPath(visitedVertex, targetVertex);
 
             // Check if there exists a path.
             if (path != null) {
@@ -305,13 +305,96 @@ public class InterCDG extends CFG {
      * @return trace string corresponding to the supplied {@link CFGVertex}
      */
     public Set<String> lookupTrace(List<String> traces, CFGVertex vertex) {
-        Set<String> vertexTraces = new HashSet<>();
-        for (String trace : traces) {
+        Set<String> vertexTraces = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        traces.parallelStream().forEach(trace -> {
             CFGVertex currVertex = lookupVertex(trace);
             if (currVertex != null && currVertex.equals(vertex)) {
                 vertexTraces.add(trace);
             }
-        }
+        });
         return vertexTraces;
+    }
+
+    /**
+     * Determines which nodes have been covered according to a list of chromosome traces.
+     *
+     * @param traces resulting from a chromosome execution.
+     * @return the set of covered vertices.
+     */
+    public Set<CFGVertex> getCoveredVertices(Set<String> traces) {
+
+        // read traces from trace file(s)
+        long start = System.currentTimeMillis();
+
+        // we need to mark vertices we visited
+        Set<CFGVertex> covered = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        Set<CFGVertex> notCovered = new HashSet<>(getVertices());
+
+        // map trace to vertex
+        traces.parallelStream().forEach(trace -> {
+
+            if (trace.contains(":")) {
+                // skip branch distance trace
+                return;
+            }
+
+            // mark virtual entry
+            final String entryMarker = "->entry";
+            final int entryIndex = trace.indexOf(entryMarker);
+            if (entryIndex != -1) {
+                final String entryTrace = trace.substring(0, entryIndex + entryMarker.length());
+                final CFGVertex visitedEntry = lookupVertex(entryTrace);
+
+                if (visitedEntry != null) {
+                    covered.add(visitedEntry);
+                    notCovered.remove(visitedEntry);
+                } else {
+                    Log.printWarning("Couldn't derive vertex for entry trace: " + entryTrace);
+                }
+            }
+
+            // mark virtual exit
+            final String exitMarker = "->exit";
+            final int exitIndex = trace.indexOf(exitMarker);
+            if (exitIndex != -1) {
+                final String exitTrace = trace.substring(0, exitIndex + exitMarker.length());
+                final CFGVertex visitedExit = lookupVertex(exitTrace);
+
+                if (visitedExit != null) {
+                    covered.add(visitedExit);
+                    notCovered.remove(visitedExit);
+                } else {
+                    Log.printWarning("Couldn't derive vertex for exit trace: " + exitTrace);
+                }
+            }
+
+            // mark actual vertex corresponding to trace
+            CFGVertex visitedVertex = lookupVertex(trace);
+
+            if (visitedVertex == null) {
+                Log.printWarning("Couldn't derive vertex for trace: " + trace);
+            } else {
+                covered.add(visitedVertex);
+                notCovered.remove(visitedVertex);
+            }
+        });
+
+        // The mapping from traces to vertices misses virtual nodes. Thus, we now go over virtual entry and exit nodes
+        // and check whether one of their predecessors has been covered.
+        notCovered.parallelStream().forEach(vertex -> {
+            // Virtual Entry and Exit vertices are covered if one of their ancestors has been covered as well.
+            if (vertex.isEntryVertex() || vertex.isExitVertex()) {
+                Set<CFGVertex> successors = graph.getPredecessors(vertex);
+                if (!Collections.disjoint(successors, covered)) {
+                    covered.add(vertex);
+                }
+            }
+        });
+
+        long end = System.currentTimeMillis();
+        Log.println("Mapping traces to vertices took: " + (end - start) + " ms.");
+
+        Log.println("Number of visited vertices: " + covered.size());
+        return covered;
     }
 }

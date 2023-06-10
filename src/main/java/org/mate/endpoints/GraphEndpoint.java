@@ -382,7 +382,7 @@ public class GraphEndpoint implements Endpoint {
 
         InterCDG cdg = (InterCDG) graph;
         final var traces = getTraces(packageName, chromosome);
-        final var visitedVertices = mapTracesToVertices(traces);
+        final var visitedVertices = cdg.getCoveredVertices(new HashSet<>(traces));
         CFGVertex targetVertex = (CFGVertex) targetVertices.iterator().next();
 
         int approachLevel;
@@ -1380,7 +1380,9 @@ public class GraphEndpoint implements Endpoint {
             case "all_branches":
                 return ((CFG) graph).getBranchVertices();
             case "all_statements":
-                return ((CFG) graph).getVertices();
+                return ((CFG) graph).getVertices().stream()
+                        .filter(vertex -> vertex.getStatement() instanceof BasicStatement || vertex.getStatement() instanceof BlockStatement)
+                        .collect(Collectors.toList());
             case "random_target":
             case "random_branch":
                 final List<? extends Vertex> targets = target.equals("random_target")
