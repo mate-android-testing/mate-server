@@ -44,21 +44,19 @@ public class InterCDGTest {
         Log.registerLogger(new Log());
         traces = this.readTraceFile(TRACES_FILE);
 
-        cdg = new InterCDG(APK_FILE, true, false, true, RESOURCES.toPath(), "com.zola.bmi");
+        cdg = new InterCDG(APK_FILE, true, true, true, RESOURCES.toPath(), "com.zola.bmi");
         cdg.initTraceToVertexCache();
         covered = this.cdg.getCoveredVertices(new HashSet<>(traces));
+        // cdg.draw(RESOURCES, covered, new HashSet<>());
     }
 
     @Test
     public void testComputeApproachLevel() {
-        CFGVertex target = cdg.lookupVertex("Lcom/zola/bmi/BMIMain;->interpretBMI(D)Ljava/lang/String;->82");
-        Set<CFGVertex> visited = new HashSet<>();
-        visited.add(cdg.lookupVertex("Lcom/zola/bmi/BMIMain;->calculateClickHandler(Landroid/view/View;)V->if->13"));
-        CFGVertex expectedShortest = cdg.lookupVertex("Lcom/zola/bmi/BMIMain;->interpretBMI(D)Ljava/lang/String;->if->11");
-        visited.add(expectedShortest);
-        Pair<CFGVertex, Integer> result = cdg.computeApproachLevel(target, visited);
+        CFGVertex target = cdg.lookupVertex("Lcom/zola/bmi/BMIMain;->calculateClickHandler(Landroid/view/View;)V->if->95");
+        CFGVertex expectedShortest = cdg.lookupVertex("Lcom/zola/bmi/BMIMain;->calculateClickHandler(Landroid/view/View;)V->63");
+        Pair<CFGVertex, Integer> result = cdg.computeApproachLevel(target, covered);
         assertEquals(result.fst(), expectedShortest);
-        assertEquals(result.snd(), Integer.valueOf(4));
+        assertEquals(result.snd(), Integer.valueOf(2));
     }
 
     @Test
@@ -69,11 +67,11 @@ public class InterCDGTest {
 
     @Test
     public void computeApproachLevelAndBranchDistance() {
-        CFGVertex target = cdg.lookupVertex("Lcom/zola/bmi/BMIMain;->interpretBMI(D)Ljava/lang/String;->76");
+        CFGVertex target = cdg.lookupVertex("Lcom/zola/bmi/BMIMain;->calculateClickHandler(Landroid/view/View;)V->if->95");
         Pair<CFGVertex, Integer> result = cdg.computeApproachLevel(target, covered);
         int approachLevel = result.snd();
         double branchDistance = cdg.computeBranchDistance(result.fst(), traces);
-        assertEquals(approachLevel, 0);
+        assertEquals(approachLevel, 2);
         assertEquals(branchDistance, 1.0, 0);
     }
 }

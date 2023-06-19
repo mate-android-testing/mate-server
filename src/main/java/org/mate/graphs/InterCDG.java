@@ -16,7 +16,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.BaseCFG;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
@@ -26,17 +25,6 @@ import de.uni_passau.fim.auermich.android_graphs.core.utility.GraphUtils;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.InstructionUtils;
 
 public class InterCDG extends CFG {
-
-    /**
-     * Constructs a wrapper for a given control dependence graph.
-     *
-     * @param graph   The actual control dependence graph.
-     * @param appsDir The path to the apps directory.
-     * @param appName The name of the app (the package name).
-     */
-    public InterCDG(BaseCFG graph, Path appsDir, String appName) {
-        super(graph, appsDir, appName);
-    }
 
     /**
      * Constructs an inter-procedural CFG with the given properties.
@@ -156,17 +144,17 @@ public class InterCDG extends CFG {
             }
 
             // Handle exit vertices
-            if (vertex.isExitVertex()) {
+            else if (vertex.isExitVertex()) {
                 initExitVertexToVertexCache(vertex, traceToVertexCache);
             }
 
             // Handle branch vertices
-            if (branchVertices.contains(vertex)) {
+            else if (branchVertices.contains(vertex)) {
                 initBranchVertexToVertexCache(vertex, traceToVertexCache);
+            } else {
+                Log.printWarning("Unable to establish trace mapping for : " + vertex);
             }
         }
-
-        // handle branch + if and switch stmt vertices
 
 
         long end = System.currentTimeMillis();
