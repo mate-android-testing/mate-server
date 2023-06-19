@@ -151,8 +151,6 @@ public class InterCDG extends CFG {
             // Handle branch vertices
             else if (branchVertices.contains(vertex)) {
                 initBranchVertexToVertexCache(vertex, traceToVertexCache);
-            } else {
-                Log.printWarning("Unable to establish trace mapping for : " + vertex);
             }
         }
 
