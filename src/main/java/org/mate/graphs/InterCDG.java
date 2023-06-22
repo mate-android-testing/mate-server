@@ -186,9 +186,8 @@ public class InterCDG extends CFG {
 
                     // TODO: handle basic statements
                     if (statement instanceof BlockStatement) {
-                        // each statement within a block statement is a basic statement
-                        BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
-                        traceToVertexCache.put(entry.getMethod() + "->entry->" + basicStatement.getInstructionIndex(), entry);
+                        int index = getInstructionIndexFromBlockStatement(statement);
+                        traceToVertexCache.put(entry.getMethod() + "->entry->" + index, entry);
                     }
                 }
             }
@@ -217,9 +216,8 @@ public class InterCDG extends CFG {
 
                     // TODO: handle basic statements
                     if (statement instanceof BlockStatement) {
-                        // each statement within a block statement is a basic statement
-                        BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
-                        traceToVertexCache.put(exit.getMethod() + "->exit->" + basicStatement.getInstructionIndex(), exit);
+                        int index = getInstructionIndexFromBlockStatement(statement);
+                        traceToVertexCache.put(exit.getMethod() + "->entry->" + index, exit);
                     }
                 }
             }
@@ -262,17 +260,8 @@ public class InterCDG extends CFG {
 
         // TODO: handle basic statements
         if (statement instanceof BlockStatement) {
-            Statement firstStatement = ((BlockStatement) statement).getFirstStatement();
-
-            // Find first basic statement in given statement to infer the instruction index.
-            BasicStatement basicStatement;
-            if (firstStatement.getType() != Statement.StatementType.RETURN_STATEMENT) {
-                basicStatement = (BasicStatement) firstStatement;
-            } else {
-                basicStatement = (BasicStatement) ((BlockStatement) statement).getStatements().get(1);
-            }
-
-            traceToVertexCache.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
+            int index = getInstructionIndexFromBlockStatement(statement);
+            traceToVertexCache.put(branchVertex.getMethod() + "->entry->" + index, branchVertex);
         }
     }
 
@@ -411,5 +400,22 @@ public class InterCDG extends CFG {
 
         Log.println("Number of visited vertices: " + covered.size());
         return covered;
+    }
+
+    /**
+     * Extracts the instruction index from a given {@link Statement}.
+     *
+     * @param statement The statement from which the instruction index is to be extracted.
+     * @return The instruction index of the given statement.
+     */
+    private int getInstructionIndexFromBlockStatement(Statement statement) {
+        Statement firstStatement = ((BlockStatement) statement).getFirstStatement();
+        BasicStatement basicStatement;
+        if (firstStatement.getType() != Statement.StatementType.RETURN_STATEMENT) {
+            basicStatement = (BasicStatement) firstStatement;
+        } else {
+            basicStatement = (BasicStatement) ((BlockStatement) statement).getStatements().get(1);
+        }
+        return basicStatement.getInstructionIndex();
     }
 }
