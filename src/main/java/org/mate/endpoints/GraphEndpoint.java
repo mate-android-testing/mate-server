@@ -163,8 +163,6 @@ public class GraphEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/graph/init")) {
             return initGraph(request);
-        } else if (request.getSubject().startsWith("/graph/get_approach_and_branch")){
-            return getApproachLevelAndBranchDist(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector_cfg")) {
             return getBranchDistanceVectorCFG(request);
         }else if (request.getSubject().startsWith("/graph/get_branch_distance_vector_cdg")) {
@@ -324,7 +322,7 @@ public class GraphEndpoint implements Endpoint {
      * @param branchVertex The given branch vertex (target).
      * @return Returns the combined approach level + branch distance for the given branch vertex.
      */
-    private String computeApproachLevelAndBranchDistanceCDG(final Set<CFGVertex> visitedVertices,
+    private String computeApproachLevelAndBranchDistanceCDG(final Set<Vertex> visitedVertices,
                                                             final CFGVertex branchVertex, List<String> traces) {
         InterCDG cdg = (InterCDG) graph;
         int approachLevel;
@@ -393,56 +391,6 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Computes the fitness value for a given chromosome by combining approach level + branch distance.
-     *
-     * @param request The request message.
-     * @return Returns a message containing the branch distance information.
-     */
-    private Message getApproachLevelAndBranchDist(final Message request) {
-        final String packageName = request.getParameter("packageName");
-        final String chromosome = request.getParameter("chromosome");
-        Log.println("Computing the approach level and branch distance for the chromosome: " + chromosome);
-
-        if (graph == null) {
-            throw new IllegalStateException("Graph hasn't been initialised!");
-        } else if (!(graph instanceof InterCDG)) {
-            throw new IllegalStateException("The generated Graph does not correspond to a CDG");
-        }
-        if (targetVertices.size() != 1) {
-            throw new IllegalStateException("There should exactly be one single target." +
-                    "If you want to use a multi-objective algorithm please adjust your settings!");
-        }
-
-        InterCDG cdg = (InterCDG) graph;
-        final var traces = getTraces(packageName, chromosome);
-        final var visitedVertices = cdg.getCoveredVertices(new HashSet<>(traces));
-        CFGVertex targetVertex = (CFGVertex) targetVertices.iterator().next();
-
-        int approachLevel;
-        double branchDistance;
-        // Shortcut: if we covered the target approach level and branch distance is zero.
-        if (visitedVertices.contains(targetVertex)) {
-            approachLevel = 0;
-            branchDistance = 0.0;
-        } else {
-
-            // Compute Approach Level
-            Pair<CFGVertex, Integer> approachLevelPair = cdg.computeApproachLevel(targetVertex, visitedVertices);
-            approachLevel = approachLevelPair.snd();
-
-            // This is the branching statement from which an incorrect branch toward the target was taken.
-            // Hence, we will use this vertex to compute the branch distance.
-            CFGVertex branchingVertex = approachLevelPair.fst();
-            branchDistance = cdg.computeBranchDistance(branchingVertex, traces);
-        }
-
-        return new Message.MessageBuilder("/graph/get_approach_and_branch")
-                .withParameter("approach_level", String.valueOf(approachLevel))
-                .withParameter("branch_distance", String.valueOf(branchDistance))
-                .build();
-    }
-
-    /**
      * Computes the fitness value for a given chromosome by combining approach level + branch distance and using the CFG.
      *
      * @param request The request message.
@@ -459,7 +407,7 @@ public class GraphEndpoint implements Endpoint {
         }
 
         final var traces = getTraces(packageName, chromosome);
-        final var visitedVertices = mapTracesToVertices(traces);
+        final var visitedVertices = mapTracesToVertices(graph, traces);
         precomputeBranchDistances(traces);
         final var branchDistance = computeApproachLevelAndBranchDistanceCFG(visitedVertices,
                 // there is only a single target
@@ -488,7 +436,7 @@ public class GraphEndpoint implements Endpoint {
 
         long start = System.currentTimeMillis();
         final var traces = getTraces(packageName, chromosome);
-        final var visitedVertices = mapTracesToVertices(traces);
+        final var visitedVertices = mapTracesToVertices(graph, traces);
         final var branchVertices =  ((CFG) graph).getBranchVertices();
         long start1 = System.currentTimeMillis();
         precomputeBranchDistances(traces);
@@ -521,9 +469,8 @@ public class GraphEndpoint implements Endpoint {
         }
 
         long start = System.currentTimeMillis();
-        InterCDG cdg = (InterCDG) graph;
         final var traces = getTraces(packageName, chromosome);
-        final var visitedVertices = cdg.getCoveredVertices(new HashSet<>(traces));
+        final var visitedVertices = new HashSet<>(mapTracesToVertices(graph, traces));
         final var branchVertices =  ((CFG) graph).getBranchVertices();
 
         final List<String> branchDistanceVector = computeBranchDistanceVectorCDG(visitedVertices, branchVertices, traces);
@@ -566,7 +513,7 @@ public class GraphEndpoint implements Endpoint {
      * @param branchVertices  The branch vertices (targets).
      * @return Returns the branch distance vector based on the CDG.
      */
-    private List<String> computeBranchDistanceVectorCDG(final Set<CFGVertex> visitedVertices,
+    private List<String> computeBranchDistanceVectorCDG(final Set<Vertex> visitedVertices,
                                                         final List<CFGVertex> branchVertices,
                                                         final List<String> traces) {
 
@@ -1451,7 +1398,7 @@ public class GraphEndpoint implements Endpoint {
         // read traces from trace file(s)
         final List<String> traces = readTraces(tracesFiles);
 
-        return mapTracesToVertices(traces);
+        return mapTracesToVertices(graph, traces);
     }
 
     /**
@@ -1822,7 +1769,7 @@ public class GraphEndpoint implements Endpoint {
      * @param traces The set of traces that should be mapped to vertices.
      * @return Returns the vertices described by the given set of traces.
      */
-    private List<Vertex> mapTracesToVertices(List<String> traces) {
+    public static List<Vertex> mapTracesToVertices(Graph graph, List<String> traces) {
 
         // read traces from trace file(s)
         long start = System.currentTimeMillis();
@@ -1833,8 +1780,8 @@ public class GraphEndpoint implements Endpoint {
         // map trace to vertex
         traces.parallelStream().forEach(trace -> {
 
-            if (trace.contains(":")) {
-                // skip branch distance trace
+            if (trace.contains(":") || graph.lookupVertex(trace) == null) {
+                // skip branch distance trace and traces without a matching vertex pair.
                 return;
             }
 

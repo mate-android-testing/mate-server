@@ -5,6 +5,7 @@ import static org.junit.Assert.assertEquals;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.mate.endpoints.GraphEndpoint;
 import org.mate.util.Log;
 import org.mate.util.Pair;
 
@@ -18,16 +19,17 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
 
 public class InterCDGTest {
     private final File RESOURCES = new File("./src/test/java/resources/");
-    private final File APK_FILE = new File("./src/test/java/resources/com.zola.bmi.apk");
-    private final File TRACES_FILE = new File("./src/test/java/resources/com.zola.bmi/trace1.txt");
+    private final File APK_FILE = new File("./src/test/java/resources/android.bignerdranch.com.apk");
+    private final File TRACES_FILE = new File("./src/test/java/resources/android.bignerdranch.com/trace.txt");
 
     private InterCDG cdg;
     private List<String> traces;
-    Set<CFGVertex> covered;
+    Set<Vertex> covered;
 
     private List<String> readTraceFile(File traceFile) {
         try (Stream<String> stream = Files.lines(traceFile.toPath(), StandardCharsets.UTF_8)) {
@@ -44,34 +46,41 @@ public class InterCDGTest {
         Log.registerLogger(new Log());
         traces = this.readTraceFile(TRACES_FILE);
 
-        cdg = new InterCDG(APK_FILE, true, true, true, RESOURCES.toPath(), "com.zola.bmi");
+        cdg = new InterCDG(APK_FILE, true, true, true, RESOURCES.toPath(), "android.bignerdranch.com");
         cdg.initTraceToVertexCache();
-        covered = this.cdg.getCoveredVertices(new HashSet<>(traces));
+        covered = new HashSet<>(GraphEndpoint.mapTracesToVertices(cdg, traces));
         // cdg.draw(RESOURCES, covered, new HashSet<>());
     }
 
     @Test
-    public void testComputeApproachLevel() {
-        CFGVertex target = cdg.lookupVertex("Lcom/zola/bmi/BMIMain;->calculateClickHandler(Landroid/view/View;)V->if->95");
-        CFGVertex expectedShortest = cdg.lookupVertex("Lcom/zola/bmi/BMIMain;->calculateClickHandler(Landroid/view/View;)V->63");
-        Pair<CFGVertex, Integer> result = cdg.computeApproachLevel(target, covered);
-        assertEquals(result.fst(), expectedShortest);
-        assertEquals(result.snd(), Integer.valueOf(2));
+    public void computeApproachLevelAndBranchDistanceIfStatement() {
+        CFGVertex target = cdg.lookupVertex("Landroid/bignerdranch/com/MainActivity;->ifFunction(I)V->17");
+        Pair<CFGVertex, Integer> approachLevelPair = cdg.computeApproachLevel(target, covered);
+
+        Vertex expectedMissedVertex = cdg.lookupVertex("Landroid/bignerdranch/com/MainActivity;->ifFunction(I)V->if->2");
+        Vertex missedVertex = approachLevelPair.fst();
+        assertEquals(expectedMissedVertex, missedVertex);
+
+        int approachLevel = approachLevelPair.snd();
+        assertEquals(approachLevel, 0);
+
+        double branchDistance = cdg.computeBranchDistance(approachLevelPair.fst(), traces);
+        assertEquals(branchDistance, 0.75, 0);
     }
 
     @Test
-    public void computeBranchDistance() {
-        CFGVertex branchVertex = cdg.lookupVertex("Lcom/zola/bmi/BMIMain;->calculateClickHandler(Landroid/view/View;)V->if->70");
-        assertEquals(cdg.computeBranchDistance(branchVertex, traces), 1, 0);
-    }
+    public void computeApproachLevelAndBranchDistanceSwitchStatement() {
+        CFGVertex target = cdg.lookupVertex("Landroid/bignerdranch/com/MainActivity;->switchFunction(Ljava/lang/String;)V->9");
+        Pair<CFGVertex, Integer> approachLevelPair = cdg.computeApproachLevel(target, covered);
 
-    @Test
-    public void computeApproachLevelAndBranchDistance() {
-        CFGVertex target = cdg.lookupVertex("Lcom/zola/bmi/BMIMain;->calculateClickHandler(Landroid/view/View;)V->if->95");
-        Pair<CFGVertex, Integer> result = cdg.computeApproachLevel(target, covered);
-        int approachLevel = result.snd();
-        double branchDistance = cdg.computeBranchDistance(result.fst(), traces);
-        assertEquals(approachLevel, 2);
-        assertEquals(branchDistance, 1.0, 0);
+        Vertex expectedMissedVertex = cdg.lookupVertex("Landroid/bignerdranch/com/MainActivity;->switchFunction(Ljava/lang/String;)V->6");
+        Vertex missedVertex = approachLevelPair.fst();
+        assertEquals(expectedMissedVertex, missedVertex);
+
+        int approachLevel = approachLevelPair.snd();
+        assertEquals(approachLevel, 1);
+
+        double branchDistance = cdg.computeBranchDistance(approachLevelPair.fst(), traces);
+        assertEquals(branchDistance, 0.5, 0);
     }
 }

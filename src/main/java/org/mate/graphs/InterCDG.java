@@ -9,13 +9,12 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
@@ -43,87 +42,65 @@ public class InterCDG extends CFG {
     /**
      * Computes the approach level by finding the minimum distance between the target vertex and any covered vertex.
      *
-     * @param targetVertex    vertex that should be covered.
-     * @param coveredVertices set of covered vertices.
-     * @return approach level toward the targeted vertex.
+     * @param targetVertex    The vertex that should be covered.
+     * @param coveredVertices The set of covered vertices.
+     * @return The approach level toward the targeted vertex.
      */
-    public Pair<CFGVertex, Integer> computeApproachLevel(CFGVertex targetVertex, Set<CFGVertex> coveredVertices) {
+    public Pair<CFGVertex, Integer> computeApproachLevel(CFGVertex targetVertex, Set<Vertex> coveredVertices) {
         int min = Integer.MAX_VALUE;
-        CFGVertex shortestPathVertex = graph.getEntry();
-        for (CFGVertex visitedVertex : coveredVertices) {
-            GraphPath<CFGVertex, CFGEdge> path = shortestPathAlgorithm.getPath(visitedVertex, targetVertex);
+        CFGVertex missedBranchVertex = graph.getEntry();
+        for (Vertex visitedVertex : coveredVertices) {
+            GraphPath<CFGVertex, CFGEdge> path = shortestPathAlgorithm.getPath((CFGVertex) visitedVertex, targetVertex);
 
             // Check if there exists a path.
             if (path != null) {
                 int length = path.getLength();
                 if (length < min) {
                     min = length;
-                    shortestPathVertex = (CFGVertex) visitedVertex;
+
+                    // Determine the vertex on which we want to compute the branch distance.
+                    // Switch branches have their branching trace inside the respective case statement,
+                    // which corresponds the second vertex of the path list, right after the switch statement itself.
+                    if (path.getStartVertex().isSwitchVertex()) {
+                        missedBranchVertex = path.getVertexList().get(1);
+                    }
+
+                    // If branches compute the branch distance on the branching statement,
+                    // which corresponds to the first vertex of the found path.
+                    else {
+                        missedBranchVertex = path.getStartVertex();
+                    }
                 }
             }
         }
 
         // The approach level has an offset of -1, since the approach level is zero if a direct parent is covered.
-        return new Pair<>(shortestPathVertex, min - 1);
+        return new Pair<>(missedBranchVertex, min - 1);
     }
 
     /**
-     * Computes the branch distance on the supplied branching vertex.
+     * Computes the branch distance for the given branch vertex.
      *
-     * @param branchVertex vertex on which the branch distance is to be determined.
-     * @param traces       collected trace from the executed chromosome.
-     * @return branch distance on the supplied branching vertex.
+     * @param missedBranchVertex The missed branch vertex based on which the branch distance will be determined.
+     * @param traces             The collected traces from the executed chromosome.
+     * @return The branch distance of the missed branching vertex.
      */
-    public double computeBranchDistance(CFGVertex branchVertex, List<String> traces) {
-        // In Android control dependencies might not always be related to branches.
-        if (!branchVertices.contains(branchVertex)) {
-            return 0.0;
-        }
+    public double computeBranchDistance(CFGVertex missedBranchVertex, List<String> traces) {
+        Set<String> branchTraces = traces.stream()
+                .filter(trace -> trace.contains(":"))
+                .collect(Collectors.toSet());
 
-        // Find the right trace record for our branching vertex.
-        int currIndex = -1;
-        double branchValue = -1;
-        Set<String> potentialVertices = this.lookupTrace(traces, branchVertex).stream().map(this::transformToComparePattern).collect(Collectors.toSet());
-
-        for (String trace : traces) {
-            String tracePattern = transformToComparePattern(trace);
-            if (potentialVertices.contains(tracePattern) && trace.contains(":")) {
-
-                // We may have multiple indicators within several branches. Thus, we search for the deepest branch with
-                // the highest branchDistance.
-                String lastArrowElement = trace.split("->")[2];
-                if (branchValue == -1) {
-                    currIndex = Integer.parseInt(lastArrowElement.split(":")[0]);
-                    branchValue = Double.parseDouble(lastArrowElement.split(":")[1]);
-                } else {
-                    int traceIndex = Integer.parseInt(lastArrowElement.split(":")[0]);
-                    double traceBranchValue = Double.parseDouble(lastArrowElement.split(":")[1]);
-
-                    if (traceIndex > currIndex || (traceIndex == currIndex && traceBranchValue > branchValue)) {
-                        currIndex = traceIndex;
-                        branchValue = traceBranchValue;
-                    }
-
-                }
+        // Search for the right branch trace and extract the corresponding branch distance if found.
+        for (String branchTrace : branchTraces) {
+            String[] traceArray = branchTrace.split(":");
+            if (lookupVertex(traceArray[0]).equals(missedBranchVertex)) {
+                return normalise(Double.parseDouble(traceArray[1]));
             }
         }
 
-        return branchValue;
-    }
-
-    /**
-     * Transform the trace of a vertex into a pattern that can universally be used for comparing traces.
-     *
-     * @param trace vertex trace to be transformed into a comparison pattern.
-     * @return pattern suitable for comparing execution traces.
-     */
-    private String transformToComparePattern(String trace) {
-        String[] splitTrace = trace.split(":")[0].split("->");
-        if (splitTrace.length == 3) {
-            return String.join("->", splitTrace);
-        } else {
-            return splitTrace[0] + "->" + splitTrace[1] + "->" + splitTrace[3];
-        }
+        // Not all dependencies correspond to branches. For instance, dependencies based
+        // on clicking on a specific button. For such scenarios, we assign a branch distance value of 1.
+        return 1;
     }
 
 
@@ -154,7 +131,6 @@ public class InterCDG extends CFG {
             }
         }
 
-
         long end = System.currentTimeMillis();
         Log.println("TraceToVertexCache construction took: " + (end - start) + " ms.");
         Log.println("Size of TraceToVertexCache: " + traceToVertexCache.size());
@@ -165,8 +141,8 @@ public class InterCDG extends CFG {
     /**
      * Initialises the trace to vertex mapping for entry vertices.
      *
-     * @param entryVertex        entry vertex to be added to the trace to vertex cache.
-     * @param traceToVertexCache the mapping to which the given entry vertex is to be added.
+     * @param entryVertex        The entry vertex that will be added to the trace to vertex cache mapping.
+     * @param traceToVertexCache The the mapping to which the given entry vertex will be added.
      */
     private void initEntryVertexToVertexCache(CFGVertex entryVertex, Map<String, CFGVertex> traceToVertexCache) {
         // exclude global entry vertex
@@ -197,8 +173,8 @@ public class InterCDG extends CFG {
     /**
      * Initialises the trace to vertex mapping for exit vertices.
      *
-     * @param exitVertex         exit vertex to be added to the trace to vertex cache.
-     * @param traceToVertexCache the mapping to which the given exit vertex is to be added.
+     * @param exitVertex         The exit vertex that will be added to the trace to vertex cache mapping.
+     * @param traceToVertexCache The the mapping to which the given entry vertex will be added.
      */
     private void initExitVertexToVertexCache(CFGVertex exitVertex, Map<String, CFGVertex> traceToVertexCache) {
         if (!exitVertex.equals(graph.getExit())) {
@@ -227,8 +203,8 @@ public class InterCDG extends CFG {
     /**
      * Initialises the trace to vertex mapping for branch vertices.
      *
-     * @param branchVertex       branch vertex to be added to the trace to vertex cache.
-     * @param traceToVertexCache the mapping to which the given branch vertex is to be added.
+     * @param branchVertex       The branch vertex that will be added to the trace to vertex cache mapping.
+     * @param traceToVertexCache The the mapping to which the given entry vertex will be added.
      */
     private void initBranchVertexToVertexCache(CFGVertex branchVertex, Map<String, CFGVertex> traceToVertexCache) {
         // a branch can potentially have multiple predecessors (shared branch)
@@ -303,106 +279,6 @@ public class InterCDG extends CFG {
     }
 
     /**
-     * Fetches the corresponding trace string for the supplied vertex.
-     *
-     * @param vertex {@link CFGVertex} whose trace string is to be determined.
-     * @return trace string corresponding to the supplied {@link CFGVertex}
-     */
-    public Set<String> lookupTrace(List<String> traces, CFGVertex vertex) {
-        Set<String> vertexTraces = Collections.newSetFromMap(new ConcurrentHashMap<>());
-        traces.parallelStream().forEach(trace -> {
-            CFGVertex currVertex = lookupVertex(trace);
-            if (currVertex != null && currVertex.equals(vertex)) {
-                vertexTraces.add(trace);
-            }
-        });
-        return vertexTraces;
-    }
-
-    /**
-     * Determines which nodes have been covered according to a list of chromosome traces.
-     *
-     * @param traces resulting from a chromosome execution.
-     * @return the set of covered vertices.
-     */
-    public Set<CFGVertex> getCoveredVertices(Set<String> traces) {
-
-        // read traces from trace file(s)
-        long start = System.currentTimeMillis();
-
-        // we need to mark vertices we visited
-        Set<CFGVertex> covered = Collections.newSetFromMap(new ConcurrentHashMap<>());
-        Set<CFGVertex> notCovered = new HashSet<>(getVertices());
-
-        // map trace to vertex
-        traces.parallelStream().forEach(trace -> {
-
-            if (trace.contains(":")) {
-                // skip branch distance trace
-                return;
-            }
-
-            // mark virtual entry
-            final String entryMarker = "->entry";
-            final int entryIndex = trace.indexOf(entryMarker);
-            if (entryIndex != -1) {
-                final String entryTrace = trace.substring(0, entryIndex + entryMarker.length());
-                final CFGVertex visitedEntry = lookupVertex(entryTrace);
-
-                if (visitedEntry != null) {
-                    covered.add(visitedEntry);
-                    notCovered.remove(visitedEntry);
-                } else {
-                    Log.printWarning("Couldn't derive vertex for entry trace: " + entryTrace);
-                }
-            }
-
-            // mark virtual exit
-            final String exitMarker = "->exit";
-            final int exitIndex = trace.indexOf(exitMarker);
-            if (exitIndex != -1) {
-                final String exitTrace = trace.substring(0, exitIndex + exitMarker.length());
-                final CFGVertex visitedExit = lookupVertex(exitTrace);
-
-                if (visitedExit != null) {
-                    covered.add(visitedExit);
-                    notCovered.remove(visitedExit);
-                } else {
-                    Log.printWarning("Couldn't derive vertex for exit trace: " + exitTrace);
-                }
-            }
-
-            // mark actual vertex corresponding to trace
-            CFGVertex visitedVertex = lookupVertex(trace);
-
-            if (visitedVertex == null) {
-                Log.printWarning("Couldn't derive vertex for trace: " + trace);
-            } else {
-                covered.add(visitedVertex);
-                notCovered.remove(visitedVertex);
-            }
-        });
-
-        // The mapping from traces to vertices misses virtual nodes. Thus, we now go over virtual entry and exit nodes
-        // and check whether one of their predecessors has been covered.
-        notCovered.parallelStream().forEach(vertex -> {
-            // Virtual Entry and Exit vertices are covered if one of their ancestors has been covered as well.
-            if (vertex.isEntryVertex() || vertex.isExitVertex()) {
-                Set<CFGVertex> successors = graph.getPredecessors(vertex);
-                if (!Collections.disjoint(successors, covered)) {
-                    covered.add(vertex);
-                }
-            }
-        });
-
-        long end = System.currentTimeMillis();
-        Log.println("Mapping traces to vertices took: " + (end - start) + " ms.");
-
-        Log.println("Number of visited vertices: " + covered.size());
-        return covered;
-    }
-
-    /**
      * Extracts the instruction index from a given {@link Statement}.
      *
      * @param statement The statement from which the instruction index is to be extracted.
@@ -417,5 +293,15 @@ public class InterCDG extends CFG {
             basicStatement = (BasicStatement) ((BlockStatement) statement).getStatements().get(1);
         }
         return basicStatement.getInstructionIndex();
+    }
+
+    /**
+     * Normalises the given double into the range [0, 1].
+     *
+     * @param value The double to be normalised.
+     * @return The normalised double value.
+     */
+    private double normalise(double value) {
+        return value / (value + 1);
     }
 }
