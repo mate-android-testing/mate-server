@@ -211,7 +211,7 @@ public class GraphEndpoint implements Endpoint {
         final var indexToVertex = new CFGVertex[relevantVerticesCount];
 
         for (final CFGVertex vertex : relevantVertices) {
-            final int newIndex = relevantVertexToIndex.size() - 1;
+            final int newIndex = relevantVertexToIndex.size();
             // The remaining relevant vertices, i.e. switch and if vertices, get assigned the indices (n+1) onwards.
             final var oldIndex = relevantVertexToIndex.putIfAbsent(vertex, newIndex);
             indexToVertex[oldIndex != null ? oldIndex : newIndex] = vertex;
@@ -229,11 +229,6 @@ public class GraphEndpoint implements Endpoint {
             for (int j = 0; j < relevantVerticesCount; ++j) { // store the distance to every other vertex
 
                 final var relevantVertex = indexToVertex[j];
-
-                if (relevantVertex == null) {
-                    approachLevels[row + j] = (char) -1;
-                    continue;
-                }
 
                 /*
                  * To store the distance, which can be -1 if no path exists between two vertices, in an (unsigned) char,
@@ -1780,7 +1775,7 @@ public class GraphEndpoint implements Endpoint {
         // map trace to vertex
         traces.parallelStream().forEach(trace -> {
 
-            if (trace.contains(":") || graph.lookupVertex(trace) == null) {
+            if (trace.contains(":")) {
                 // skip branch distance trace and traces without a matching vertex pair.
                 return;
             }
