@@ -168,7 +168,7 @@ public class GraphEndpoint implements Endpoint {
         }else if (request.getSubject().startsWith("/graph/get_branch_distance_vector_cdg")) {
             return getBranchDistanceVectorCDG(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_cfg")) {
-            return getBranchDistCFG(request);
+            return getBranchDistanceCFG(request);
         } else if (request.getSubject().startsWith("/graph/get_crash_distance")) {
             return getCrashDistance(request);
         } else if (request.getSubject().startsWith("/graph/draw")) {
@@ -204,7 +204,7 @@ public class GraphEndpoint implements Endpoint {
 
         // The branch vertices get assigned the ids 0 to n.
         for (int i = 0; i < branchVerticesCount; ++i) {
-            relevantVertexToIndex.put((CFGVertex) branchVertices.get(i), i);
+            relevantVertexToIndex.put(branchVertices.get(i), i);
         }
 
         // Defines the reverse mapping (index to vertex) for every relevant vertex.
@@ -234,7 +234,7 @@ public class GraphEndpoint implements Endpoint {
                  * To store the distance, which can be -1 if no path exists between two vertices, in an (unsigned) char,
                  * we need to add +1 to make it non-negative. Later, upon reading from the cache, we subtract -1 again.
                  */
-                final var distance = distances.apply(relevantVertex, (CFGVertex) branchVertex) + 1;
+                final var distance = distances.apply(relevantVertex, branchVertex) + 1;
 
                 if (distance <= Character.MAX_VALUE) {
                     approachLevels[row + j] = (char) distance;
@@ -319,22 +319,23 @@ public class GraphEndpoint implements Endpoint {
      */
     private String computeApproachLevelAndBranchDistanceCDG(final Set<Vertex> visitedVertices,
                                                             final CFGVertex branchVertex, List<String> traces) {
-        InterCDG cdg = (InterCDG) graph;
-        int approachLevel;
-        double branchDistance;
-        // Shortcut: if we covered the target approach level and branch distance is zero.
+
+        final InterCDG cdg = (InterCDG) graph;
+        final int approachLevel;
+        final double branchDistance;
+
+        // If we covered the target branch, the approach level and branch distance is zero.
         if (visitedVertices.contains(branchVertex)) {
             approachLevel = 0;
             branchDistance = 0.0;
         } else {
-
             // Compute Approach Level
             Pair<CFGVertex, Integer> approachLevelPair = cdg.computeApproachLevel(branchVertex, visitedVertices);
             approachLevel = approachLevelPair.snd();
 
             // This is the branching statement from which an incorrect branch toward the target was taken.
             // Hence, we will use this vertex to compute the branch distance.
-            CFGVertex branchingVertex = approachLevelPair.fst();
+            final CFGVertex branchingVertex = approachLevelPair.fst();
             branchDistance = cdg.computeBranchDistance(branchingVertex, traces);
         }
 
@@ -391,7 +392,7 @@ public class GraphEndpoint implements Endpoint {
      * @param request The request message.
      * @return Returns a message containing the branch distance information.
      */
-    private Message getBranchDistCFG(final Message request) {
+    private Message getBranchDistanceCFG(final Message request) {
 
         final String packageName = request.getParameter("packageName");
         final String chromosome = request.getParameter("chromosome");
@@ -1414,7 +1415,8 @@ public class GraphEndpoint implements Endpoint {
                 return ((CFG) graph).getBranchVertices();
             case "all_statements":
                 return ((CFG) graph).getVertices().stream()
-                        .filter(vertex -> vertex.getStatement() instanceof BasicStatement || vertex.getStatement() instanceof BlockStatement)
+                        .filter(vertex -> vertex.getStatement() instanceof BasicStatement
+                                || vertex.getStatement() instanceof BlockStatement)
                         .collect(Collectors.toList());
             case "random_target":
             case "random_branch":
