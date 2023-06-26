@@ -285,9 +285,14 @@ public class InterCDG extends CFG {
      * @param statement The statement from which the instruction index is to be extracted.
      * @return The instruction index of the given statement.
      */
-    private int getInstructionIndexFromBlockStatement(Statement statement) {
+    private int getInstructionIndexFromBlockStatement(final Statement statement) {
         final Statement firstStatement = ((BlockStatement) statement).getFirstStatement();
-        BasicStatement basicStatement = (BasicStatement) firstStatement;
+        BasicStatement basicStatement;
+        if (firstStatement.getType() != Statement.StatementType.RETURN_STATEMENT) {
+            basicStatement = (BasicStatement) firstStatement;
+        } else {
+            basicStatement = (BasicStatement) ((BlockStatement) statement).getStatements().get(1);
+        }
         return basicStatement.getInstructionIndex();
     }
 
