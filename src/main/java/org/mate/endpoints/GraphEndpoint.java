@@ -339,7 +339,9 @@ public class GraphEndpoint implements Endpoint {
             branchDistance = cdg.computeBranchDistance(branchingVertex, traces);
         }
 
-        return String.valueOf(approachLevel + branchDistance);
+        final double combined = approachLevel + branchDistance;
+        final double combinedNormalized = combined / (combined + 1);
+        return String.valueOf(combinedNormalized);
     }
 
     /**
