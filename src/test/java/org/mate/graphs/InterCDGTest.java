@@ -1,9 +1,8 @@
 package org.mate.graphs;
 
-import static org.junit.Assert.assertEquals;
-
-
-import org.junit.Before;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
+import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.mate.endpoints.GraphEndpoint;
 import org.mate.util.Log;
@@ -19,19 +18,25 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
+import static org.junit.Assert.assertEquals;
 
 public class InterCDGTest {
-    private final File RESOURCES = new File("./src/test/java/resources/");
-    private final File APK_FILE = new File("./src/test/java/resources/android.bignerdranch.com.apk");
-    private final File TRACES_FILE = new File("./src/test/java/resources/android.bignerdranch.com/trace.txt");
 
-    private InterCDG cdg;
-    private List<String> traces;
-    Set<Vertex> covered;
+    private static final File RESOURCES = new File("./src/test/java/resources/");
+    private static final File APK_FILE = new File("./src/test/java/resources/android.bignerdranch.com.apk");
+    private static final File TRACES_FILE = new File("./src/test/java/resources/android.bignerdranch.com/trace.txt");
 
-    private List<String> readTraceFile(File traceFile) {
+    private static InterCDG cdg;
+    private static List<String> traces;
+    private static Set<Vertex> covered;
+
+    /**
+     * Reads the traces from the given file.
+     *
+     * @param traceFile The file containing the traces.
+     * @return Contains the list of traces contained in the given file.
+     */
+    private static List<String> readTraceFile(final File traceFile) {
         try (Stream<String> stream = Files.lines(traceFile.toPath(), StandardCharsets.UTF_8)) {
             return stream.collect(Collectors.toList());
         } catch (IOException e) {
@@ -40,20 +45,22 @@ public class InterCDGTest {
         }
     }
 
+    /**
+     * Reads in the traces and initialises the graph once before any test is executed.
+     */
+    @BeforeClass
+    public static void setup() {
 
-    @Before
-    public void setup() {
-        Log.registerLogger(new Log());
-        traces = this.readTraceFile(TRACES_FILE);
-
-        cdg = new InterCDG(APK_FILE, true, true, true, RESOURCES.toPath(), "android.bignerdranch.com");
-        cdg.initTraceToVertexCache();
+        traces = readTraceFile(TRACES_FILE);
+        cdg = new InterCDG(APK_FILE, true, true, true, RESOURCES.toPath(),
+                "android.bignerdranch.com");
         covered = new HashSet<>(GraphEndpoint.mapTracesToVertices(cdg, traces));
         // cdg.draw(RESOURCES, covered, new HashSet<>());
     }
 
     @Test
     public void computeApproachLevelAndBranchDistanceIfStatement() {
+
         CFGVertex target = cdg.lookupVertex("Landroid/bignerdranch/com/MainActivity;->ifFunction(I)V->17");
         Pair<CFGVertex, Integer> approachLevelPair = cdg.computeApproachLevel(target, covered);
 
@@ -70,6 +77,7 @@ public class InterCDGTest {
 
     @Test
     public void computeApproachLevelAndBranchDistanceSwitchStatement() {
+
         CFGVertex target = cdg.lookupVertex("Landroid/bignerdranch/com/MainActivity;->switchFunction(Ljava/lang/String;)V->9");
         Pair<CFGVertex, Integer> approachLevelPair = cdg.computeApproachLevel(target, covered);
 
