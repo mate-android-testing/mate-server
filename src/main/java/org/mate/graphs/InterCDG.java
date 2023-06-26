@@ -211,7 +211,7 @@ public class InterCDG extends CFG {
 
         // a branch can potentially have multiple predecessors (shared branch)
         final Set<CFGVertex> ifOrSwitchVertices = graph.getIncomingEdges(branchVertex).stream()
-                .map(CFGEdge::getSource).filter(CFGVertex::isIfVertex).collect(Collectors.toSet());
+                .map(CFGEdge::getSource).filter(CFGVertex::isBranchVertex).collect(Collectors.toSet());
 
         // if or switch vertex
         for (CFGVertex ifOrSwitchVertex : ifOrSwitchVertices) {
@@ -288,12 +288,7 @@ public class InterCDG extends CFG {
      */
     private int getInstructionIndexFromBlockStatement(Statement statement) {
         final Statement firstStatement = ((BlockStatement) statement).getFirstStatement();
-        BasicStatement basicStatement;
-        if (firstStatement.getType() != Statement.StatementType.RETURN_STATEMENT) {
-            basicStatement = (BasicStatement) firstStatement;
-        } else {
-            basicStatement = (BasicStatement) ((BlockStatement) statement).getStatements().get(1);
-        }
+        BasicStatement basicStatement = (BasicStatement) firstStatement;
         return basicStatement.getInstructionIndex();
     }
 
