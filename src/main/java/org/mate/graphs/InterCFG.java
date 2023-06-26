@@ -184,18 +184,9 @@ public class InterCFG extends CFG {
 
             // TODO: handle basic statements
             if (statement instanceof BlockStatement) {
-                Statement firstStatement = ((BlockStatement) statement).getFirstStatement();
-
                 // each statement within a block statement is a basic statement
-                if (firstStatement.getType() != Statement.StatementType.RETURN_STATEMENT) {
-                    BasicStatement basicStatement = (BasicStatement) firstStatement;
-                    traceToVertexCache.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
-                }
-                // Special handling for Return statements since they have no instruction index.
-                else if (firstStatement.getType() == Statement.StatementType.RETURN_STATEMENT) {
-                    ReturnStatement returnStatement = (ReturnStatement) firstStatement;
-                    traceToVertexCache.put(branchVertex.getMethod() + "->" + returnStatement.getTargetMethod(), branchVertex);
-                }
+                BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
+                traceToVertexCache.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
             }
         }
 
