@@ -1,19 +1,5 @@
 package org.mate.graphs;
 
-import org.jgrapht.GraphPath;
-import org.mate.util.Log;
-import org.mate.util.Pair;
-
-import java.io.File;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
@@ -22,34 +8,50 @@ import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.GraphUtils;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.InstructionUtils;
+import org.jgrapht.GraphPath;
+import org.mate.util.Log;
+import org.mate.util.Pair;
 
+import java.io.File;
+import java.nio.file.Path;
+import java.util.*;
+import java.util.stream.Collectors;
+
+/**
+ * Represents an inter-procedural CDG.
+ */
 public class InterCDG extends CFG {
 
     /**
-     * Constructs an inter-procedural CFG with the given properties.
+     * Constructs an inter-procedural CDG with the given properties.
      *
-     * @param apkPath               The path to the APK file.
-     * @param useBasicBlocks        Whether basic blocks should be used or not.
-     * @param excludeARTClasses     Whether to exclude ART classes.
+     * @param apkPath The path to the APK file.
+     * @param useBasicBlocks Whether basic blocks should be used or not.
+     * @param excludeARTClasses Whether to exclude ART classes.
      * @param resolveOnlyAUTClasses Whether to resolve only classes belonging to the AUT package.
-     * @param appsDir               The apps directory.
-     * @param packageName           The package name of the AUT.
+     * @param appsDir The apps directory.
+     * @param packageName The package name of the AUT.
      */
-    public InterCDG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses, boolean resolveOnlyAUTClasses, Path appsDir, String packageName) {
-        super(GraphUtils.constructInterCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses), appsDir, packageName);
+    public InterCDG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses, boolean resolveOnlyAUTClasses,
+                    Path appsDir, String packageName) {
+        super(GraphUtils.constructInterCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses),
+                appsDir, packageName);
     }
 
     /**
      * Computes the approach level by finding the minimum distance between the target vertex and any covered vertex.
      *
-     * @param targetVertex    The vertex that should be covered.
+     * @param targetVertex The vertex that should be covered.
      * @param coveredVertices The set of covered vertices.
      * @return The approach level toward the targeted vertex.
      */
-    public Pair<CFGVertex, Integer> computeApproachLevel(CFGVertex targetVertex, Set<Vertex> coveredVertices) {
+    public Pair<CFGVertex, Integer> computeApproachLevel(final CFGVertex targetVertex, final Set<Vertex> coveredVertices) {
+
         int min = Integer.MAX_VALUE;
         CFGVertex missedBranchVertex = graph.getEntry();
+
         for (Vertex visitedVertex : coveredVertices) {
+
             GraphPath<CFGVertex, CFGEdge> path = shortestPathAlgorithm.getPath((CFGVertex) visitedVertex, targetVertex);
 
             // Check if there exists a path.
@@ -82,7 +84,7 @@ public class InterCDG extends CFG {
      * Computes the branch distance for the given branch vertex.
      *
      * @param missedBranchVertex The missed branch vertex based on which the branch distance will be determined.
-     * @param traces             The collected traces from the executed chromosome.
+     * @param traces The collected traces from the executed chromosome.
      * @return The branch distance of the missed branching vertex.
      */
     public double computeBranchDistance(CFGVertex missedBranchVertex, List<String> traces) {
@@ -110,23 +112,18 @@ public class InterCDG extends CFG {
      * @return Returns a mapping between a trace and its vertex in the graph.
      */
     public Map<String, CFGVertex> initTraceToVertexCache() {
+
         long start = System.currentTimeMillis();
 
-        Map<String, CFGVertex> traceToVertexCache = new HashMap<>();
+        final Map<String, CFGVertex> traceToVertexCache = new HashMap<>();
 
         for (CFGVertex vertex : getVertices()) {
-            // Handle entry vertices
-            if (vertex.isEntryVertex()) {
+
+            if (vertex.isEntryVertex()) { // Handle entry vertices
                 initEntryVertexToVertexCache(vertex, traceToVertexCache);
-            }
-
-            // Handle exit vertices
-            else if (vertex.isExitVertex()) {
+            } else if (vertex.isExitVertex()) { // Handle exit vertices
                 initExitVertexToVertexCache(vertex, traceToVertexCache);
-            }
-
-            // Handle branch vertices
-            else if (branchVertices.contains(vertex)) {
+            } else if (branchVertices.contains(vertex)) { // Handle branch vertices
                 initBranchVertexToVertexCache(vertex, traceToVertexCache);
             }
         }
@@ -141,10 +138,11 @@ public class InterCDG extends CFG {
     /**
      * Initialises the trace to vertex mapping for entry vertices.
      *
-     * @param entryVertex        The entry vertex that will be added to the trace to vertex cache mapping.
-     * @param traceToVertexCache The the mapping to which the given entry vertex will be added.
+     * @param entryVertex The entry vertex that will be added to the trace to vertex cache mapping.
+     * @param traceToVertexCache The trace to vertex mapping.
      */
     private void initEntryVertexToVertexCache(CFGVertex entryVertex, Map<String, CFGVertex> traceToVertexCache) {
+
         // exclude global entry vertex
         if (!entryVertex.equals(graph.getEntry())) {
 
@@ -152,13 +150,14 @@ public class InterCDG extends CFG {
             traceToVertexCache.put(entryVertex.getMethod() + "->entry", entryVertex);
 
             // there are potentially several entry vertices when dealing with try-catch blocks at the beginning
-            Set<CFGVertex> entries = graph.getOutgoingEdges(entryVertex).stream()
+            final Set<CFGVertex> entries = graph.getOutgoingEdges(entryVertex).stream()
                     .map(CFGEdge::getTarget).collect(Collectors.toSet());
 
             for (CFGVertex entry : entries) {
-                // exclude dummy CFGs solely consisting of entry and exit vertex
+
+                // Exclude dummy CFGs solely consisting of entry and exit vertex.
                 if (!entry.isExitVertex()) {
-                    Statement statement = entry.getStatement();
+                    final Statement statement = entry.getStatement();
 
                     // TODO: handle basic statements
                     if (statement instanceof BlockStatement) {
@@ -173,22 +172,24 @@ public class InterCDG extends CFG {
     /**
      * Initialises the trace to vertex mapping for exit vertices.
      *
-     * @param exitVertex         The exit vertex that will be added to the trace to vertex cache mapping.
-     * @param traceToVertexCache The the mapping to which the given entry vertex will be added.
+     * @param exitVertex The exit vertex that will be added to the trace to vertex cache mapping.
+     * @param traceToVertexCache The trace to vertex mapping.
      */
-    private void initExitVertexToVertexCache(CFGVertex exitVertex, Map<String, CFGVertex> traceToVertexCache) {
+    private void initExitVertexToVertexCache(final CFGVertex exitVertex, final Map<String, CFGVertex> traceToVertexCache) {
+
         if (!exitVertex.equals(graph.getExit())) {
 
             // virtual exit vertex
             traceToVertexCache.put(exitVertex.getMethod() + "->exit", exitVertex);
 
-            Set<CFGVertex> exits = graph.getIncomingEdges(exitVertex).stream()
+            final Set<CFGVertex> exits = graph.getIncomingEdges(exitVertex).stream()
                     .map(CFGEdge::getSource).collect(Collectors.toSet());
 
             for (CFGVertex exit : exits) {
-                // exclude dummy CFGs solely consisting of entry and exit vertex
+
+                // Exclude dummy CFGs solely consisting of entry and exit vertex.
                 if (!exit.isEntryVertex()) {
-                    Statement statement = exit.getStatement();
+                    final Statement statement = exit.getStatement();
 
                     // TODO: handle basic statements
                     if (statement instanceof BlockStatement) {
@@ -203,12 +204,13 @@ public class InterCDG extends CFG {
     /**
      * Initialises the trace to vertex mapping for branch vertices.
      *
-     * @param branchVertex       The branch vertex that will be added to the trace to vertex cache mapping.
-     * @param traceToVertexCache The the mapping to which the given entry vertex will be added.
+     * @param branchVertex The branch vertex that will be added to the trace to vertex cache mapping.
+     * @param traceToVertexCache The trace to vertex mapping.
      */
-    private void initBranchVertexToVertexCache(CFGVertex branchVertex, Map<String, CFGVertex> traceToVertexCache) {
+    private void initBranchVertexToVertexCache(final CFGVertex branchVertex, final Map<String, CFGVertex> traceToVertexCache) {
+
         // a branch can potentially have multiple predecessors (shared branch)
-        Set<CFGVertex> ifOrSwitchVertices = graph.getIncomingEdges(branchVertex).stream()
+        final Set<CFGVertex> ifOrSwitchVertices = graph.getIncomingEdges(branchVertex).stream()
                 .map(CFGEdge::getSource).filter(CFGVertex::isIfVertex).collect(Collectors.toSet());
 
         // if or switch vertex
@@ -285,7 +287,7 @@ public class InterCDG extends CFG {
      * @return The instruction index of the given statement.
      */
     private int getInstructionIndexFromBlockStatement(Statement statement) {
-        Statement firstStatement = ((BlockStatement) statement).getFirstStatement();
+        final Statement firstStatement = ((BlockStatement) statement).getFirstStatement();
         BasicStatement basicStatement;
         if (firstStatement.getType() != Statement.StatementType.RETURN_STATEMENT) {
             basicStatement = (BasicStatement) firstStatement;
