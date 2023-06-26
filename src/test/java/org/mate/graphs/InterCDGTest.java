@@ -50,7 +50,7 @@ public class InterCDGTest {
      */
     @BeforeClass
     public static void setup() {
-
+        Log.registerLogger(new Log()); // Required for the logger invocations.
         traces = readTraceFile(TRACES_FILE);
         cdg = new InterCDG(APK_FILE, true, true, true, RESOURCES.toPath(),
                 "android.bignerdranch.com");
@@ -81,7 +81,8 @@ public class InterCDGTest {
         CFGVertex target = cdg.lookupVertex("Landroid/bignerdranch/com/MainActivity;->switchFunction(Ljava/lang/String;)V->9");
         Pair<CFGVertex, Integer> approachLevelPair = cdg.computeApproachLevel(target, covered);
 
-        Vertex expectedMissedVertex = cdg.lookupVertex("Landroid/bignerdranch/com/MainActivity;->switchFunction(Ljava/lang/String;)V->6");
+        Vertex expectedMissedVertex
+                = cdg.lookupVertex("Landroid/bignerdranch/com/MainActivity;->switchFunction(Ljava/lang/String;)V->6");
         Vertex missedVertex = approachLevelPair.fst();
         assertEquals(expectedMissedVertex, missedVertex);
 

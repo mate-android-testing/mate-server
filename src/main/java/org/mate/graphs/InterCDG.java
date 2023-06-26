@@ -105,7 +105,6 @@ public class InterCDG extends CFG {
         return 1;
     }
 
-
     /**
      * Pre-computes a mapping between certain traces and its vertices in the graph.
      *
