@@ -333,10 +333,10 @@ public class GraphEndpoint implements Endpoint {
             Pair<CFGVertex, Integer> approachLevelPair = cdg.computeApproachLevel(branchVertex, visitedVertices);
             approachLevel = approachLevelPair.snd();
 
-            // This is the branching statement from which an incorrect branch toward the target was taken.
+            // This is the if or switch statement from which an incorrect branch toward the target was taken.
             // Hence, we will use this vertex to compute the branch distance.
-            final CFGVertex branchingVertex = approachLevelPair.fst();
-            branchDistance = cdg.computeBranchDistance(branchingVertex, traces);
+            final CFGVertex ifOrSwitchVertex = approachLevelPair.fst();
+            branchDistance = cdg.computeBranchDistance(ifOrSwitchVertex, traces);
         }
 
         final double combined = approachLevel + branchDistance;

@@ -39,38 +39,38 @@ public class InterCDG extends CFG {
     }
 
     /**
-     * Computes the approach level by finding the minimum distance between the target vertex and any covered vertex.
+     * Computes the approach level by finding the minimum distance between the branch vertex (target) and the closest
+     * covered if or switch vertex.
      *
-     * @param targetVertex The vertex that should be covered.
+     * @param branchVertex The branch vertex (target).
      * @param coveredVertices The set of covered vertices.
-     * @return The approach level toward the targeted vertex.
+     * @return Returns the approach level between the targeted vertex and the closest if or switch vertex.
      */
-    public Pair<CFGVertex, Integer> computeApproachLevel(final CFGVertex targetVertex, final Set<Vertex> coveredVertices) {
+    public Pair<CFGVertex, Integer> computeApproachLevel(final CFGVertex branchVertex, final Set<Vertex> coveredVertices) {
 
         int min = Integer.MAX_VALUE;
         CFGVertex missedBranchVertex = graph.getEntry();
 
+        // Find the closest covered if or switch vertex.
         for (Vertex visitedVertex : coveredVertices) {
 
-            GraphPath<CFGVertex, CFGEdge> path = shortestPathAlgorithm.getPath((CFGVertex) visitedVertex, targetVertex);
+            GraphPath<CFGVertex, CFGEdge> path = shortestPathAlgorithm.getPath((CFGVertex) visitedVertex, branchVertex);
 
             // Check if there exists a path.
             if (path != null) {
                 int length = path.getLength();
                 if (length < min) {
-                    min = length;
 
-                    // Determine the vertex on which we want to compute the branch distance.
-                    // Switch branches have their branching trace inside the respective case statement,
-                    // which corresponds the second vertex of the path list, right after the switch statement itself.
                     if (path.getStartVertex().isSwitchVertex()) {
+                        // The branch distance (trace) of switch vertices is actually attached to the case statement,
+                        // which corresponds to the second vertex on the path list, right after the switch vertex itself.
                         missedBranchVertex = path.getVertexList().get(1);
-                    }
-
-                    // If branches compute the branch distance on the branching statement,
-                    // which corresponds to the first vertex of the found path.
-                    else {
+                        min = length;
+                    } else if (path.getStartVertex().isIfVertex()) {
+                        // The branch distance (trace) of if vertices is directly attached to the if statement, which
+                        // corresponds to the first vertex on the path list.
                         missedBranchVertex = path.getStartVertex();
+                        min = length;
                     }
                 }
             }
@@ -81,28 +81,35 @@ public class InterCDG extends CFG {
     }
 
     /**
-     * Computes the branch distance for the given branch vertex.
+     * Computes the branch distance for the given if or switch vertex.
      *
-     * @param missedBranchVertex The missed branch vertex based on which the branch distance will be determined.
-     * @param traces The collected traces from the executed chromosome.
-     * @return The branch distance of the missed branching vertex.
+     * @param ifOrSwitchVertex The nearest covered if or switch vertex.
+     * @param traces The collected traces.
+     * @return Returns the branch distance of the missed branching vertex.
      */
-    public double computeBranchDistance(CFGVertex missedBranchVertex, List<String> traces) {
-        Set<String> branchTraces = traces.stream()
+    public double computeBranchDistance(final CFGVertex ifOrSwitchVertex, final List<String> traces) {
+
+        final Set<String> branchDistanceTraces = traces.stream()
                 .filter(trace -> trace.contains(":"))
                 .collect(Collectors.toSet());
 
+        final Set<Double> branchDistances = new HashSet<>();
+
         // Search for the right branch trace and extract the corresponding branch distance if found.
-        for (String branchTrace : branchTraces) {
-            String[] traceArray = branchTrace.split(":");
-            if (lookupVertex(traceArray[0]).equals(missedBranchVertex)) {
-                return normalise(Double.parseDouble(traceArray[1]));
+        for (String branchDistanceTrace : branchDistanceTraces) {
+            // A token looks as follows: className->methodName->instructionIndex:branchDistance
+            final String[] tokens = branchDistanceTrace.split(":");
+            if (lookupVertex(tokens[0]).equals(ifOrSwitchVertex)) {
+                double branchDistance = Double.parseDouble(tokens[1]);
+                if (branchDistance > 0) { // A branch distance of 0 represents the covered branch.
+                    branchDistances.add(branchDistance);
+                }
             }
         }
 
-        // Not all dependencies correspond to branches. For instance, dependencies based
-        // on clicking on a specific button. For such scenarios, we assign a branch distance value of 1.
-        return 1;
+        // An if statement might have been visited multiple times and the branch distance could have changed, so we need
+        // to pick the minimal branch distance > 0.
+        return normalise(Collections.min(branchDistances));
     }
 
     /**
