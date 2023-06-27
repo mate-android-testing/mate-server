@@ -110,7 +110,7 @@ public class InterCDG extends CFG {
      *
      * @return Returns a mapping between a trace and its vertex in the graph.
      */
-    public Map<String, CFGVertex> initTraceToVertexCache() {
+    protected Map<String, CFGVertex> initTraceToVertexCache() {
 
         long start = System.currentTimeMillis();
 
@@ -210,7 +210,9 @@ public class InterCDG extends CFG {
 
         // a branch can potentially have multiple predecessors (shared branch)
         final Set<CFGVertex> ifOrSwitchVertices = graph.getIncomingEdges(branchVertex).stream()
-                .map(CFGEdge::getSource).filter(CFGVertex::isBranchVertex).collect(Collectors.toSet());
+                .map(CFGEdge::getSource)
+                .filter(vertex -> vertex.isIfVertex() || vertex.isSwitchVertex())
+                .collect(Collectors.toSet());
 
         // if or switch vertex
         for (CFGVertex ifOrSwitchVertex : ifOrSwitchVertices) {
