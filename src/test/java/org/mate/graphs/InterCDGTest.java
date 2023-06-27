@@ -28,7 +28,7 @@ public class InterCDGTest {
 
     private static InterCDG cdg;
     private static List<String> traces;
-    private static Set<Vertex> covered;
+    private static Set<CFGVertex> covered;
 
     /**
      * Reads the traces from the given file.
@@ -54,8 +54,10 @@ public class InterCDGTest {
         traces = readTraceFile(TRACES_FILE);
         cdg = new InterCDG(APK_FILE, true, true, true, RESOURCES.toPath(),
                 "android.bignerdranch.com");
-        covered = new HashSet<>(GraphEndpoint.mapTracesToVertices(cdg, traces));
-        // cdg.draw(RESOURCES, covered, new HashSet<>());
+        covered = GraphEndpoint.mapTracesToVertices(cdg, traces).stream()
+                .map(vertex -> (CFGVertex) vertex)
+                .collect(Collectors.toSet());
+        cdg.draw(RESOURCES, covered, new HashSet<>());
     }
 
     @Test

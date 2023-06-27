@@ -1,6 +1,5 @@
 package org.mate.graphs;
 
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
@@ -46,15 +45,15 @@ public class InterCDG extends CFG {
      * @param coveredVertices The set of covered vertices.
      * @return Returns the approach level between the targeted vertex and the closest if or switch vertex.
      */
-    public Pair<CFGVertex, Integer> computeApproachLevel(final CFGVertex branchVertex, final Set<Vertex> coveredVertices) {
+    public Pair<CFGVertex, Integer> computeApproachLevel(final CFGVertex branchVertex, final Set<CFGVertex> coveredVertices) {
 
         int min = Integer.MAX_VALUE;
         CFGVertex missedBranchVertex = graph.getEntry();
 
         // Find the closest covered if or switch vertex.
-        for (Vertex visitedVertex : coveredVertices) {
+        for (CFGVertex visitedVertex : coveredVertices) {
 
-            GraphPath<CFGVertex, CFGEdge> path = shortestPathAlgorithm.getPath((CFGVertex) visitedVertex, branchVertex);
+            GraphPath<CFGVertex, CFGEdge> path = shortestPathAlgorithm.getPath(visitedVertex, branchVertex);
 
             // Check if there exists a path.
             if (path != null) {

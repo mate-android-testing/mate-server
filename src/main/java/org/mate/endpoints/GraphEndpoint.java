@@ -256,7 +256,7 @@ public class GraphEndpoint implements Endpoint {
      * @param branchVertex The given branch vertex (target).
      * @return Returns the combined approach level + branch distance for the given branch vertex.
      */
-    private String computeApproachLevelAndBranchDistanceCFG(final List<Vertex> visitedVertices, final CFGVertex branchVertex) {
+    private String computeApproachLevelAndBranchDistanceCFG(final List<CFGVertex> visitedVertices, final CFGVertex branchVertex) {
 
         /*
          * TODO: There can be multiple vertices with the same minimal distance (approach level) to the given target branch.
@@ -270,11 +270,11 @@ public class GraphEndpoint implements Endpoint {
         int minDistance = Integer.MAX_VALUE;
         CFGVertex minDistanceVertex = null;
 
-        for (final Vertex visitedVertex : visitedVertices) {
+        for (final CFGVertex visitedVertex : visitedVertices) {
 
-            final boolean isIfVertex = ((CFGVertex) visitedVertex).isIfVertex();
-            final boolean isSwitchVertex = ((CFGVertex) visitedVertex).isSwitchVertex();
-            final boolean isBranchVertex = ((CFGVertex) visitedVertex).isBranchVertex();
+            final boolean isIfVertex = visitedVertex.isIfVertex();
+            final boolean isSwitchVertex = visitedVertex.isSwitchVertex();
+            final boolean isBranchVertex = visitedVertex.isBranchVertex();
 
             /*
              * We are only interested in a direct hit (covered branch) or the distance to an if or switch statement.
@@ -296,7 +296,7 @@ public class GraphEndpoint implements Endpoint {
                         // closest if or switch vertex
                         || (approachLevel != -1 && approachLevel < minDistance && (isIfVertex || isSwitchVertex))) {
                     minDistance = approachLevel;
-                    minDistanceVertex = (CFGVertex) visitedVertex;
+                    minDistanceVertex = visitedVertex;
                 }
             }
         }
@@ -317,7 +317,7 @@ public class GraphEndpoint implements Endpoint {
      * @param branchVertex The given branch vertex (target).
      * @return Returns the combined approach level + branch distance for the given branch vertex.
      */
-    private String computeApproachLevelAndBranchDistanceCDG(final Set<Vertex> visitedVertices,
+    private String computeApproachLevelAndBranchDistanceCDG(final Set<CFGVertex> visitedVertices,
                                                             final CFGVertex branchVertex, List<String> traces) {
 
         final InterCDG cdg = (InterCDG) graph;
@@ -405,7 +405,9 @@ public class GraphEndpoint implements Endpoint {
         }
 
         final var traces = getTraces(packageName, chromosome);
-        final var visitedVertices = mapTracesToVertices(graph, traces);
+        final var visitedVertices = mapTracesToVertices(graph, traces).stream()
+                .map(vertex -> (CFGVertex) vertex)
+                .collect(Collectors.toList());
         precomputeBranchDistances(traces);
         final var branchDistance = computeApproachLevelAndBranchDistanceCFG(visitedVertices,
                 // there is only a single target
@@ -434,7 +436,9 @@ public class GraphEndpoint implements Endpoint {
 
         long start = System.currentTimeMillis();
         final var traces = getTraces(packageName, chromosome);
-        final var visitedVertices = mapTracesToVertices(graph, traces);
+        final var visitedVertices = mapTracesToVertices(graph, traces).stream()
+                .map(vertex -> (CFGVertex) vertex)
+                .collect(Collectors.toList());
         final var branchVertices =  ((CFG) graph).getBranchVertices();
         long start1 = System.currentTimeMillis();
         precomputeBranchDistances(traces);
@@ -468,7 +472,9 @@ public class GraphEndpoint implements Endpoint {
 
         long start = System.currentTimeMillis();
         final var traces = getTraces(packageName, chromosome);
-        final var visitedVertices = new HashSet<>(mapTracesToVertices(graph, traces));
+        final var visitedVertices = mapTracesToVertices(graph, traces).stream()
+                .map(vertex -> (CFGVertex) vertex)
+                .collect(Collectors.toSet());
         final var branchVertices =  ((CFG) graph).getBranchVertices();
 
         final List<String> branchDistanceVector = computeBranchDistanceVectorCDG(visitedVertices, branchVertices, traces);
@@ -488,7 +494,7 @@ public class GraphEndpoint implements Endpoint {
      * @param branchVertices The branch vertices (targets).
      * @return Returns the branch distance vector.
      */
-    private List<String> computeBranchDistanceVectorCFG(final List<Vertex> visitedVertices, final List<CFGVertex> branchVertices) {
+    private List<String> computeBranchDistanceVectorCFG(final List<CFGVertex> visitedVertices, final List<CFGVertex> branchVertices) {
 
         final var vector = new String[branchVertices.size()];
         IntStream.range(0, branchVertices.size())
@@ -511,7 +517,7 @@ public class GraphEndpoint implements Endpoint {
      * @param branchVertices  The branch vertices (targets).
      * @return Returns the branch distance vector based on the CDG.
      */
-    private List<String> computeBranchDistanceVectorCDG(final Set<Vertex> visitedVertices,
+    private List<String> computeBranchDistanceVectorCDG(final Set<CFGVertex> visitedVertices,
                                                         final List<CFGVertex> branchVertices,
                                                         final List<String> traces) {
 
