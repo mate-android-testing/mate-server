@@ -43,12 +43,14 @@ public class InterCDG extends CFG {
      *
      * @param branchVertex The branch vertex (target).
      * @param coveredVertices The set of covered vertices.
-     * @return Returns the approach level between the targeted vertex and the closest if or switch vertex.
+     * @return Returns the approach level between the target vertex and the closest if or switch vertex as well as the
+     *         closest if or switch vertex itself. If no if or switch vertex has been covered toward the target vertex
+     *         {@code null} is returned.
      */
     public Pair<CFGVertex, Integer> computeApproachLevel(final CFGVertex branchVertex, final Set<CFGVertex> coveredVertices) {
 
         int min = Integer.MAX_VALUE;
-        CFGVertex missedBranchVertex = graph.getEntry();
+        CFGVertex missedBranchVertex = null;
 
         // Find the closest covered if or switch vertex.
         for (CFGVertex visitedVertex : coveredVertices) {
