@@ -335,7 +335,8 @@ public class GraphEndpoint implements Endpoint {
             if (approachLevelPair.fst() == null) {
                 // We haven't covered any control-dependent if or switch statement, thus there is no guidance from the
                 // branch distance.
-                return String.valueOf(1.0);
+                approachLevel = approachLevelPair.snd();
+                branchDistance = 1.0;
             } else {
                 // This is the if or switch statement from which an incorrect branch toward the target was taken.
                 // Hence, we will use this vertex to compute the branch distance.

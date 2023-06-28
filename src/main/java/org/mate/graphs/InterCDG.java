@@ -39,20 +39,21 @@ public class InterCDG extends CFG {
 
     /**
      * Computes the approach level by finding the minimum distance between the branch vertex (target) and the closest
-     * covered if or switch vertex.
+     * covered vertex. Also keeps track of the closest covered if or switch vertex, which is relevant for the branch
+     * distance computation.
      *
      * @param branchVertex The branch vertex (target).
      * @param coveredVertices The set of covered vertices.
-     * @return Returns the approach level between the target vertex and the closest if or switch vertex as well as the
-     *         closest if or switch vertex itself. If no if or switch vertex has been covered toward the target vertex
+     * @return Returns the approach level between the target vertex and the closest covered vertex as well as the
+     *         closest if or switch vertex. If no if or switch vertex has been covered toward the target vertex
      *         {@code null} is returned.
      */
     public Pair<CFGVertex, Integer> computeApproachLevel(final CFGVertex branchVertex, final Set<CFGVertex> coveredVertices) {
 
-        int min = Integer.MAX_VALUE;
-        CFGVertex missedBranchVertex = null;
+        int minPathLength = Integer.MAX_VALUE;
+        CFGVertex closestIfOrSwitchVertex = null;
 
-        // Find the closest covered if or switch vertex.
+        // Find the closest covered if or switch vertex if any exists.
         for (CFGVertex visitedVertex : coveredVertices) {
 
             GraphPath<CFGVertex, CFGEdge> path = shortestPathAlgorithm.getPath(visitedVertex, branchVertex);
@@ -60,25 +61,29 @@ public class InterCDG extends CFG {
             // Check if there exists a path.
             if (path != null) {
                 int length = path.getLength();
-                if (length < min) {
+                if (length < minPathLength) {
 
                     if (path.getStartVertex().isSwitchVertex()) {
                         // The branch distance (trace) of switch vertices is actually attached to the case statement,
                         // which corresponds to the second vertex on the path list, right after the switch vertex itself.
-                        missedBranchVertex = path.getVertexList().get(1);
-                        min = length;
+                        closestIfOrSwitchVertex = path.getVertexList().get(1);
+                        minPathLength = length;
                     } else if (path.getStartVertex().isIfVertex()) {
                         // The branch distance (trace) of if vertices is directly attached to the if statement, which
                         // corresponds to the first vertex on the path list.
-                        missedBranchVertex = path.getStartVertex();
-                        min = length;
+                        closestIfOrSwitchVertex = path.getStartVertex();
+                        minPathLength = length;
+                    } else {
+                        // We just came closer to the target vertex but since it doesn't represent an if or switch vertex
+                        // it is irrelevant for the branch distance computation.
+                        minPathLength = length;
                     }
                 }
             }
         }
 
         // The approach level has an offset of -1, since the approach level is zero if a direct parent is covered.
-        return new Pair<>(missedBranchVertex, min - 1);
+        return new Pair<>(closestIfOrSwitchVertex, minPathLength - 1);
     }
 
     /**
