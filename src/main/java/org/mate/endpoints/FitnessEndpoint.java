@@ -103,7 +103,6 @@ public class FitnessEndpoint implements Endpoint {
         // derive the coverage vector for the chromosome
         CoverageVector chromosomeCoverageVector = new CoverageVector(targets,
                 readTraces(getTraceFiles(tracesDir.toFile(), chromosome)));
-        Log.println("Coverage vector of chromosome " + chromosome + ": " + chromosomeCoverageVector);
 
         population.addAll(archive);
 
@@ -113,7 +112,6 @@ public class FitnessEndpoint implements Endpoint {
             List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), member);
             Set<String> traces = readTraces(tracesFiles);
             CoverageVector coverageVector = new CoverageVector(targets, traces);
-            Log.println("Coverage vector of population chromosome " + member + ": " + coverageVector);
             return coverageVector;
         }).collect(Collectors.toList());
 
