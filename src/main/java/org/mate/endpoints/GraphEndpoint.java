@@ -591,7 +591,15 @@ public class GraphEndpoint implements Endpoint {
 
             if (colon != -1) {
 
-                final short distance = (short) Integer.parseUnsignedInt(trace, colon + 1, trace.length(), 10);
+                short distance;
+                try {
+                    distance = (short) Integer.parseUnsignedInt(trace, colon + 1, trace.length(), 10);
+                    if (distance < 0) { // overflow may occur from int to short conversion
+                        distance = Short.MAX_VALUE;
+                    }
+                } catch (NumberFormatException e) {
+                    distance = Short.MAX_VALUE;
+                }
 
                 /*
                  * We don't need to store a branch distance of 0 for neither if or switch statements, because we would
