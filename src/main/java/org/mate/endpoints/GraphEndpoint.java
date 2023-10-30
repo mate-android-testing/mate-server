@@ -165,7 +165,7 @@ public class GraphEndpoint implements Endpoint {
             return initGraph(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector_cfg")) {
             return getBranchDistanceVectorCFG(request);
-        }else if (request.getSubject().startsWith("/graph/get_branch_distance_vector_cdg")) {
+        } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector_cdg")) {
             return getBranchDistanceVectorCDG(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_cfg")) {
             return getBranchDistanceCFG(request);
