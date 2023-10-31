@@ -6,6 +6,7 @@ import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.ReturnStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.Tuple;
 import org.apache.commons.io.FileUtils;
@@ -167,6 +168,8 @@ public class GraphEndpoint implements Endpoint {
             return getBranchDistanceVectorCFG(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector_cdg")) {
             return getBranchDistanceVectorCDG(request);
+        } else if (request.getSubject().startsWith("/graph/get_branch_distance_cdg")) {
+            return getBranchDistanceCDG(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_cfg")) {
             return getBranchDistanceCFG(request);
         } else if (request.getSubject().startsWith("/graph/get_crash_distance")) {
@@ -320,7 +323,7 @@ public class GraphEndpoint implements Endpoint {
     private String computeApproachLevelAndBranchDistanceCDG(final Set<CFGVertex> visitedVertices,
                                                             final CFGVertex branchVertex, List<String> traces) {
 
-        final InterCDG cdg = (InterCDG) graph;
+        final CDG cdg = (CDG) graph;
         final int approachLevel;
         final double branchDistance;
 
@@ -393,6 +396,34 @@ public class GraphEndpoint implements Endpoint {
         }
 
         return instrumentationPoints;
+    }
+
+    /**
+     * Computes the fitness value for a given chromosome by combining approach level + branch distance and using the CDG.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the branch distance information.
+     */
+    private Message getBranchDistanceCDG(final Message request) {
+
+        final String packageName = request.getParameter("packageName");
+        final String chromosome = request.getParameter("chromosome");
+        Log.println("Computing the branch distance for the chromosome: " + chromosome);
+
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
+        final var traces = getTraces(packageName, chromosome);
+        final var visitedVertices = mapTracesToVertices(graph, traces).stream()
+                .map(vertex -> (CFGVertex) vertex)
+                .collect(Collectors.toSet());
+        final var branchDistance = computeApproachLevelAndBranchDistanceCDG(visitedVertices,
+                // there is only a single target
+                (CFGVertex) targetVertices.get(0), traces);
+        return new Message.MessageBuilder("/graph/get_branch_distance_cdg")
+                .withParameter("branch_distance", branchDistance)
+                .build();
     }
 
     /**
@@ -1016,7 +1047,6 @@ public class GraphEndpoint implements Endpoint {
         final IntraCFG intraCFG = analyzedStackTraceLine.getIntraCFG();
 
         final String targetMethod = analyzedStackTraceLine.getIntraCFGVertices().stream()
-                .map(v -> (CFGVertex) v)
                 .findAny().orElseThrow().getMethod();
 
         int minDistance = Integer.MAX_VALUE;
@@ -1428,10 +1458,13 @@ public class GraphEndpoint implements Endpoint {
         switch (target) {
             case "all_branches":
                 return ((CFG) graph).getBranchVertices();
-            case "all_statements":
+            case "all_basic_blocks":
                 return ((CFG) graph).getVertices().stream()
-                        .filter(vertex -> vertex.getStatement() instanceof BasicStatement
-                                || vertex.getStatement() instanceof BlockStatement)
+                        .filter(vertex -> vertex.getStatement() instanceof BlockStatement &&
+                                // A basic block that got split (InterCDG & InterCFG) after an invoke statement remains
+                                // in terms of the instrumentation still a single basic block, i.e., there is only a
+                                // single trace for the entire basic block.
+                                !(((BlockStatement) vertex.getStatement()).getFirstStatement() instanceof ReturnStatement))
                         .collect(Collectors.toList());
             case "random_target":
             case "random_branch":
@@ -1619,6 +1652,14 @@ public class GraphEndpoint implements Endpoint {
                 initInterCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, packageName, target);
                 break;
             }
+            case MODULAR_CDG: {
+                boolean useBasicBlocks = Boolean.parseBoolean(request.getParameter("basic_blocks"));
+                boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
+                boolean resolveOnlyAUTClasses
+                        = Boolean.parseBoolean(request.getParameter("resolve_only_aut_classes"));
+                initModularCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, packageName, target);
+                break;
+            }
             case CALL_TREE: {
                 boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
                 boolean resolveOnlyAUTClasses
@@ -1632,6 +1673,22 @@ public class GraphEndpoint implements Endpoint {
         }
 
         return new Message("/graph/init");
+    }
+
+    /**
+     * Initialises the modularCDG with the given properties.
+     *
+     * @param apkPath The path to the APK file.
+     * @param useBasicBlocks Whether to use basic blocks for the CDG.
+     * @param excludeARTClasses Whether to exclude ART classes.
+     * @param resolveOnlyAUTClasses Whether to resolve only classes belonging to the AUT package.
+     * @param packageName The package name of the AUT.
+     * @param target Describes the target vertices.
+     */
+    private void initModularCDG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
+                                     boolean resolveOnlyAUTClasses, String packageName, String target) {
+        graph = new ModularCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
+        targetVertices = selectTargetVertices(target, packageName, apkPath, null);
     }
 
     /**
@@ -1669,7 +1726,7 @@ public class GraphEndpoint implements Endpoint {
      * Initialises the interCDG with the given properties.
      *
      * @param apkPath The path to the APK file.
-     * @param useBasicBlocks Whether to use basic blocks for the interCFG.
+     * @param useBasicBlocks Whether to use basic blocks for the CDG.
      * @param excludeARTClasses Whether to exclude ART classes.
      * @param resolveOnlyAUTClasses Whether to resolve only classes belonging to the AUT package.
      * @param packageName The package name of the AUT.

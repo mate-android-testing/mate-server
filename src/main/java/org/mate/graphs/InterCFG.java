@@ -52,6 +52,7 @@ public class InterCFG extends CFG {
     /**
      * {@inheritDoc}
      */
+    @Override
     protected List<CFGVertex> mapBranchesToVertices(List<String> branches) {
 
         long start = System.currentTimeMillis();
@@ -60,7 +61,7 @@ public class InterCFG extends CFG {
 
         branches.parallelStream().forEach(branch -> {
 
-            CFGVertex branchVertex = lookupVertex(branch);
+            final CFGVertex branchVertex = lookupVertex(branch);
 
             if (branchVertex == null) {
                 Log.printWarning("Couldn't derive vertex for branch: " + branch);
@@ -85,6 +86,7 @@ public class InterCFG extends CFG {
     /**
      * {@inheritDoc}
      */
+    @Override
     protected Map<String, CFGVertex> initTraceToVertexCache() {
 
         long start = System.currentTimeMillis();
@@ -155,7 +157,9 @@ public class InterCFG extends CFG {
 
             // a branch can potentially have multiple predecessors (shared branch)
             Set<CFGVertex> ifOrSwitchVertices = graph.getIncomingEdges(branchVertex).stream()
-                    .map(CFGEdge::getSource).filter(CFGVertex::isIfVertex).collect(Collectors.toSet());
+                    .map(CFGEdge::getSource)
+                    .filter(vertex -> vertex.isIfVertex() || vertex.isSwitchVertex())
+                    .collect(Collectors.toSet());
 
             // if or switch vertex
             for (CFGVertex ifOrSwitchVertex : ifOrSwitchVertices) {

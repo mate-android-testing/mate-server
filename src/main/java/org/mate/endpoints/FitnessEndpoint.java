@@ -235,16 +235,25 @@ public class FitnessEndpoint implements Endpoint {
      */
     private List<String> getBranches(Path appDir) {
 
-        File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
+        final File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
+        final List<String> branches = new ArrayList<>();
 
-        List<String> branches = new ArrayList<>();
-
-        try (Stream<String> stream = Files.lines(branchesFile.toPath(), StandardCharsets.UTF_8)) {
-            // hopefully this preserves the order (remove blank line at end)
-            branches.addAll(stream.filter(line -> line.length() > 0).collect(Collectors.toList()));
-        } catch (IOException e) {
-            Log.printError("Reading branches.txt failed!");
-            throw new IllegalStateException(e);
+        if (branchesFile.exists()) {
+            try (Stream<String> stream = Files.lines(branchesFile.toPath(), StandardCharsets.UTF_8)) {
+                // hopefully this preserves the order (remove blank line at end)
+                branches.addAll(stream.filter(line -> !line.isEmpty()).collect(Collectors.toList()));
+            } catch (IOException e) {
+                throw new IllegalStateException("Error occurred during processing of " + BRANCHES_FILE + " file!", e);
+            }
+        } else {
+            // Extract branches from blocks.txt file
+            final File blocksFile = appDir.resolve(BLOCKS_FILE).toFile();
+            try (Stream<String> stream = Files.lines(blocksFile.toPath(), StandardCharsets.UTF_8)) {
+                // hopefully this preserves the order (remove blank line at end)
+                branches.addAll(stream.filter(line -> line.endsWith("->isBranch")).collect(Collectors.toList()));
+            } catch (IOException e) {
+                throw new IllegalStateException("Error occurred during processing of " + BLOCKS_FILE + " file!", e);
+            }
         }
 
         return branches;

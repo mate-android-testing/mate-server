@@ -52,6 +52,11 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
     private static final String BRANCHES_FILE = "branches.txt";
 
     /**
+     * Contains the instrumented basic blocks of the AUT. This also includes instrumented branch statements.
+     */
+    private static final String BLOCKS_FILE = "blocks.txt";
+
+    /**
      * Caches a mapping from trace to vertex for the most relevant vertices, e.g. branch, case, if and switch vertices.
      */
     private Map<String, CFGVertex> traceToVertexCache;
@@ -86,19 +91,26 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     protected List<CFGVertex> initBranchVertices() {
 
-        // TODO: Read from blocks.txt if branches.txt is not present.
-
         final Path appDir = appsDir.resolve(appName);
         final File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
-
         final List<String> branches = new ArrayList<>();
 
-        try (Stream<String> stream = Files.lines(branchesFile.toPath(), StandardCharsets.UTF_8)) {
-            // hopefully this preserves the order (remove blank line at end)
-            branches.addAll(stream.filter(line -> line.length() > 0).collect(Collectors.toList()));
-        } catch (IOException e) {
-            Log.printError("Reading " + BRANCHES_FILE + " failed!");
-            throw new IllegalStateException(e);
+        if (branchesFile.exists()) {
+            try (Stream<String> stream = Files.lines(branchesFile.toPath(), StandardCharsets.UTF_8)) {
+                // hopefully this preserves the order (remove blank line at end)
+                branches.addAll(stream.filter(line -> !line.isEmpty()).collect(Collectors.toList()));
+            } catch (IOException e) {
+                throw new IllegalStateException("Error occurred during processing of " + BRANCHES_FILE + " file!", e);
+            }
+        } else {
+            // Extract branches from blocks.txt file
+            final File blocksFile = appDir.resolve(BLOCKS_FILE).toFile();
+            try (Stream<String> stream = Files.lines(blocksFile.toPath(), StandardCharsets.UTF_8)) {
+                // hopefully this preserves the order (remove blank line at end)
+                branches.addAll(stream.filter(line -> line.endsWith("->isBranch")).collect(Collectors.toList()));
+            } catch (IOException e) {
+                throw new IllegalStateException("Error occurred during processing of " + BLOCKS_FILE + " file!", e);
+            }
         }
 
         return mapBranchesToVertices(branches);

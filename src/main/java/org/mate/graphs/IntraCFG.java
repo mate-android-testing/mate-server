@@ -39,7 +39,9 @@ public class IntraCFG extends CFG {
 
             // a branch can potentially have multiple predecessors (shared branch)
             Set<CFGVertex> ifOrSwitchVertices = graph.getIncomingEdges(branchVertex).stream()
-                    .map(CFGEdge::getSource).filter(CFGVertex::isIfVertex).collect(Collectors.toSet());
+                    .map(CFGEdge::getSource)
+                    .filter(vertex -> vertex.isIfVertex() || vertex.isSwitchVertex())
+                    .collect(Collectors.toSet());
 
             // if or switch vertex
             for (CFGVertex ifOrSwitchVertex : ifOrSwitchVertices) {

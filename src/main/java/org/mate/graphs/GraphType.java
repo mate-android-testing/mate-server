@@ -6,5 +6,6 @@ public enum GraphType {
     INTER_CFG,
     CALL_TREE,
     INTER_CDG,
+    MODULAR_CDG,
     SGD;
 }
