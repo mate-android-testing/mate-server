@@ -112,3 +112,6 @@ gradle-app.setting
 
 ## Local properties
 local.properties
+
+# MacOs
+*.DS_Store

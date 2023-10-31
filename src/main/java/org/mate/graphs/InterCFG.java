@@ -52,6 +52,7 @@ public class InterCFG extends CFG {
     /**
      * {@inheritDoc}
      */
+    @Override
     protected List<CFGVertex> mapBranchesToVertices(List<String> branches) {
 
         long start = System.currentTimeMillis();
@@ -60,7 +61,7 @@ public class InterCFG extends CFG {
 
         branches.parallelStream().forEach(branch -> {
 
-            CFGVertex branchVertex = lookupVertex(branch);
+            final CFGVertex branchVertex = lookupVertex(branch);
 
             if (branchVertex == null) {
                 Log.printWarning("Couldn't derive vertex for branch: " + branch);
@@ -85,6 +86,7 @@ public class InterCFG extends CFG {
     /**
      * {@inheritDoc}
      */
+    @Override
     protected Map<String, CFGVertex> initTraceToVertexCache() {
 
         long start = System.currentTimeMillis();
@@ -92,17 +94,17 @@ public class InterCFG extends CFG {
         Map<String, CFGVertex> traceToVertexCache = new HashMap<>();
 
         // handle entry vertices
-        Set<CFGVertex> entryVertices = baseCFG.getVertices().stream().filter(CFGVertex::isEntryVertex).collect(Collectors.toSet());
+        Set<CFGVertex> entryVertices = graph.getVertices().stream().filter(CFGVertex::isEntryVertex).collect(Collectors.toSet());
 
         for (CFGVertex entryVertex : entryVertices) {
             // exclude global entry vertex
-            if (!entryVertex.equals(baseCFG.getEntry())) {
+            if (!entryVertex.equals(graph.getEntry())) {
 
                 // virtual entry vertex
                 traceToVertexCache.put(entryVertex.getMethod() + "->entry", entryVertex);
 
                 // there are potentially several entry vertices when dealing with try-catch blocks at the beginning
-                Set<CFGVertex> entries = baseCFG.getOutgoingEdges(entryVertex).stream()
+                Set<CFGVertex> entries = graph.getOutgoingEdges(entryVertex).stream()
                         .map(CFGEdge::getTarget).collect(Collectors.toSet());
 
                 for (CFGVertex entry : entries) {
@@ -122,16 +124,16 @@ public class InterCFG extends CFG {
         }
 
         // handle exit vertices
-        Set<CFGVertex> exitVertices = baseCFG.getVertices().stream().filter(CFGVertex::isExitVertex).collect(Collectors.toSet());
+        Set<CFGVertex> exitVertices = graph.getVertices().stream().filter(CFGVertex::isExitVertex).collect(Collectors.toSet());
 
         for (CFGVertex exitVertex : exitVertices) {
             // exclude global exit vertex
-            if (!exitVertex.equals(baseCFG.getExit())) {
+            if (!exitVertex.equals(graph.getExit())) {
 
                 // virtual exit vertex
                 traceToVertexCache.put(exitVertex.getMethod() + "->exit", exitVertex);
 
-                Set<CFGVertex> exits = baseCFG.getIncomingEdges(exitVertex).stream()
+                Set<CFGVertex> exits = graph.getIncomingEdges(exitVertex).stream()
                         .map(CFGEdge::getSource).collect(Collectors.toSet());
 
                 for (CFGVertex exit : exits) {
@@ -154,8 +156,10 @@ public class InterCFG extends CFG {
         for (CFGVertex branchVertex : branchVertices) {
 
             // a branch can potentially have multiple predecessors (shared branch)
-            Set<CFGVertex> ifOrSwitchVertices = baseCFG.getIncomingEdges(branchVertex).stream()
-                    .map(CFGEdge::getSource).filter(CFGVertex::isIfVertex).collect(Collectors.toSet());
+            Set<CFGVertex> ifOrSwitchVertices = graph.getIncomingEdges(branchVertex).stream()
+                    .map(CFGEdge::getSource)
+                    .filter(vertex -> vertex.isIfVertex() || vertex.isSwitchVertex())
+                    .collect(Collectors.toSet());
 
             // if or switch vertex
             for (CFGVertex ifOrSwitchVertex : ifOrSwitchVertices) {

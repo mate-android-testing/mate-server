@@ -24,7 +24,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
     /**
      * The underlying CFG.
      */
-    protected final BaseCFG baseCFG;
+    protected final BaseCFG graph;
 
     /**
      * The package name of the AUT, e.g. com.zola.bmi.
@@ -39,7 +39,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      * option, while for resolving the shortest paths between many vertices, the CH many-to-many shortest path algorithm
      * appears to be the best option.
      */
-    private final ManyToManyShortestPathsAlgorithm<CFGVertex, CFGEdge> shortestPathAlgorithm;
+    protected final ManyToManyShortestPathsAlgorithm<CFGVertex, CFGEdge> shortestPathAlgorithm;
 
     /**
      * The path to the 'apps' folder.
@@ -50,6 +50,11 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      * Contains the instrumented branches of the AUT. This also includes case statements belonging to switch instructions.
      */
     private static final String BRANCHES_FILE = "branches.txt";
+
+    /**
+     * Contains the instrumented basic blocks of the AUT. This also includes instrumented branch statements.
+     */
+    private static final String BLOCKS_FILE = "blocks.txt";
 
     /**
      * Caches a mapping from trace to vertex for the most relevant vertices, e.g. branch, case, if and switch vertices.
@@ -65,17 +70,17 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
     /**
      * Constructs a wrapper for a given control-flow graph.
      *
-     * @param baseCFG The actual control flow graph.
+     * @param graph The actual control flow graph.
      * @param appsDir The path to the apps directory.
      * @param appName The name of the app (the package name).
      */
-    public CFG(BaseCFG baseCFG, Path appsDir, String appName) {
-        this.baseCFG = baseCFG;
+    public CFG(BaseCFG graph, Path appsDir, String appName) {
+        this.graph = graph;
         this.appName = appName;
         this.appsDir = appsDir;
         this.traceToVertexCache = new HashMap<>(); // pre-init for initBranchVertices()!
         branchVertices = initBranchVertices();
-        shortestPathAlgorithm = baseCFG.initCHManyToManyShortestPathAlgorithm();
+        shortestPathAlgorithm = graph.initCHManyToManyShortestPathAlgorithm();
         traceToVertexCache = initTraceToVertexCache();
     }
 
@@ -86,19 +91,26 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     protected List<CFGVertex> initBranchVertices() {
 
-        // TODO: Read from blocks.txt if branches.txt is not present.
-
         final Path appDir = appsDir.resolve(appName);
         final File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
-
         final List<String> branches = new ArrayList<>();
 
-        try (Stream<String> stream = Files.lines(branchesFile.toPath(), StandardCharsets.UTF_8)) {
-            // hopefully this preserves the order (remove blank line at end)
-            branches.addAll(stream.filter(line -> line.length() > 0).collect(Collectors.toList()));
-        } catch (IOException e) {
-            Log.printError("Reading " + BRANCHES_FILE + " failed!");
-            throw new IllegalStateException(e);
+        if (branchesFile.exists()) {
+            try (Stream<String> stream = Files.lines(branchesFile.toPath(), StandardCharsets.UTF_8)) {
+                // hopefully this preserves the order (remove blank line at end)
+                branches.addAll(stream.filter(line -> !line.isEmpty()).collect(Collectors.toList()));
+            } catch (IOException e) {
+                throw new IllegalStateException("Error occurred during processing of " + BRANCHES_FILE + " file!", e);
+            }
+        } else {
+            // Extract branches from blocks.txt file
+            final File blocksFile = appDir.resolve(BLOCKS_FILE).toFile();
+            try (Stream<String> stream = Files.lines(blocksFile.toPath(), StandardCharsets.UTF_8)) {
+                // hopefully this preserves the order (remove blank line at end)
+                branches.addAll(stream.filter(line -> line.endsWith("->isBranch")).collect(Collectors.toList()));
+            } catch (IOException e) {
+                throw new IllegalStateException("Error occurred during processing of " + BLOCKS_FILE + " file!", e);
+            }
         }
 
         return mapBranchesToVertices(branches);
@@ -127,7 +139,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public boolean isReachable(CFGVertex vertex) {
-        return shortestPathAlgorithm.getPath(baseCFG.getEntry(), vertex) != null;
+        return shortestPathAlgorithm.getPath(graph.getEntry(), vertex) != null;
     }
 
     /**
@@ -137,7 +149,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public List<CFGVertex> getVertices() {
-        return new ArrayList<>(baseCFG.getVertices());
+        return new ArrayList<>(graph.getVertices());
     }
 
     /**
@@ -145,7 +157,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public void draw(File outputPath) {
-        baseCFG.drawGraph(outputPath);
+        graph.drawGraph(outputPath);
     }
 
     /**
@@ -161,7 +173,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public void draw(File outputPath, Set<CFGVertex> visitedVertices, Set<CFGVertex> targets) {
-        baseCFG.drawGraph(outputPath, visitedVertices, targets);
+        graph.drawGraph(outputPath, visitedVertices, targets);
     }
 
     /**
@@ -172,7 +184,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public Set<CFGEdge> getOutgoingEdges(CFGVertex vertex) {
-        return baseCFG.getOutgoingEdges(vertex);
+        return graph.getOutgoingEdges(vertex);
     }
 
     /**
@@ -183,7 +195,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public Set<CFGEdge> getIncomingEdges(CFGVertex vertex) {
-        return baseCFG.getIncomingEdges(vertex);
+        return graph.getIncomingEdges(vertex);
     }
 
     /**
@@ -207,7 +219,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
             return traceToVertexCache.get(trace);
         } else {
             try {
-                return baseCFG.lookUpVertex(trace);
+                return graph.lookUpVertex(trace);
             } catch (Exception e) {
                 Log.printWarning(e.getMessage());
                 return null;
@@ -268,7 +280,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public int size() {
-        return baseCFG.size();
+        return graph.size();
     }
 
     /**

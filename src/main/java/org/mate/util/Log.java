@@ -52,17 +52,23 @@ public class Log {
     }
 
     public static void printWarning(String message) {
-        printWithTag("WARNING", message);
+        if (message != null) {
+            printWithTag("WARNING", message);
+        }
     }
 
     public static void printError(String message) {
-        printWithTag("ERROR", message);
+        if (message != null) {
+            printWithTag("ERROR", message);
+        }
     }
 
     private static void printWithTag(String tag, String message) {
+
         if (logger == null) {
             throw new IllegalStateException("No logger registered");
         }
+
         StringBuilder output = new StringBuilder();
         for (String line : message.split("\n")) {
             output.append(tag)
@@ -110,24 +116,29 @@ public class Log {
     }
 
     public static void println(String message) {
+
         if (logger == null) {
             throw new IllegalStateException("No logger registered");
         }
-        StringBuilder output = new StringBuilder();
-        for (String line : message.split("\n")) {
-            output.append(LocalDateTime.now())
-                    .append(" ")
-                    .append(line)
-                    .append("\n");
-        }
 
-        if (logger.log) {
-            synchronized (Log.class) {
-                logger.writeToLog(output.toString());
+        if (message != null) {
+
+            StringBuilder output = new StringBuilder();
+            for (String line : message.split("\n")) {
+                output.append(LocalDateTime.now())
+                        .append(" ")
+                        .append(line)
+                        .append("\n");
             }
-        } else {
-            synchronized (Log.class) {
-                logger.buffer += output.toString();
+
+            if (logger.log) {
+                synchronized (Log.class) {
+                    logger.writeToLog(output.toString());
+                }
+            } else {
+                synchronized (Log.class) {
+                    logger.buffer += output.toString();
+                }
             }
         }
     }

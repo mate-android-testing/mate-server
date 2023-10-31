@@ -31,15 +31,17 @@ public class IntraCFG extends CFG {
         final Map<String, CFGVertex> traceToVertexCache = new HashMap<>();
 
         // virtual entry and exit vertex
-        traceToVertexCache.put(baseCFG.getEntry().getMethod() + "->entry", baseCFG.getEntry());
-        traceToVertexCache.put(baseCFG.getExit().getMethod() + "->exit", baseCFG.getExit());
+        traceToVertexCache.put(graph.getEntry().getMethod() + "->entry", graph.getEntry());
+        traceToVertexCache.put(graph.getExit().getMethod() + "->exit", graph.getExit());
 
         // handle branch + if and switch stmt vertices
         for (CFGVertex branchVertex : branchVertices) {
 
             // a branch can potentially have multiple predecessors (shared branch)
-            Set<CFGVertex> ifOrSwitchVertices = baseCFG.getIncomingEdges(branchVertex).stream()
-                    .map(CFGEdge::getSource).filter(CFGVertex::isIfVertex).collect(Collectors.toSet());
+            Set<CFGVertex> ifOrSwitchVertices = graph.getIncomingEdges(branchVertex).stream()
+                    .map(CFGEdge::getSource)
+                    .filter(vertex -> vertex.isIfVertex() || vertex.isSwitchVertex())
+                    .collect(Collectors.toSet());
 
             // if or switch vertex
             for (CFGVertex ifOrSwitchVertex : ifOrSwitchVertices) {
@@ -97,7 +99,7 @@ public class IntraCFG extends CFG {
             // retrieve fully qualified method name (class name + method name)
             final String method = tokens[0] + "->" + tokens[1];
 
-            if (method.equals(baseCFG.getMethodName())) {
+            if (method.equals(graph.getMethodName())) {
 
                 final CFGVertex branchVertex = lookupVertex(branch);
 

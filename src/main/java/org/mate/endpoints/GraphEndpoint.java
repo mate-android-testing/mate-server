@@ -6,6 +6,7 @@ import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.ReturnStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.Tuple;
 import org.apache.commons.io.FileUtils;
@@ -16,6 +17,7 @@ import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
 import org.mate.util.AndroidEnvironment;
 import org.mate.util.Log;
+import org.mate.util.Pair;
 
 import java.io.File;
 import java.io.IOException;
@@ -162,10 +164,14 @@ public class GraphEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/graph/init")) {
             return initGraph(request);
-        } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector")) {
-            return getBranchDistanceVector(request);
-        } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
-            return getBranchDistance(request);
+        } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector_cfg")) {
+            return getBranchDistanceVectorCFG(request);
+        } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector_cdg")) {
+            return getBranchDistanceVectorCDG(request);
+        } else if (request.getSubject().startsWith("/graph/get_branch_distance_cdg")) {
+            return getBranchDistanceCDG(request);
+        } else if (request.getSubject().startsWith("/graph/get_branch_distance_cfg")) {
+            return getBranchDistanceCFG(request);
         } else if (request.getSubject().startsWith("/graph/get_crash_distance")) {
             return getCrashDistance(request);
         } else if (request.getSubject().startsWith("/graph/draw")) {
@@ -201,7 +207,7 @@ public class GraphEndpoint implements Endpoint {
 
         // The branch vertices get assigned the ids 0 to n.
         for (int i = 0; i < branchVerticesCount; ++i) {
-            relevantVertexToIndex.put((CFGVertex) branchVertices.get(i), i);
+            relevantVertexToIndex.put(branchVertices.get(i), i);
         }
 
         // Defines the reverse mapping (index to vertex) for every relevant vertex.
@@ -231,7 +237,7 @@ public class GraphEndpoint implements Endpoint {
                  * To store the distance, which can be -1 if no path exists between two vertices, in an (unsigned) char,
                  * we need to add +1 to make it non-negative. Later, upon reading from the cache, we subtract -1 again.
                  */
-                final var distance = distances.apply(relevantVertex, (CFGVertex) branchVertex) + 1;
+                final var distance = distances.apply(relevantVertex, branchVertex) + 1;
 
                 if (distance <= Character.MAX_VALUE) {
                     approachLevels[row + j] = (char) distance;
@@ -247,13 +253,13 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Computes the approach level and branch distance for the given branch vertex (target).
+     * Computes the approach level and branch distance for the given branch vertex (target) using the CFG.
      *
      * @param visitedVertices The list of visited vertices (traces).
      * @param branchVertex The given branch vertex (target).
      * @return Returns the combined approach level + branch distance for the given branch vertex.
      */
-    private String computeApproachLevelAndBranchDistance(final List<Vertex> visitedVertices, final CFGVertex branchVertex) {
+    private String computeApproachLevelAndBranchDistanceCFG(final List<CFGVertex> visitedVertices, final CFGVertex branchVertex) {
 
         /*
          * TODO: There can be multiple vertices with the same minimal distance (approach level) to the given target branch.
@@ -267,11 +273,11 @@ public class GraphEndpoint implements Endpoint {
         int minDistance = Integer.MAX_VALUE;
         CFGVertex minDistanceVertex = null;
 
-        for (final Vertex visitedVertex : visitedVertices) {
+        for (final CFGVertex visitedVertex : visitedVertices) {
 
-            final boolean isIfVertex = ((CFGVertex) visitedVertex).isIfVertex();
-            final boolean isSwitchVertex = ((CFGVertex) visitedVertex).isSwitchVertex();
-            final boolean isBranchVertex = ((CFGVertex) visitedVertex).isBranchVertex();
+            final boolean isIfVertex = visitedVertex.isIfVertex();
+            final boolean isSwitchVertex = visitedVertex.isSwitchVertex();
+            final boolean isBranchVertex = visitedVertex.isBranchVertex();
 
             /*
              * We are only interested in a direct hit (covered branch) or the distance to an if or switch statement.
@@ -293,7 +299,7 @@ public class GraphEndpoint implements Endpoint {
                         // closest if or switch vertex
                         || (approachLevel != -1 && approachLevel < minDistance && (isIfVertex || isSwitchVertex))) {
                     minDistance = approachLevel;
-                    minDistanceVertex = (CFGVertex) visitedVertex;
+                    minDistanceVertex = visitedVertex;
                 }
             }
         }
@@ -305,6 +311,47 @@ public class GraphEndpoint implements Endpoint {
          */
         return minDistanceVertex == null ? "1" : minDistance == 0 ? "0"
                 : combineApproachLevelAndBranchDistance(minDistance , minDistanceVertex, branchVertex);
+    }
+
+    /**
+     * Computes the approach level and branch distance for the given branch vertex (target) using the CDG.
+     *
+     * @param visitedVertices The list of visited vertices (traces).
+     * @param branchVertex The given branch vertex (target).
+     * @return Returns the combined approach level + branch distance for the given branch vertex.
+     */
+    private String computeApproachLevelAndBranchDistanceCDG(final Set<CFGVertex> visitedVertices,
+                                                            final CFGVertex branchVertex, List<String> traces) {
+
+        final CDG cdg = (CDG) graph;
+        final int approachLevel;
+        final double branchDistance;
+
+        // If we covered the target branch, the approach level and branch distance is zero.
+        if (visitedVertices.contains(branchVertex)) {
+            approachLevel = 0;
+            branchDistance = 0.0;
+        } else {
+            // Compute Approach Level
+            Pair<CFGVertex, Integer> approachLevelPair = cdg.computeApproachLevel(branchVertex, visitedVertices);
+
+            if (approachLevelPair.fst() == null) {
+                // We haven't covered any control-dependent if or switch statement, thus there is no guidance from the
+                // branch distance.
+                approachLevel = approachLevelPair.snd();
+                branchDistance = 1.0;
+            } else {
+                // This is the if or switch statement from which an incorrect branch toward the target was taken.
+                // Hence, we will use this vertex to compute the branch distance.
+                final CFGVertex ifOrSwitchVertex = approachLevelPair.fst();
+                approachLevel = approachLevelPair.snd();
+                branchDistance = cdg.computeBranchDistance(ifOrSwitchVertex, traces);
+            }
+        }
+
+        final double combined = approachLevel + branchDistance;
+        final double combinedNormalized = combined / (combined + 1);
+        return String.valueOf(combinedNormalized);
     }
 
     /**
@@ -352,12 +399,12 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Computes the fitness value for a given chromosome combining approach level + branch distance.
+     * Computes the fitness value for a given chromosome by combining approach level + branch distance and using the CDG.
      *
      * @param request The request message.
      * @return Returns a message containing the branch distance information.
      */
-    private Message getBranchDistance(final Message request) {
+    private Message getBranchDistanceCDG(final Message request) {
 
         final String packageName = request.getParameter("packageName");
         final String chromosome = request.getParameter("chromosome");
@@ -368,23 +415,54 @@ public class GraphEndpoint implements Endpoint {
         }
 
         final var traces = getTraces(packageName, chromosome);
-        final var visitedVertices = mapTracesToVertices(traces);
-        precomputeBranchDistances(traces);
-        final var branchDistance = computeApproachLevelAndBranchDistance(visitedVertices,
+        final var visitedVertices = mapTracesToVertices(graph, traces).stream()
+                .map(vertex -> (CFGVertex) vertex)
+                .collect(Collectors.toSet());
+        final var branchDistance = computeApproachLevelAndBranchDistanceCDG(visitedVertices,
                 // there is only a single target
-                (CFGVertex) targetVertices.get(0));
-        return new Message.MessageBuilder("/graph/get_branch_distance")
+                (CFGVertex) targetVertices.get(0), traces);
+        return new Message.MessageBuilder("/graph/get_branch_distance_cdg")
                 .withParameter("branch_distance", branchDistance)
                 .build();
     }
 
     /**
-     * Computes the branch distance vector for a given chromosome combining approach level + branch distance.
+     * Computes the fitness value for a given chromosome by combining approach level + branch distance and using the CFG.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the branch distance information.
+     */
+    private Message getBranchDistanceCFG(final Message request) {
+
+        final String packageName = request.getParameter("packageName");
+        final String chromosome = request.getParameter("chromosome");
+        Log.println("Computing the branch distance for the chromosome: " + chromosome);
+
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
+        final var traces = getTraces(packageName, chromosome);
+        final var visitedVertices = mapTracesToVertices(graph, traces).stream()
+                .map(vertex -> (CFGVertex) vertex)
+                .collect(Collectors.toList());
+        precomputeBranchDistances(traces);
+        final var branchDistance = computeApproachLevelAndBranchDistanceCFG(visitedVertices,
+                // there is only a single target
+                (CFGVertex) targetVertices.get(0));
+        return new Message.MessageBuilder("/graph/get_branch_distance_cfg")
+                .withParameter("branch_distance", branchDistance)
+                .build();
+    }
+
+    /**
+     * Computes the branch distance vector for a given chromosome
+     * by combining approach level + branch distance using the CFG.
      *
      * @param request The request message.
      * @return Returns a message containing the branch distance vector.
      */
-    private Message getBranchDistanceVector(final Message request) {
+    private Message getBranchDistanceVectorCFG(final Message request) {
 
         final String packageName = request.getParameter("packageName");
         final String chromosome = request.getParameter("chromosome");
@@ -396,36 +474,97 @@ public class GraphEndpoint implements Endpoint {
 
         long start = System.currentTimeMillis();
         final var traces = getTraces(packageName, chromosome);
-        final var visitedVertices = mapTracesToVertices(traces);
+        final var visitedVertices = mapTracesToVertices(graph, traces).stream()
+                .map(vertex -> (CFGVertex) vertex)
+                .collect(Collectors.toList());
         final var branchVertices =  ((CFG) graph).getBranchVertices();
         long start1 = System.currentTimeMillis();
         precomputeBranchDistances(traces);
         long end1 = System.currentTimeMillis();
         Log.println("Pre-Computing branch distances took: " + (end1 - start1) + "ms");
-        final List<String> branchDistanceVector = computeBranchDistanceVector(visitedVertices, branchVertices);
+        final List<String> branchDistanceVector = computeBranchDistanceVectorCFG(visitedVertices, branchVertices);
         long end = System.currentTimeMillis();
         Log.println("Computing branch distance vector took: " + (end - start) + "ms");
 
-        return new Message.MessageBuilder("/graph/get_branch_distance_vector")
+        return new Message.MessageBuilder("/graph/get_branch_distance_vector_cfg")
                 .withParameter("branch_distance_vector", String.join("+", branchDistanceVector))
                 .build();
     }
 
     /**
-     * Computes the branch distance vector (approach levels + branch distances) for the given branch vertices.
+     * Computes the branch distance vector for a given chromosome
+     * by combining approach level + branch distance using the CDG.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the branch distance vector.
+     */
+    private Message getBranchDistanceVectorCDG(final Message request) {
+
+        final String packageName = request.getParameter("packageName");
+        final String chromosome = request.getParameter("chromosome");
+        Log.println("Computing the branch distance vector for the chromosome: " + chromosome);
+
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
+        long start = System.currentTimeMillis();
+        final var traces = getTraces(packageName, chromosome);
+        final var visitedVertices = mapTracesToVertices(graph, traces).stream()
+                .map(vertex -> (CFGVertex) vertex)
+                .collect(Collectors.toSet());
+        final var branchVertices =  ((CFG) graph).getBranchVertices();
+
+        final List<String> branchDistanceVector = computeBranchDistanceVectorCDG(visitedVertices, branchVertices, traces);
+        long end = System.currentTimeMillis();
+        Log.println("Computing branch distance vector took: " + (end - start) + "ms");
+
+        return new Message.MessageBuilder("/graph/get_branch_distance_vector_cdg")
+                .withParameter("branch_distance_vector", String.join("+", branchDistanceVector))
+                .build();
+    }
+
+    /**
+     * Computes the branch distance vector (approach levels + branch distances)
+     * for the given branch vertices based on the CFG.
      *
      * @param visitedVertices The list of visited vertices (traces).
      * @param branchVertices The branch vertices (targets).
      * @return Returns the branch distance vector.
      */
-    private List<String> computeBranchDistanceVector(final List<Vertex> visitedVertices, final List<CFGVertex> branchVertices) {
+    private List<String> computeBranchDistanceVectorCFG(final List<CFGVertex> visitedVertices, final List<CFGVertex> branchVertices) {
 
         final var vector = new String[branchVertices.size()];
         IntStream.range(0, branchVertices.size())
                 .parallel()
                 .forEach(index -> {
                     final var vertex = branchVertices.get(index);
-                    final var distance = computeApproachLevelAndBranchDistance(visitedVertices, vertex);
+                    final var distance = computeApproachLevelAndBranchDistanceCFG(visitedVertices, vertex);
+                    vector[index] = distance;
+                });
+
+        final var branchDistanceVector = Arrays.asList(vector);
+        return Collections.unmodifiableList(branchDistanceVector);
+    }
+
+    /**
+     * Computes the branch distance vector (approach levels + branch distances)
+     * for the given branch vertices based on the CDG.
+     *
+     * @param visitedVertices The list of visited vertices (traces).
+     * @param branchVertices  The branch vertices (targets).
+     * @return Returns the branch distance vector based on the CDG.
+     */
+    private List<String> computeBranchDistanceVectorCDG(final Set<CFGVertex> visitedVertices,
+                                                        final List<CFGVertex> branchVertices,
+                                                        final List<String> traces) {
+
+        final var vector = new String[branchVertices.size()];
+        IntStream.range(0, branchVertices.size())
+                .parallel()
+                .forEach(index -> {
+                    final var vertex = branchVertices.get(index);
+                    final var distance = computeApproachLevelAndBranchDistanceCDG(visitedVertices, vertex, traces);
                     vector[index] = distance;
                 });
 
@@ -916,7 +1055,6 @@ public class GraphEndpoint implements Endpoint {
         final IntraCFG intraCFG = analyzedStackTraceLine.getIntraCFG();
 
         final String targetMethod = analyzedStackTraceLine.getIntraCFGVertices().stream()
-                .map(v -> (CFGVertex) v)
                 .findAny().orElseThrow().getMethod();
 
         int minDistance = Integer.MAX_VALUE;
@@ -1309,7 +1447,7 @@ public class GraphEndpoint implements Endpoint {
         // read traces from trace file(s)
         final List<String> traces = readTraces(tracesFiles);
 
-        return mapTracesToVertices(traces);
+        return mapTracesToVertices(graph, traces);
     }
 
     /**
@@ -1328,6 +1466,14 @@ public class GraphEndpoint implements Endpoint {
         switch (target) {
             case "all_branches":
                 return ((CFG) graph).getBranchVertices();
+            case "all_basic_blocks":
+                return ((CFG) graph).getVertices().stream()
+                        .filter(vertex -> vertex.getStatement() instanceof BlockStatement &&
+                                // A basic block that got split (InterCDG & InterCFG) after an invoke statement remains
+                                // in terms of the instrumentation still a single basic block, i.e., there is only a
+                                // single trace for the entire basic block.
+                                !(((BlockStatement) vertex.getStatement()).getFirstStatement() instanceof ReturnStatement))
+                        .collect(Collectors.toList());
             case "random_target":
             case "random_branch":
                 final List<? extends Vertex> targets = target.equals("random_target")
@@ -1506,6 +1652,22 @@ public class GraphEndpoint implements Endpoint {
                 Log.println("Pre-Computing approach levels and branch distances took: " + (end - start) + "ms");
                 break;
             }
+            case INTER_CDG: {
+                boolean useBasicBlocks = Boolean.parseBoolean(request.getParameter("basic_blocks"));
+                boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
+                boolean resolveOnlyAUTClasses
+                        = Boolean.parseBoolean(request.getParameter("resolve_only_aut_classes"));
+                initInterCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, packageName, target);
+                break;
+            }
+            case MODULAR_CDG: {
+                boolean useBasicBlocks = Boolean.parseBoolean(request.getParameter("basic_blocks"));
+                boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
+                boolean resolveOnlyAUTClasses
+                        = Boolean.parseBoolean(request.getParameter("resolve_only_aut_classes"));
+                initModularCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, packageName, target);
+                break;
+            }
             case CALL_TREE: {
                 boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
                 boolean resolveOnlyAUTClasses
@@ -1519,6 +1681,22 @@ public class GraphEndpoint implements Endpoint {
         }
 
         return new Message("/graph/init");
+    }
+
+    /**
+     * Initialises the modularCDG with the given properties.
+     *
+     * @param apkPath The path to the APK file.
+     * @param useBasicBlocks Whether to use basic blocks for the CDG.
+     * @param excludeARTClasses Whether to exclude ART classes.
+     * @param resolveOnlyAUTClasses Whether to resolve only classes belonging to the AUT package.
+     * @param packageName The package name of the AUT.
+     * @param target Describes the target vertices.
+     */
+    private void initModularCDG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
+                                     boolean resolveOnlyAUTClasses, String packageName, String target) {
+        graph = new ModularCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
+        targetVertices = selectTargetVertices(target, packageName, apkPath, null);
     }
 
     /**
@@ -1549,6 +1727,22 @@ public class GraphEndpoint implements Endpoint {
     private void initInterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
                                  boolean resolveOnlyAUTClasses, String packageName, String target) {
         graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
+        targetVertices = selectTargetVertices(target, packageName, apkPath, null);
+    }
+
+    /**
+     * Initialises the interCDG with the given properties.
+     *
+     * @param apkPath The path to the APK file.
+     * @param useBasicBlocks Whether to use basic blocks for the CDG.
+     * @param excludeARTClasses Whether to exclude ART classes.
+     * @param resolveOnlyAUTClasses Whether to resolve only classes belonging to the AUT package.
+     * @param packageName The package name of the AUT.
+     * @param target Describes the target vertices.
+     */
+    private void initInterCDG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
+                              boolean resolveOnlyAUTClasses, String packageName, String target) {
+        graph = new InterCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
         targetVertices = selectTargetVertices(target, packageName, apkPath, null);
     }
 
@@ -1652,7 +1846,7 @@ public class GraphEndpoint implements Endpoint {
      * @param traces The set of traces that should be mapped to vertices.
      * @return Returns the vertices described by the given set of traces.
      */
-    private List<Vertex> mapTracesToVertices(List<String> traces) {
+    public static List<Vertex> mapTracesToVertices(Graph graph, List<String> traces) {
 
         // read traces from trace file(s)
         long start = System.currentTimeMillis();
@@ -1664,7 +1858,7 @@ public class GraphEndpoint implements Endpoint {
         traces.parallelStream().forEach(trace -> {
 
             if (trace.contains(":")) {
-                // skip branch distance trace
+                // skip branch distance trace and traces without a matching vertex pair.
                 return;
             }
 
