@@ -164,14 +164,10 @@ public class GraphEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/graph/init")) {
             return initGraph(request);
-        } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector_cfg")) {
-            return getBranchDistanceVectorCFG(request);
-        } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector_cdg")) {
-            return getBranchDistanceVectorCDG(request);
-        } else if (request.getSubject().startsWith("/graph/get_branch_distance_cdg")) {
-            return getBranchDistanceCDG(request);
-        } else if (request.getSubject().startsWith("/graph/get_branch_distance_cfg")) {
-            return getBranchDistanceCFG(request);
+        } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector")) {
+            return getBranchDistanceVector(request);
+        } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
+            return getBranchDistance(request);
         } else if (request.getSubject().startsWith("/graph/get_crash_distance")) {
             return getCrashDistance(request);
         } else if (request.getSubject().startsWith("/graph/draw")) {
@@ -410,10 +406,6 @@ public class GraphEndpoint implements Endpoint {
         final String chromosome = request.getParameter("chromosome");
         Log.println("Computing the branch distance for the chromosome: " + chromosome);
 
-        if (graph == null) {
-            throw new IllegalStateException("Graph hasn't been initialised!");
-        }
-
         final var traces = getTraces(packageName, chromosome);
         final var visitedVertices = mapTracesToVertices(graph, traces).stream()
                 .map(vertex -> (CFGVertex) vertex)
@@ -421,9 +413,30 @@ public class GraphEndpoint implements Endpoint {
         final var branchDistance = computeApproachLevelAndBranchDistanceCDG(visitedVertices,
                 // there is only a single target
                 (CFGVertex) targetVertices.get(0), traces);
-        return new Message.MessageBuilder("/graph/get_branch_distance_cdg")
+        return new Message.MessageBuilder("/graph/get_branch_distance")
                 .withParameter("branch_distance", branchDistance)
                 .build();
+    }
+
+    /**
+     * Computes the fitness value for a given chromosome by combining approach level + branch distance.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the branch distance information.
+     */
+    private Message getBranchDistance(final Message request) {
+
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
+        if (graph instanceof CDG) {
+            return getBranchDistanceCDG(request);
+        } else if (graph instanceof CFG) {
+            return getBranchDistanceCFG(request);
+        } else {
+            throw new UnsupportedOperationException("Branch distance not defined on " + graph.getClass() + "!");
+        }
     }
 
     /**
@@ -438,10 +451,6 @@ public class GraphEndpoint implements Endpoint {
         final String chromosome = request.getParameter("chromosome");
         Log.println("Computing the branch distance for the chromosome: " + chromosome);
 
-        if (graph == null) {
-            throw new IllegalStateException("Graph hasn't been initialised!");
-        }
-
         final var traces = getTraces(packageName, chromosome);
         final var visitedVertices = mapTracesToVertices(graph, traces).stream()
                 .map(vertex -> (CFGVertex) vertex)
@@ -450,14 +459,34 @@ public class GraphEndpoint implements Endpoint {
         final var branchDistance = computeApproachLevelAndBranchDistanceCFG(visitedVertices,
                 // there is only a single target
                 (CFGVertex) targetVertices.get(0));
-        return new Message.MessageBuilder("/graph/get_branch_distance_cfg")
+        return new Message.MessageBuilder("/graph/get_branch_distance")
                 .withParameter("branch_distance", branchDistance)
                 .build();
     }
 
     /**
-     * Computes the branch distance vector for a given chromosome
-     * by combining approach level + branch distance using the CFG.
+     * Computes the branch distance vector for a given chromosome by combining approach level + branch distance.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the branch distance vector.
+     */
+    private Message getBranchDistanceVector(final Message request) {
+
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
+        if (graph instanceof CDG) {
+            return getBranchDistanceVectorCDG(request);
+        } else if (graph instanceof CFG) {
+            return getBranchDistanceVectorCFG(request);
+        } else {
+            throw new UnsupportedOperationException("Branch distance not defined on " + graph.getClass() + "!");
+        }
+    }
+
+    /**
+     * Computes the branch distance vector for a given chromosome by combining approach level + branch distance using the CFG.
      *
      * @param request The request message.
      * @return Returns a message containing the branch distance vector.
@@ -467,10 +496,6 @@ public class GraphEndpoint implements Endpoint {
         final String packageName = request.getParameter("packageName");
         final String chromosome = request.getParameter("chromosome");
         Log.println("Computing the branch distance vector for the chromosome: " + chromosome);
-
-        if (graph == null) {
-            throw new IllegalStateException("Graph hasn't been initialised!");
-        }
 
         long start = System.currentTimeMillis();
         final var traces = getTraces(packageName, chromosome);
@@ -486,7 +511,7 @@ public class GraphEndpoint implements Endpoint {
         long end = System.currentTimeMillis();
         Log.println("Computing branch distance vector took: " + (end - start) + "ms");
 
-        return new Message.MessageBuilder("/graph/get_branch_distance_vector_cfg")
+        return new Message.MessageBuilder("/graph/get_branch_distance_vector")
                 .withParameter("branch_distance_vector", String.join("+", branchDistanceVector))
                 .build();
     }
@@ -504,10 +529,6 @@ public class GraphEndpoint implements Endpoint {
         final String chromosome = request.getParameter("chromosome");
         Log.println("Computing the branch distance vector for the chromosome: " + chromosome);
 
-        if (graph == null) {
-            throw new IllegalStateException("Graph hasn't been initialised!");
-        }
-
         long start = System.currentTimeMillis();
         final var traces = getTraces(packageName, chromosome);
         final var visitedVertices = mapTracesToVertices(graph, traces).stream()
@@ -519,7 +540,7 @@ public class GraphEndpoint implements Endpoint {
         long end = System.currentTimeMillis();
         Log.println("Computing branch distance vector took: " + (end - start) + "ms");
 
-        return new Message.MessageBuilder("/graph/get_branch_distance_vector_cdg")
+        return new Message.MessageBuilder("/graph/get_branch_distance_vector")
                 .withParameter("branch_distance_vector", String.join("+", branchDistanceVector))
                 .build();
     }
