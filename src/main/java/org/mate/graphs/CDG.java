@@ -209,12 +209,11 @@ public abstract class CDG extends CFG {
                     // The branch distance (trace) of if vertices is directly attached to the if statement, which
                     // corresponds to the first vertex on the path list.
                     return new Pair<>(path.getStartVertex(), approachLevel);
-                } else if (curr.toString().startsWith("entry Disconnect")) {
+                } else if (curr.toString().startsWith("Connect->")) {
                     // Last vertex corresponds to virtual disconnect vertex added to the graph due to loose subgraphs.
                     return new Pair<>(curr, Integer.MAX_VALUE);
                 } else {
-                    // TODO: The last missed vertex is neither a switch nor a branch vertex.
-                    //  Most probably this is due to not interacting with required UI-Elements.
+                    // regular basic block
                     return new Pair<>(path.getStartVertex(), approachLevel);
                 }
             } else {
