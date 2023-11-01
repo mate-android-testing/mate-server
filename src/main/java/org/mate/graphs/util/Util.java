@@ -2,7 +2,6 @@ package org.mate.graphs.util;
 
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
-import de.uni_passau.fim.auermich.android_graphs.core.statements.ReturnStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
 
 public final class Util {
@@ -19,17 +18,13 @@ public final class Util {
      */
     public static int getInstructionIndexFromBlockStatement(final Statement statement) {
 
-        // TODO: Reformulate condition to be easier to understand.
-
         final Statement firstStatement = ((BlockStatement) statement).getFirstStatement();
         BasicStatement basicStatement;
+
         if (firstStatement.getType() != Statement.StatementType.RETURN_STATEMENT) {
             basicStatement = (BasicStatement) firstStatement;
-        } else if (((BlockStatement) statement).getStatements().size() > 1) { // return statement
-            basicStatement = (BasicStatement) ((BlockStatement) statement).getStatements().get(1);
         } else {
-            // Unused methods may only have the virtual return statement in their statements list.
-            return ((ReturnStatement) firstStatement).getId();
+            basicStatement = (BasicStatement) ((BlockStatement) statement).getStatements().get(1);
         }
         return basicStatement.getInstructionIndex();
     }
