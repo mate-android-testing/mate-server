@@ -81,11 +81,7 @@ public abstract class CDG extends CFG {
 
         for (CFGVertex vertex : getVertices()) {
 
-            if (vertex.isEntryVertex()) { // Handle entry vertices
-                initEntryVertexToVertexCache(vertex, traceToVertexCache);
-            } else if (vertex.isExitVertex()) { // Handle exit vertices
-                initExitVertexToVertexCache(vertex, traceToVertexCache);
-            } else { // Handle branch vertices
+            if (!vertex.isEntryVertex() && !vertex.isExitVertex()) { // basic block
                 initStatementVertexToVertexCache(vertex, traceToVertexCache);
             }
         }
@@ -103,6 +99,7 @@ public abstract class CDG extends CFG {
      * @param entryVertex The entry vertex that will be added to the trace to vertex cache mapping.
      * @param traceToVertexCache The trace to vertex mapping.
      */
+    @SuppressWarnings("unused")
     private void initEntryVertexToVertexCache(final CFGVertex entryVertex, final Map<String, CFGVertex> traceToVertexCache) {
 
         // exclude global entry vertex
@@ -137,6 +134,7 @@ public abstract class CDG extends CFG {
      * @param exitVertex The exit vertex that will be added to the trace to vertex cache mapping.
      * @param traceToVertexCache The trace to vertex mapping.
      */
+    @SuppressWarnings("unused")
     private void initExitVertexToVertexCache(final CFGVertex exitVertex, final Map<String, CFGVertex> traceToVertexCache) {
 
         if (!exitVertex.equals(graph.getExit())) {
