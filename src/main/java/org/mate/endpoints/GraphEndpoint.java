@@ -277,7 +277,6 @@ public class GraphEndpoint implements Endpoint {
 
             /*
              * We are only interested in a direct hit (covered branch) or the distance to an if or switch statement.
-             * This excludes distances to visited entry or exit vertices.
              */
             if (isIfVertex || isSwitchVertex || isBranchVertex) {
 
@@ -290,6 +289,8 @@ public class GraphEndpoint implements Endpoint {
                  * necessary to store the cached approach level in a compact representation (char instead of int/short).
                  */
                 final int approachLevel = approachLevels[index] - 1;
+
+                // TODO: Exit loop upon reaching an approach level of 0.
 
                 if (approachLevel == 0 // covered branch
                         // closest if or switch vertex
@@ -1862,18 +1863,68 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
+     * Maps an entry trace to its vertex.
+     *
+     * @param graph The underlying graph.
+     * @param visitedVertices The set of visited vertices.
+     * @param trace The potential entry trace.
+     */
+    @SuppressWarnings("unused")
+    private static void mapEntryTraceToVertex(final Graph graph, final Set<Vertex> visitedVertices, final String trace) {
+
+        // mark virtual entry
+        final String entryMarker = "->entry";
+        final int entryIndex = trace.indexOf(entryMarker);
+        if (entryIndex != -1) {
+            final String entryTrace = trace.substring(0, entryIndex + entryMarker.length());
+            final Vertex visitedEntry = graph.lookupVertex(entryTrace);
+
+            if (visitedEntry != null) {
+                visitedVertices.add(visitedEntry);
+            } else {
+                Log.printWarning("Couldn't derive vertex for entry trace: " + entryTrace);
+            }
+        }
+    }
+
+    /**
+     * Maps an exit trace to its vertex.
+     *
+     * @param graph The underlying graph.
+     * @param visitedVertices The set of visited vertices.
+     * @param trace The potential exit trace.
+     */
+    @SuppressWarnings("unused")
+    private static void mapExitTraceToVertex(final Graph graph, final Set<Vertex> visitedVertices, final String trace) {
+
+        // mark virtual exit
+        final String exitMarker = "->exit";
+        final int exitIndex = trace.indexOf(exitMarker);
+        if (exitIndex != -1) {
+            final String exitTrace = trace.substring(0, exitIndex + exitMarker.length());
+            final Vertex visitedExit = graph.lookupVertex(exitTrace);
+
+            if (visitedExit != null) {
+                visitedVertices.add(visitedExit);
+            } else {
+                Log.printWarning("Couldn't derive vertex for exit trace: " + exitTrace);
+            }
+        }
+    }
+
+    /**
      * Maps the given set of traces to vertices in the graph.
      *
      * @param traces The set of traces that should be mapped to vertices.
      * @return Returns the vertices described by the given set of traces.
      */
-    public static List<Vertex> mapTracesToVertices(Graph graph, List<String> traces) {
+    public static List<Vertex> mapTracesToVertices(final Graph graph, final List<String> traces) {
 
         // read traces from trace file(s)
         long start = System.currentTimeMillis();
 
         // we need to mark vertices we visited
-        Set<Vertex> visitedVertices = Collections.newSetFromMap(new ConcurrentHashMap<Vertex, Boolean>());
+        final Set<Vertex> visitedVertices = Collections.newSetFromMap(new ConcurrentHashMap<Vertex, Boolean>());
 
         // map trace to vertex
         traces.parallelStream().forEach(trace -> {
@@ -1883,33 +1934,8 @@ public class GraphEndpoint implements Endpoint {
                 return;
             }
 
-            // mark virtual entry
-            final String entryMarker = "->entry";
-            final int entryIndex = trace.indexOf(entryMarker);
-            if (entryIndex != -1) {
-                final String entryTrace = trace.substring(0, entryIndex + entryMarker.length());
-                final Vertex visitedEntry = graph.lookupVertex(entryTrace);
-
-                if (visitedEntry != null) {
-                    visitedVertices.add(visitedEntry);
-                } else {
-                    Log.printWarning("Couldn't derive vertex for entry trace: " + entryTrace);
-                }
-            }
-
-            // mark virtual exit
-            final String exitMarker = "->exit";
-            final int exitIndex = trace.indexOf(exitMarker);
-            if (exitIndex != -1) {
-                final String exitTrace = trace.substring(0, exitIndex + exitMarker.length());
-                final Vertex visitedExit = graph.lookupVertex(exitTrace);
-
-                if (visitedExit != null) {
-                    visitedVertices.add(visitedExit);
-                } else {
-                    Log.printWarning("Couldn't derive vertex for exit trace: " + exitTrace);
-                }
-            }
+            // mapEntryTraceToVertex(graph, visitedVertices, trace);
+            // mapExitTraceToVertex(graph, visitedVertices, trace);
 
             // mark actual vertex corresponding to trace
             Vertex visitedVertex = graph.lookupVertex(trace);

@@ -84,14 +84,12 @@ public class InterCFG extends CFG {
     }
 
     /**
-     * {@inheritDoc}
+     * Adds a mapping in the cache for method entries.
+     *
+     * @param traceToVertexCache The trace to vertex cache.
      */
-    @Override
-    protected Map<String, CFGVertex> initTraceToVertexCache() {
-
-        long start = System.currentTimeMillis();
-
-        Map<String, CFGVertex> traceToVertexCache = new HashMap<>();
+    @SuppressWarnings("unused")
+    private void handleMethodEntries(final Map<String, CFGVertex> traceToVertexCache) {
 
         // handle entry vertices
         Set<CFGVertex> entryVertices = graph.getVertices().stream().filter(CFGVertex::isEntryVertex).collect(Collectors.toSet());
@@ -122,6 +120,15 @@ public class InterCFG extends CFG {
                 }
             }
         }
+    }
+
+    /**
+     * Adds a mapping in the cache for method exits.
+     *
+     * @param traceToVertexCache The trace to vertex cache.
+     */
+    @SuppressWarnings("unused")
+    private void handleMethodExits(Map<String, CFGVertex> traceToVertexCache) {
 
         // handle exit vertices
         Set<CFGVertex> exitVertices = graph.getVertices().stream().filter(CFGVertex::isExitVertex).collect(Collectors.toSet());
@@ -151,6 +158,20 @@ public class InterCFG extends CFG {
                 }
             }
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    protected Map<String, CFGVertex> initTraceToVertexCache() {
+
+        long start = System.currentTimeMillis();
+
+        final Map<String, CFGVertex> traceToVertexCache = new HashMap<>();
+
+        // handleMethodEntries(traceToVertexCache);
+        // handleMethodExits(traceToVertexCache);
 
         // handle branch + if and switch stmt vertices
         for (CFGVertex branchVertex : branchVertices) {
