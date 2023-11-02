@@ -233,6 +233,9 @@ public class FitnessEndpoint implements Endpoint {
      */
     private List<String> getBranches(Path appDir) {
 
+        // TODO: Both files have a different format. Unless the branches aren't actually needed except counting them,
+        //  it doesn't matter. Otherwise, we need to convert them to the same format or prefer those from the blocks.txt.
+
         final File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
         final List<String> branches = new ArrayList<>();
 
