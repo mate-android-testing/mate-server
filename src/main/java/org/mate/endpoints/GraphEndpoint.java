@@ -141,7 +141,7 @@ public class GraphEndpoint implements Endpoint {
                 approachLevel = approachLevelPair.snd();
                 branchDistance = 1.0;
             } else {
-                // This is the if or switch statement from which an incorrect branch toward the target was taken.
+                // This is the if or switch (actually case) statement from which an incorrect branch toward the target was taken.
                 // Hence, we will use this vertex to compute the branch distance.
                 final CFGVertex ifOrSwitchVertex = approachLevelPair.fst();
                 approachLevel = approachLevelPair.snd();

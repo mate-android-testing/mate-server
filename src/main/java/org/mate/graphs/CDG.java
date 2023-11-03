@@ -209,10 +209,10 @@ public abstract class CDG extends CFG {
                     return new Pair<>(path.getStartVertex(), approachLevel);
                 } else if (curr.toString().startsWith("Connect->")) {
                     // Last vertex corresponds to virtual disconnect vertex added to the graph due to loose subgraphs.
-                    return new Pair<>(curr, Integer.MAX_VALUE);
+                    return new Pair<>(null, Integer.MAX_VALUE);
                 } else {
-                    // covered branch, case or basic block
-                    return new Pair<>(path.getStartVertex(), approachLevel);
+                    // covered basic block
+                    return new Pair<>(null, approachLevel);
                 }
             } else {
 
