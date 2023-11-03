@@ -1,16 +1,11 @@
 package org.mate.endpoints;
 
-import com.android.tools.smali.dexlib2.analysis.AnalyzedInstruction;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.calltree.CallTreeVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
-import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.ReturnStatement;
-import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.Tuple;
 import org.apache.commons.io.FileUtils;
-import org.mate.crash_reproduction.*;
+import org.mate.crash_reproduction.StackTrace;
 import org.mate.graphs.*;
 import org.mate.network.Endpoint;
 import org.mate.network.message.Message;
@@ -20,7 +15,6 @@ import org.mate.util.Pair;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -54,21 +48,6 @@ public class GraphEndpoint implements Endpoint {
      * The list of target vertices, e.g. all branches.
      */
     private List<? extends Vertex> targetVertices;
-
-    /**
-     * Stores for each stack trace line detailed information.
-     */
-    private Map<AtStackTraceLine, AnalyzedStackTraceLine> analyzedStackTraceLines;
-
-    /**
-     * The stack trace used for crash reproduction.
-     */
-    private StackTrace stackTrace;
-
-    /**
-     * Provides mainly utility functions for crash reproduction.
-     */
-    private CrashReproductionUtil crashReproductionUtil;
 
     public GraphEndpoint(AndroidEnvironment androidEnvironment, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
@@ -329,7 +308,8 @@ public class GraphEndpoint implements Endpoint {
      * @param branchVertices The branch vertices (targets).
      * @return Returns the branch distance vector.
      */
-    private List<String> computeBranchDistanceVectorCFG(final List<CFGVertex> visitedVertices, final List<CFGVertex> branchVertices) {
+    private List<String> computeBranchDistanceVectorCFG(final List<CFGVertex> visitedVertices,
+                                                        final List<CFGVertex> branchVertices) {
 
         final var vector = new String[branchVertices.size()];
         IntStream.range(0, branchVertices.size())
@@ -376,8 +356,15 @@ public class GraphEndpoint implements Endpoint {
      * @return Returns a response message containing the stack trace (lines).
      */
     private Message getStackTrace(Message request) {
+
+        if (!(graph instanceof CallTree)) {
+            throw new UnsupportedOperationException("Crash reproduction only available on call tree so far!");
+        }
+
+        final CallTree callTree = (CallTree) graph;
+
         return new Message.MessageBuilder("/graph/stack_trace")
-                .withParameter("stack_trace", String.join(",", stackTrace.getAtLines()))
+                .withParameter("stack_trace", String.join(",", callTree.getStackTrace().getAtLines()))
                 .build();
     }
 
@@ -389,9 +376,16 @@ public class GraphEndpoint implements Endpoint {
      */
     private Message getStackTraceTokens(Message request) {
 
+        if (!(graph instanceof CallTree)) {
+            throw new UnsupportedOperationException("Crash reproduction only available on call tree so far!");
+        }
+
+        final CallTree callTree = (CallTree) graph;
+
+        final StackTrace stackTrace = callTree.getStackTrace();
         final String packageName = request.getParameter("package");
         final Set<String> stackTraceTokens = stackTrace.getFuzzyTokens(packageName);
-        final Stream<String> instructionTokens = crashReproductionUtil.getTokensForStackTrace(stackTrace, packageName);
+        final Stream<String> instructionTokens = callTree.getTokensForStackTrace(stackTrace, packageName);
         final Set<String> tokens = Stream.concat(stackTraceTokens.stream(), instructionTokens).collect(Collectors.toSet());
 
         final var builder = new Message.MessageBuilder("/graph/stack_trace_tokens")
@@ -413,8 +407,39 @@ public class GraphEndpoint implements Endpoint {
      * @return Returns a response message containing the stack trace user tokens.
      */
     private Message getStackTraceUserTokens(Message request) {
+
+        if (!(graph instanceof CallTree)) {
+            throw new UnsupportedOperationException("Crash reproduction only available on call tree so far!");
+        }
+
+        final CallTree callTree = (CallTree) graph;
+
         return new Message.MessageBuilder("/graph/stack_trace_user_tokens")
-                .withParameter("tokens", String.join(",", stackTrace.getUserTokens()))
+                .withParameter("tokens", String.join(",", callTree.getStackTrace().getUserTokens()))
+                .build();
+    }
+
+    /**
+     * Retrieves the crash distance for the given chromosome.
+     *
+     * @param request The request message.
+     * @return Returns a response message containing the computed crash distance.
+     */
+    private Message getCrashDistance(final Message request) {
+
+        if (!(graph instanceof CallTree)) {
+            throw new UnsupportedOperationException("Crash reproduction only available on call tree so far!");
+        }
+
+        CallTree callTree = (CallTree) graph;
+
+        final String chromosome = request.getParameter("chromosome");
+        final List<Set<String>> tracesPerFile = getTracesPerFile(request);
+        final Set<String> traces = getTraces(request);
+        double crashDistance = callTree.getCrashDistance(chromosome, tracesPerFile, traces);
+
+        return new Message.MessageBuilder("/graph/get_crash_distance")
+                .withParameter("crash_distance", String.valueOf(crashDistance))
                 .build();
     }
 
@@ -465,341 +490,6 @@ public class GraphEndpoint implements Endpoint {
      */
     private Set<String> getVisitedMethods(final Set<String> traces) {
         return traces.stream().map(this::traceToMethod).collect(Collectors.toSet());
-    }
-
-    /**
-     * Computes the normalized basic block distance between the given traces and the target methods described by the
-     * stack trace.
-     *
-     * @param tracesPerFile The given traces per file. One file essentially represents the traces of a single action.
-     * @return Returns a mapping that describes for each stack trace line the normalized basic block distance.
-     */
-    private Map<AtStackTraceLine, Double> getNormalizedBasicBlockDistances(final List<Set<String>> tracesPerFile) {
-
-        // Look for the traces that reached most target methods.
-        final var bestTraces = tracesPerFile.stream()
-                .map(traces -> new Tuple<>(traces, reachedTargetMethods(traces)))
-                .max(Comparator.comparingLong(tuple -> tuple.getY().values().stream().filter(b -> b).count()))
-                .orElseThrow();
-
-        return bestTraces.getY().entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> {
-                    final int distance = e.getValue()
-                            // only need to compute distance if we reached the target method (stack trace line)
-                            ? getBasicBlockDistance(bestTraces.getX(), e.getKey())
-                            : Integer.MAX_VALUE;
-
-                    // normalize distance in [0,1]
-                    return distance == Integer.MAX_VALUE
-                            ? 1D
-                            : (double) distance / ((double) distance + 1);
-                }));
-    }
-
-    /**
-     * Retrieves the minimal basic block distance (approach level) between the given traces and the target method
-     * contained in the stack trace.
-     *
-     * @param traces The set of traces.
-     * @param stackTraceLine The stack trace line containing the target method.
-     * @return Returns the minimal basic block distance between the traces and the target method.
-     */
-    private int getBasicBlockDistance(final Set<String> traces, final AtStackTraceLine stackTraceLine) {
-
-        // retrieve the intra CFG corresponding to the given stack trace line
-        final var analyzedStackTraceLine = analyzedStackTraceLines.get(stackTraceLine);
-        final IntraCFG intraCFG = analyzedStackTraceLine.getIntraCFG();
-
-        final String targetMethod = analyzedStackTraceLine.getIntraCFGVertices().stream()
-                .findAny().orElseThrow().getMethod();
-
-        int minDistance = Integer.MAX_VALUE;
-
-        for (String trace : traces) {
-            if (traceToMethod(trace).equals(targetMethod)) {
-                int distance = analyzedStackTraceLine.getIntraCFGVertices().stream()
-                        // TODO: Employ a cache for the distances!
-                        .map(targetVertex -> intraCFG.getDistance(intraCFG.lookupVertex(trace), (CFGVertex) targetVertex))
-                        .map(dist -> dist == -1 ? Integer.MAX_VALUE : dist) // -1 means not reachable
-                        .min(Integer::compare)
-                        .orElseThrow();
-
-                if (distance < minDistance) {
-                    minDistance = distance;
-                }
-            }
-        }
-
-        return minDistance;
-    }
-
-    /**
-     * Retrieves the normalized call tree distance for the given chromosome.
-     *
-     * @param chromosome The chromosome for which the call tree distance should be derived.
-     * @param tracesPerFile The traces per file (action).
-     * @return Returns the normalized call tree distance for the given chromosome.
-     */
-    private double getCallTreeDistance(final String chromosome, final List<Set<String>> tracesPerFile) {
-
-        Log.println("Computing the call tree distance for the chromosome: " + chromosome);
-
-        // We don't want to mix the traces of different actions, since our target action should produce all traces
-        // necessary to cover the stack trace methods.
-        // If we mix the traces then it's possible that we get a call tree distance of zero even if the target methods
-        // are called from different actions
-        // (and never just by one action). Then we have technically reached all target methods, but not in the right sequence
-        double callTreeDistance = tracesPerFile.stream()
-                .map(traces -> traces.stream().map(this::traceToMethod).collect(Collectors.toSet()))
-                .mapToInt(this::getCallTreeDistance)
-                .min().orElseThrow();
-
-        double normalizedCallTreeDistance = callTreeDistance == Integer.MAX_VALUE
-                ? 1
-                : callTreeDistance / (callTreeDistance + 1);
-
-        Log.println("Call tree distance for " + chromosome + " is: abs. distance " + callTreeDistance
-                + ", rel. distance " + normalizedCallTreeDistance);
-
-        return normalizedCallTreeDistance;
-    }
-
-    /**
-     * Retrieves the normalized (average) basic block distance between the traces and the target methods.
-     *
-     * @param chromosome The chromosome for which the basic block distance should be derived.
-     * @param tracesPerFile The traces per file (action).
-     * @return Returns the normalized basic block distance for the given chromosome.
-     */
-    private double getBasicBlockDistance(final String chromosome, final List<Set<String>> tracesPerFile) {
-
-        Log.println("Computing the call tree distance for the chromosome: " + chromosome);
-
-        final Map<AtStackTraceLine, Double> basicBlockDistances = getNormalizedBasicBlockDistances(tracesPerFile);
-
-        // computes the average basic block distance
-        double sum = basicBlockDistances.values().stream().mapToDouble(d -> d).sum();
-        double averageBasicBlockDistance = sum / basicBlockDistances.size();
-
-        Log.println("Basic block distance for " + chromosome + " is: " + averageBasicBlockDistance);
-
-        return averageBasicBlockDistance;
-    }
-
-    /**
-     * Retrieves the number (percentage) of reached constructors for the given chromosome.
-     *
-     * @param chromosome The chromosome for which the number of reached constructors should be derived.
-     * @param traces The traces for the given chromosome.
-     * @return Returns the number of reached constructors for the given chromosome.
-     */
-    private double getNumberOfReachedConstructors(final String chromosome, final Set<String> traces) {
-
-        Log.println("Computing number of reached constructors for the chromosome: " + chromosome);
-
-        // track which methods have been visited by the traces
-        final Set<String> reachedMethods = traces.stream().map(this::traceToMethod).collect(Collectors.toSet());
-
-        // TODO: Cache this computation when initialising the call graph.
-        // track the set of required constructors by iterating over the stack trace lines
-        final Set<String> requiredConstructors = analyzedStackTraceLines.values().stream()
-                .map(AnalyzedStackTraceLine::getRequiredConstructorCalls)
-                .flatMap(Collection::stream)
-                .collect(Collectors.toSet());
-
-        // count how many constructors have been reached
-        double reachedConstructors = requiredConstructors.stream().filter(reachedMethods::contains).count();
-
-        // normalize in the range [0,1]
-        double normalisedNumberOfReachedConstructors = requiredConstructors.size() == 0
-                ? 1
-                : reachedConstructors / requiredConstructors.size();
-
-        Log.println("Number of reached constructors for " + chromosome + " is: " + normalisedNumberOfReachedConstructors);
-
-        return normalisedNumberOfReachedConstructors;
-    }
-
-    /**
-     * Retrieves the crash distance for the given chromosome.
-     *
-     * @param request The request message.
-     * @return Returns a response message containing the computed crash distance.
-     */
-    private Message getCrashDistance(final Message request) {
-
-        final String chromosome = request.getParameter("chromosome");
-        final List<Set<String>> tracesPerFile = getTracesPerFile(request);
-        final Set<String> traces = getTraces(request);
-
-        double callTreeDistance = getCallTreeDistance(chromosome, tracesPerFile);
-        double basicBlockDistance = getBasicBlockDistance(chromosome, tracesPerFile);
-        double reachedConstructorsPercentage = getNumberOfReachedConstructors(chromosome, traces);
-
-        double crashDistance = (basicBlockDistance + callTreeDistance + reachedConstructorsPercentage) / 3;
-
-        return new Message.MessageBuilder("/graph/get_crash_distance")
-                .withParameter("crash_distance", String.valueOf(crashDistance))
-                .build();
-    }
-
-    /**
-     * Computes the call tree distance between the target vertices and the given traces.
-     *
-     * @param traces The given traces.
-     * @return Returns the call tree distance.
-     */
-    private int getCallTreeDistance(final Set<String> traces) {
-
-        CallTree callTree = (CallTree) graph;
-
-        // TODO: Cache this computation.
-        // the call tree vertices describing the stack trace in reversed order
-        final List<CallTreeVertex> callTreeVertices = targetVertices.stream()
-                .map(v -> (CFGVertex) v)
-                .map(CFGVertex::getMethod)
-                .map(CallTreeVertex::new)
-                .collect(Collectors.toList());
-        Collections.reverse(callTreeVertices);
-
-        Optional<CallTreeVertex> lastCoveredVertex = Optional.empty();
-
-        while (!callTreeVertices.isEmpty() && traces.contains(callTreeVertices.get(0).getMethod())) {
-            // remove target vertices that we have already covered
-            lastCoveredVertex = Optional.of(callTreeVertices.remove(0));
-        }
-
-        if (callTreeVertices.isEmpty()) {
-            // We have already reached all targets, thus a distance of 0.
-            return 0;
-        } else if (lastCoveredVertex.isPresent()) {
-            // We partially covered the targets, thus the distance is defined as the minimal path length from the last
-            // covered vertex through the remaining targets.
-            return callTree.getShortestPathWithStops(lastCoveredVertex.get(), callTreeVertices).orElseThrow().getLength();
-        } else {
-            // TODO: Computing the minimal path between every single trace and the targets can be expensive. Track it
-            //  or compute the distance in advance. Alternatively, use a different metric in this case.
-            // We have not found any targets yet, thus the distance is defined as the minimal path length from a trace
-            // through the targets.
-            int minDistance = Integer.MAX_VALUE;
-
-            for (String trace : traces) {
-                var path
-                        = callTree.getShortestPathWithStops(new CallTreeVertex(trace), callTreeVertices);
-                if (path.isPresent()) {
-                    final int distance = path.get().getLength();
-
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                    }
-                }
-            }
-            return minDistance;
-        }
-    }
-
-    /**
-     * Computes a mapping that describes which stack trace line (target method) has been covered by the given traces.
-     *
-     * @param traces The given traces.
-     * @return Returns a mapping that tracks which target method (stack trace line) has been covered by the traces.
-     */
-    private Map<AtStackTraceLine, Boolean> reachedTargetMethods(final Set<String> traces) {
-
-        final Set<String> reachedMethods = traces.stream().map(this::traceToMethod).collect(Collectors.toSet());
-
-        final Map<AtStackTraceLine, Boolean> reachedTargetMethods = analyzedStackTraceLines.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, stackTraceLine -> {
-                    final String method = expectOne(stackTraceLine.getValue().getInterCFGVertices().stream()
-                            .map(CFGVertex::getMethod)
-                            .collect(Collectors.toSet()));
-                    return reachedMethods.contains(method);
-                }));
-        onlyAllowCoveredIfPredecessorCoveredAsWell(reachedTargetMethods);
-        return reachedTargetMethods;
-    }
-
-    // TODO: Need help here for understanding!
-    private void onlyAllowCoveredIfPredecessorCoveredAsWell(Map<AtStackTraceLine, Boolean> map) {
-        // We are only interested in a covered method if its predecessor from the stack trace was reached as well
-        // TODO Does not consider the following case:
-        // Stack trace from crash we are trying to reproduce:
-        // at com.example.Class2.method2()
-        // at com.example.Class1.method1()
-        //
-        // Traces
-        // - com.example.Class2.method2() covered
-        // - com.example.Class1.method1() covered
-        //
-        // Result
-        // - com.example.Class1.method1() will be marked as reached -> fine
-        // - com.example.Class2.method2() will be marked as reached
-        //      -> Case: method2 is called by method3
-        //      -> should ideally not be marked as reached (since it was not called by method1)
-
-        var orderedEntries = stackTrace.getStackTraceAtLines()
-                .filter(map::containsKey)
-                .map(line -> map.entrySet().stream().filter(e -> e.getKey().equals(line)).findAny())
-                .map(Optional::orElseThrow)
-                .collect(Collectors.toList());
-        Collections.reverse(orderedEntries);
-
-        Iterator<Map.Entry<AtStackTraceLine, Boolean>> coveredStackTraceLineIterator = orderedEntries.listIterator();
-
-        while (coveredStackTraceLineIterator.hasNext() && coveredStackTraceLineIterator.next().getValue()) {
-            // Run from bottom to top of stack trace lines until an uncovered line is reached
-        }
-
-        // Set remaining lines to not covered, since predecessor is also not covered
-        while (coveredStackTraceLineIterator.hasNext()) {
-            coveredStackTraceLineIterator.next().setValue(false);
-        }
-    }
-
-    /**
-     * Checks whether the given collection contains exactly one element.
-     *
-     * @param collection The collection to be verified.
-     * @param <T> The element type of the collection entries.
-     * @return Returns the single element in the collection or throws an exception otherwise.
-     */
-    private static <T> T expectOne(final Collection<T> collection) {
-        if (collection.isEmpty()) {
-            throw new NoSuchElementException("Empty collection!");
-        } else if (collection.size() > 1) {
-            throw new IllegalArgumentException("Collection contains more than one element!");
-        } else {
-            return collection.stream().findAny().orElseThrow();
-        }
-    }
-
-    /**
-     * Computes the traces for the given statement. A trace encodes the full-qualified method name and the instruction
-     * index, e.g. Lcom/zola/bmi/onStop()V->3.
-     *
-     * @param statement The given statement.
-     * @return Returns the traces for the statement.
-     */
-    private Stream<String> tracesForStatement(final Statement statement) {
-        return getInstructions(statement)
-                .map(instruction -> statement.getMethod() + "->" + instruction.getInstructionIndex());
-    }
-
-    /**
-     * Retrieves the instructions of the given statement.
-     *
-     * @param statement The given statement.
-     * @return Returns the instructions belonging to the statement.
-     */
-    private static Stream<AnalyzedInstruction> getInstructions(final Statement statement) {
-        if (statement instanceof BasicStatement) {
-            return Stream.of(((BasicStatement) statement).getInstruction());
-        } else if (statement instanceof BlockStatement) { // basic block, unroll instructions
-            return ((BlockStatement) statement).getStatements()
-                    .stream().flatMap(GraphEndpoint::getInstructions);
-        } else {
-            return Stream.empty();
-        }
     }
 
     /**
@@ -910,12 +600,9 @@ public class GraphEndpoint implements Endpoint {
      * Selects one or more target vertices based on the given target criterion.
      *
      * @param target Describes how a target should be selected.
-     * @param packageName The package name of the AUT.
-     * @param apkPath The path to the APK file.
-     * @param stackTracePath The path to the stack trace file, {@code null} if not required.
      * @return Returns the selected target vertex.
      */
-    private List<? extends Vertex> selectTargetVertices(String target, String packageName, File apkPath, String stackTracePath) {
+    private List<? extends Vertex> selectTargetVertices(String target) {
 
         Log.println("Target vertex selection strategy: " + target);
 
@@ -945,18 +632,8 @@ public class GraphEndpoint implements Endpoint {
                     }
                 }
             case "stack_trace":
-                final File appDir = new File(appsDir.toFile(), packageName);
-
-                // the stack_trace.txt should be located within the app directory
-                final File stackTraceFile = new File(appDir, stackTracePath);
-
-                if (!stackTraceFile.exists()) {
-                    throw new IllegalArgumentException("Stack trace file does not exist at: " + stackTraceFile.getAbsolutePath());
-                }
-
-                stackTrace = parseStackTraceFromFile(stackTraceFile);
-
-                return getTargetVertices(stackTrace, packageName, apkPath);
+                final CallTree callTree = (CallTree) graph;
+                return callTree.getTargetVertices();
             default:
                 // look up target vertex/vertices by supplied trace(s)
                 final List<Vertex> targetVertices = Arrays.stream(target.split(","))
@@ -969,104 +646,6 @@ public class GraphEndpoint implements Endpoint {
                 }
                 return targetVertices;
         }
-    }
-
-    /**
-     * Parses the stack trace from the given file.
-     *
-     * @param stackTraceFile The given stack trace file.
-     * @return Returns the parsed stack trace.
-     */
-    private StackTrace parseStackTraceFromFile(final File stackTraceFile) {
-        try {
-            return StackTraceParser.parse(Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()));
-        } catch (IOException e) {
-            Log.printError("Could not read stack trace file from '" + stackTraceFile.getAbsolutePath() + "'!");
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    /**
-     * Initialises the target vertices for crash reproduction.
-     *
-     * @param stackTrace The target stack trace.
-     * @param packageName The package name of the AUT.
-     * @param apkPath The path to the APK.
-     * @return Returns the target vertices for crash reproduction.
-     */
-    private List<? extends Vertex> getTargetVertices(final StackTrace stackTrace, final String packageName, final File apkPath) {
-
-        final CallTree callTree = (CallTree) graph;
-        final InterCFG interCFG = callTree.getInterCFG();
-
-        // TODO: Make this crash reproduction util a real utility class.
-        crashReproductionUtil = new CrashReproductionUtil(callTree);
-
-        // Analyse every 'at' stack trace line that belongs to the given package and comes in consecutive order.
-        analyzedStackTraceLines = crashReproductionUtil.getLastConsecutiveLines(stackTrace.getStackTraceAtLines()
-                .collect(Collectors.toList()), packageName).stream()
-                .collect(Collectors.toMap(Function.identity(), line -> {
-
-                    // Retrieve the inter-procedural CFG vertices that are mapped to the given stack trace line.
-                    final Set<CFGVertex> targetInterCFGVertices
-                            = crashReproductionUtil.getTargetVerticesForStackTraceLine(line, interCFG);
-
-                    // TODO: Retrieve the target method name directly from the method name encoded in the stack trace line.
-                    final String targetMethod = expectOne(targetInterCFGVertices.stream()
-                            .map(CFGVertex::getMethod)
-                            .collect(Collectors.toSet()));
-
-                    // create the intraCFG matching the target method (method encoded in the stack trace line)
-                    final IntraCFG intraCFG = new IntraCFG(apkPath, targetMethod, true, appsDir, packageName);
-
-                    // TODO: Remove once we can assure that those vertices are identical to the interTargetVertices!
-                    final Set<CFGVertex> targetIntraCFGVertices = targetInterCFGVertices.stream()
-                            .flatMap(interVertex -> tracesForStatement(interVertex.getStatement()))
-                            .map(intraCFG::lookupVertex)
-                            .collect(Collectors.toSet());
-
-                    if (!targetInterCFGVertices.equals(targetIntraCFGVertices)) {
-                        Log.println("Not same set of vertices!");
-                        Log.println("InterCFG vertices: " + targetInterCFGVertices);
-                        Log.println("IntraCFG vertices: " + targetIntraCFGVertices);
-                    }
-
-                    // Retrieves the required constructors to properly call the target method in the stack trace line.
-                    final var requiredConstructorCalls = crashReproductionUtil.getRequiredConstructorCalls(line);
-
-                    return new AnalyzedStackTraceLine(targetInterCFGVertices, intraCFG,
-                            targetIntraCFGVertices, requiredConstructorCalls);
-                }));
-
-        // Retrieve the target vertices from the stack trace lines.
-        final List<CFGVertex> targetInterCFGVertices = stackTrace.getStackTraceAtLines()
-                .filter(analyzedStackTraceLines::containsKey)
-                .map(analyzedStackTraceLines::get)
-                .map(AnalyzedStackTraceLine::getInterCFGVertices)
-                .flatMap(Collection::stream)
-                .collect(Collectors.toList());
-
-        // At least a single line (target) in the stack trace must refer to the AUT.
-        if (targetInterCFGVertices.isEmpty()) {
-            throw new IllegalStateException("No targets found for stack trace!");
-        }
-
-        // TODO: Store the call tree vertices in a global variable.
-        // Map the interCFG vertices to the callTree vertices.
-        final var callTreeVertices = targetInterCFGVertices.stream()
-                .map(CFGVertex::getMethod)
-                .map(CallTreeVertex::new)
-                .collect(Collectors.toList());
-
-        // TODO: Why do we reverse the list?
-        Collections.reverse(callTreeVertices);
-
-        // The target vertices must be reachable in the call tree.
-        if (callTree.getShortestPathWithStops(callTreeVertices).isEmpty()) {
-            throw new IllegalStateException("No path from root to target vertices!");
-        }
-
-        return targetInterCFGVertices;
     }
 
     /**
@@ -1145,7 +724,7 @@ public class GraphEndpoint implements Endpoint {
     private void initModularCDG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
                                      boolean resolveOnlyAUTClasses, String packageName, String target) {
         graph = new ModularCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
-        targetVertices = selectTargetVertices(target, packageName, apkPath, null);
+        targetVertices = selectTargetVertices(target);
     }
 
     /**
@@ -1160,7 +739,7 @@ public class GraphEndpoint implements Endpoint {
     private void initIntraCFG(final File apkPath, final String methodName, final boolean useBasicBlocks,
                                  final String packageName, final String target) {
         graph = new IntraCFG(apkPath, methodName, useBasicBlocks, appsDir, packageName);
-        targetVertices = selectTargetVertices(target, packageName, apkPath, null);
+        targetVertices = selectTargetVertices(target);
     }
 
     /**
@@ -1176,7 +755,7 @@ public class GraphEndpoint implements Endpoint {
     private void initInterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
                                  boolean resolveOnlyAUTClasses, String packageName, String target) {
         graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
-        targetVertices = selectTargetVertices(target, packageName, apkPath, null);
+        targetVertices = selectTargetVertices(target);
     }
 
     /**
@@ -1192,7 +771,7 @@ public class GraphEndpoint implements Endpoint {
     private void initInterCDG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
                               boolean resolveOnlyAUTClasses, String packageName, String target) {
         graph = new InterCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
-        targetVertices = selectTargetVertices(target, packageName, apkPath, null);
+        targetVertices = selectTargetVertices(target);
     }
 
     /**
@@ -1207,8 +786,8 @@ public class GraphEndpoint implements Endpoint {
      */
     private void initCallTree(File apkPath, boolean excludeARTClasses, boolean resolveOnlyAUTClasses,
                               String packageName, String target, String stackTracePath) {
-        graph = new CallTree(apkPath, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
-        targetVertices = selectTargetVertices(target, packageName, apkPath, stackTracePath);
+        graph = new CallTree(apkPath, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName, stackTracePath);
+        targetVertices = selectTargetVertices(target);
     }
 
     /**
