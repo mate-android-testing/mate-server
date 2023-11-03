@@ -1,5 +1,6 @@
 package org.mate.endpoints;
 
+import com.android.tools.smali.dexlib2.analysis.AnalyzedInstruction;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.calltree.CallTreeVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
@@ -9,7 +10,6 @@ import de.uni_passau.fim.auermich.android_graphs.core.statements.ReturnStatement
 import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.Tuple;
 import org.apache.commons.io.FileUtils;
-import org.jf.dexlib2.analysis.AnalyzedInstruction;
 import org.mate.crash_reproduction.*;
 import org.mate.graphs.*;
 import org.mate.network.Endpoint;

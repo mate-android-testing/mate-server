@@ -1,5 +1,7 @@
 package org.mate.graphs;
 
+import com.android.tools.smali.dexlib2.builder.BuilderInstruction;
+import com.android.tools.smali.dexlib2.iface.Method;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.BaseCFG;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
@@ -8,8 +10,6 @@ import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.GraphUtils;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.InstructionUtils;
-import org.jf.dexlib2.builder.BuilderInstruction;
-import org.jf.dexlib2.iface.Method;
 import org.mate.util.Log;
 
 import java.io.File;
