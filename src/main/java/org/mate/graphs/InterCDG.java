@@ -72,6 +72,8 @@ public class InterCDG extends CDG {
             } else {
                 visitedVertices.add(visitedVertex);
 
+                // TODO: Perform additional lookup only if basic block has been actually split!
+
                 // mark additional vertices described by the basic block trace (caused through splitting of basic blocks)
                 if (!visitedVertex.isEntryVertex() && !visitedVertex.isExitVertex()) {
                     lookupBasicBlockVertices(visitedVertices, trace);
