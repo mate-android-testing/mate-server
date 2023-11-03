@@ -242,7 +242,7 @@ public abstract class CDG extends CFG {
 
         // Return a default value of 1.0 if we were not able to find an appropriate missedBranchVertex.
         if (missedBranchVertex == null
-                || missedBranchVertex.getStatement().toString().equals("entry global")
+                || missedBranchVertex.equals(graph.getEntry())
                 || !(missedBranchVertex.getStatement() instanceof BlockStatement)) {
             return 1.0;
         }
