@@ -25,7 +25,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -162,14 +161,18 @@ public class GraphEndpoint implements Endpoint {
      */
     private Message getBranchDistanceCDG(final Message request) {
 
+        if (!(graph instanceof CDG)) {
+            throw new UnsupportedOperationException("Approach Level & Branch Distance only defined on CDG so far!");
+        }
+
         final String packageName = request.getParameter("packageName");
         final String chromosome = request.getParameter("chromosome");
         Log.println("Computing the branch distance for the chromosome: " + chromosome);
 
+        final CDG cdg = (CDG) graph;
+
         final var traces = getTraces(packageName, chromosome);
-        final var visitedVertices = mapTracesToVertices(graph, traces).stream()
-                .map(vertex -> (CFGVertex) vertex)
-                .collect(Collectors.toSet());
+        final var visitedVertices = new HashSet<>(cdg.lookupVertices(traces));
         final var branchDistance = computeApproachLevelAndBranchDistanceCDG(visitedVertices,
                 // there is only a single target
                 (CFGVertex) targetVertices.get(0), traces);
@@ -215,12 +218,11 @@ public class GraphEndpoint implements Endpoint {
         final String chromosome = request.getParameter("chromosome");
         Log.println("Computing the branch distance for the chromosome: " + chromosome);
 
-        final var traces = getTraces(packageName, chromosome);
-        final var visitedVertices = mapTracesToVertices(graph, traces).stream()
-                .map(vertex -> (CFGVertex) vertex)
-                .collect(Collectors.toList());
+        final InterCFG interCFG = (InterCFG) graph;
 
-        InterCFG interCFG = (InterCFG) graph;
+        final var traces = getTraces(packageName, chromosome);
+        final var visitedVertices = interCFG.lookupVertices(traces);
+
         interCFG.precomputeBranchDistances(traces);
         final var branchDistance = interCFG.computeApproachLevelAndBranchDistance(visitedVertices,
                 // there is only a single target
@@ -267,14 +269,13 @@ public class GraphEndpoint implements Endpoint {
         final String chromosome = request.getParameter("chromosome");
         Log.println("Computing the branch distance vector for the chromosome: " + chromosome);
 
+        InterCFG interCFG = (InterCFG) graph;
+
         long start = System.currentTimeMillis();
         final var traces = getTraces(packageName, chromosome);
-        final var visitedVertices = mapTracesToVertices(graph, traces).stream()
-                .map(vertex -> (CFGVertex) vertex)
-                .collect(Collectors.toList());
-        final var branchVertices =  ((CFG) graph).getBranchVertices();
+        final var visitedVertices = interCFG.lookupVertices(traces);
+        final var branchVertices =  interCFG.getBranchVertices();
         long start1 = System.currentTimeMillis();
-        InterCFG interCFG = (InterCFG) graph;
         interCFG.precomputeBranchDistances(traces);
         long end1 = System.currentTimeMillis();
         Log.println("Pre-Computing branch distances took: " + (end1 - start1) + "ms");
@@ -296,16 +297,20 @@ public class GraphEndpoint implements Endpoint {
      */
     private Message getBranchDistanceVectorCDG(final Message request) {
 
+        if (!(graph instanceof CDG)) {
+            throw new UnsupportedOperationException("Approach Level & Branch Distance only defined on CDG so far!");
+        }
+
         final String packageName = request.getParameter("packageName");
         final String chromosome = request.getParameter("chromosome");
         Log.println("Computing the branch distance vector for the chromosome: " + chromosome);
 
+        final CDG cdg = (CDG) graph;
+
         long start = System.currentTimeMillis();
         final var traces = getTraces(packageName, chromosome);
-        final var visitedVertices = mapTracesToVertices(graph, traces).stream()
-                .map(vertex -> (CFGVertex) vertex)
-                .collect(Collectors.toSet());
-        final var branchVertices =  ((CFG) graph).getBranchVertices();
+        final var visitedVertices = new HashSet<>(cdg.lookupVertices(traces));
+        final var branchVertices =  cdg.getBranchVertices();
 
         final List<String> branchDistanceVector = computeBranchDistanceVectorCDG(visitedVertices, branchVertices, traces);
         long end = System.currentTimeMillis();
@@ -898,7 +903,7 @@ public class GraphEndpoint implements Endpoint {
         // read traces from trace file(s)
         final List<String> traces = readTraces(tracesFiles);
 
-        return mapTracesToVertices(graph, traces);
+        return graph.lookupVertices(traces);
     }
 
     /**
@@ -1282,97 +1287,5 @@ public class GraphEndpoint implements Endpoint {
 
         Log.println("Number of collected traces: " + traces.size());
         return new ArrayList<>(traces);
-    }
-
-    /**
-     * Maps an entry trace to its vertex.
-     *
-     * @param graph The underlying graph.
-     * @param visitedVertices The set of visited vertices.
-     * @param trace The potential entry trace.
-     */
-    @SuppressWarnings("unused")
-    private static void mapEntryTraceToVertex(final Graph graph, final Set<Vertex> visitedVertices, final String trace) {
-
-        // mark virtual entry
-        final String entryMarker = "->entry";
-        final int entryIndex = trace.indexOf(entryMarker);
-        if (entryIndex != -1) {
-            final String entryTrace = trace.substring(0, entryIndex + entryMarker.length());
-            final Vertex visitedEntry = graph.lookupVertex(entryTrace);
-
-            if (visitedEntry != null) {
-                visitedVertices.add(visitedEntry);
-            } else {
-                Log.printWarning("Couldn't derive vertex for entry trace: " + entryTrace);
-            }
-        }
-    }
-
-    /**
-     * Maps an exit trace to its vertex.
-     *
-     * @param graph The underlying graph.
-     * @param visitedVertices The set of visited vertices.
-     * @param trace The potential exit trace.
-     */
-    @SuppressWarnings("unused")
-    private static void mapExitTraceToVertex(final Graph graph, final Set<Vertex> visitedVertices, final String trace) {
-
-        // mark virtual exit
-        final String exitMarker = "->exit";
-        final int exitIndex = trace.indexOf(exitMarker);
-        if (exitIndex != -1) {
-            final String exitTrace = trace.substring(0, exitIndex + exitMarker.length());
-            final Vertex visitedExit = graph.lookupVertex(exitTrace);
-
-            if (visitedExit != null) {
-                visitedVertices.add(visitedExit);
-            } else {
-                Log.printWarning("Couldn't derive vertex for exit trace: " + exitTrace);
-            }
-        }
-    }
-
-    /**
-     * Maps the given set of traces to vertices in the graph.
-     *
-     * @param traces The set of traces that should be mapped to vertices.
-     * @return Returns the vertices described by the given set of traces.
-     */
-    public static List<Vertex> mapTracesToVertices(final Graph graph, final List<String> traces) {
-
-        // read traces from trace file(s)
-        long start = System.currentTimeMillis();
-
-        // we need to mark vertices we visited
-        final Set<Vertex> visitedVertices = Collections.newSetFromMap(new ConcurrentHashMap<Vertex, Boolean>());
-
-        // map trace to vertex
-        traces.parallelStream().forEach(trace -> {
-
-            if (trace.contains(":")) {
-                // skip branch distance trace and traces without a matching vertex pair.
-                return;
-            }
-
-            // mapEntryTraceToVertex(graph, visitedVertices, trace);
-            // mapExitTraceToVertex(graph, visitedVertices, trace);
-
-            // mark actual vertex corresponding to trace
-            Vertex visitedVertex = graph.lookupVertex(trace);
-
-            if (visitedVertex == null) {
-                Log.printWarning("Couldn't derive vertex for trace: " + trace);
-            } else {
-                visitedVertices.add(visitedVertex);
-            }
-        });
-
-        long end = System.currentTimeMillis();
-        Log.println("Mapping traces to vertices took: " + (end - start) + " ms.");
-
-        Log.println("Number of visited vertices: " + visitedVertices.size());
-        return new ArrayList<>(visitedVertices);
     }
 }

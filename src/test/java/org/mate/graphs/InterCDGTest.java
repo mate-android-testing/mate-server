@@ -4,7 +4,6 @@ import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.mate.endpoints.GraphEndpoint;
 import org.mate.util.Log;
 import org.mate.util.Pair;
 
@@ -54,9 +53,7 @@ public class InterCDGTest {
         traces = readTraceFile(TRACES_FILE);
         cdg = new InterCDG(APK_FILE, true, true, true, RESOURCES.toPath(),
                 "android.bignerdranch.com");
-        covered = GraphEndpoint.mapTracesToVertices(cdg, traces).stream()
-                .map(vertex -> (CFGVertex) vertex)
-                .collect(Collectors.toSet());
+        covered = new HashSet<>(cdg.lookupVertices(traces));
         cdg.draw(RESOURCES, covered, new HashSet<>());
     }
 

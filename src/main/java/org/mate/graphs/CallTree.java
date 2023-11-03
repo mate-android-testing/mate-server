@@ -9,10 +9,12 @@ import de.uni_passau.fim.auermich.android_graphs.core.utility.ComponentUtils;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.GraphUtils;
 import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ManyToManyShortestPathsAlgorithm;
+import org.mate.util.Log;
 
 import java.io.File;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
 
 /**
@@ -184,6 +186,96 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     @Override
     public CallTreeVertex lookupVertex(String trace) {
         return callTree.lookUpVertex(trace);
+    }
+
+    /**
+     * Maps the given set of traces to vertices in the graph.
+     *
+     * @param traces The set of traces that should be mapped to vertices.
+     * @return Returns the vertices described by the given set of traces.
+     */
+    @Override
+    public List<CallTreeVertex> lookupVertices(final List<String> traces) {
+
+        long start = System.currentTimeMillis();
+
+        // we need to mark vertices we visited
+        final Set<CallTreeVertex> visitedVertices = Collections.newSetFromMap(new ConcurrentHashMap<CallTreeVertex, Boolean>());
+
+        // map trace to vertex
+        traces.parallelStream().forEach(trace -> {
+
+            if (trace.contains(":")) {
+                // skip branch distance trace and traces without a matching vertex pair.
+                return;
+            }
+
+            // mapEntryTraceToVertex(visitedVertices, trace);
+            // mapExitTraceToVertex(visitedVertices, trace);
+
+            // mark actual vertex corresponding to trace
+            var visitedVertex = lookupVertex(trace);
+
+            if (visitedVertex == null) {
+                Log.printWarning("Couldn't derive vertex for trace: " + trace);
+            } else {
+                visitedVertices.add(visitedVertex);
+            }
+        });
+
+        long end = System.currentTimeMillis();
+        Log.println("Mapping traces to vertices took: " + (end - start) + " ms.");
+
+        Log.println("Number of visited vertices: " + visitedVertices.size());
+        return new ArrayList<>(visitedVertices);
+    }
+
+    /**
+     * Maps an entry trace to its vertex.
+     *
+     * @param visitedVertices The set of visited vertices.
+     * @param trace The potential entry trace.
+     */
+    @SuppressWarnings("unused")
+    private void mapEntryTraceToVertex(final Set<CallTreeVertex> visitedVertices, final String trace) {
+
+        // mark virtual entry
+        final String entryMarker = "->entry";
+        final int entryIndex = trace.indexOf(entryMarker);
+        if (entryIndex != -1) {
+            final String entryTrace = trace.substring(0, entryIndex + entryMarker.length());
+            final CallTreeVertex visitedEntry = lookupVertex(entryTrace);
+
+            if (visitedEntry != null) {
+                visitedVertices.add(visitedEntry);
+            } else {
+                Log.printWarning("Couldn't derive vertex for entry trace: " + entryTrace);
+            }
+        }
+    }
+
+    /**
+     * Maps an exit trace to its vertex.
+     *
+     * @param visitedVertices The set of visited vertices.
+     * @param trace The potential exit trace.
+     */
+    @SuppressWarnings("unused")
+    private void mapExitTraceToVertex(final Set<CallTreeVertex> visitedVertices, final String trace) {
+
+        // mark virtual exit
+        final String exitMarker = "->exit";
+        final int exitIndex = trace.indexOf(exitMarker);
+        if (exitIndex != -1) {
+            final String exitTrace = trace.substring(0, exitIndex + exitMarker.length());
+            final CallTreeVertex visitedExit = lookupVertex(exitTrace);
+
+            if (visitedExit != null) {
+                visitedVertices.add(visitedExit);
+            } else {
+                Log.printWarning("Couldn't derive vertex for exit trace: " + exitTrace);
+            }
+        }
     }
 
     /**

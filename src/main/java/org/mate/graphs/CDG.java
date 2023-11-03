@@ -12,6 +12,7 @@ import org.mate.util.Pair;
 
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -28,6 +29,48 @@ public abstract class CDG extends CFG {
      */
     public CDG(BaseCFG graph, Path appsDir, String appName) {
         super(graph, appsDir, appName);
+    }
+
+    /**
+     * Maps the given set of traces to vertices in the graph.
+     *
+     * @param traces The set of traces that should be mapped to vertices.
+     * @return Returns the vertices described by the given set of traces.
+     */
+    @Override
+    public List<CFGVertex> lookupVertices(final List<String> traces) {
+
+        long start = System.currentTimeMillis();
+
+        // we need to mark vertices we visited
+        final Set<CFGVertex> visitedVertices = Collections.newSetFromMap(new ConcurrentHashMap<CFGVertex, Boolean>());
+
+        // map trace to vertex
+        traces.parallelStream().forEach(trace -> {
+
+            if (trace.contains(":")) {
+                // skip branch distance trace and traces without a matching vertex pair.
+                return;
+            }
+
+            // mapEntryTraceToVertex(graph, visitedVertices, trace);
+            // mapExitTraceToVertex(graph, visitedVertices, trace);
+
+            // mark actual vertex corresponding to trace
+            var visitedVertex = lookupVertex(trace);
+
+            if (visitedVertex == null) {
+                Log.printWarning("Couldn't derive vertex for trace: " + trace);
+            } else {
+                visitedVertices.add(visitedVertex);
+            }
+        });
+
+        long end = System.currentTimeMillis();
+        Log.println("Mapping traces to vertices took: " + (end - start) + " ms.");
+
+        Log.println("Number of visited vertices: " + visitedVertices.size());
+        return new ArrayList<>(visitedVertices);
     }
 
     /**
