@@ -2,16 +2,20 @@ package org.mate.graphs;
 
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.EntryStatement;
+import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.GraphUtils;
 import org.jgrapht.GraphPath;
+import org.mate.graphs.util.Util;
+import org.mate.util.Log;
 import org.mate.util.Pair;
 
 import java.io.File;
 import java.nio.file.Path;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -33,6 +37,100 @@ public class InterCDG extends CDG {
                     Path appsDir, String packageName) {
         super(GraphUtils.constructInterCDG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses),
                 appsDir, packageName);
+    }
+
+    /**
+     * Maps the given set of traces to vertices in the graph.
+     *
+     * @param traces The set of traces that should be mapped to vertices.
+     * @return Returns the vertices described by the given set of traces.
+     */
+    @Override
+    public List<CFGVertex> lookupVertices(final List<String> traces) {
+
+        long start = System.currentTimeMillis();
+
+        // we need to mark vertices we visited
+        final Set<CFGVertex> visitedVertices = Collections.newSetFromMap(new ConcurrentHashMap<CFGVertex, Boolean>());
+
+        // map trace to vertex
+        traces.parallelStream().forEach(trace -> {
+
+            if (trace.contains(":")) {
+                // skip branch distance trace and traces without a matching vertex pair.
+                return;
+            }
+
+            // mapEntryTraceToVertex(visitedVertices, trace);
+            // mapExitTraceToVertex(visitedVertices, trace);
+
+            // mark actual vertex corresponding to trace
+            var visitedVertex = lookupVertex(trace);
+
+            if (visitedVertex == null) {
+                Log.printWarning("Couldn't derive vertex for trace: " + trace);
+            } else {
+                visitedVertices.add(visitedVertex);
+
+                // mark additional vertices described by the basic block trace (caused through splitting of basic blocks)
+                if (!visitedVertex.isEntryVertex() && !visitedVertex.isExitVertex()) {
+                    lookupBasicBlockVertices(visitedVertices, trace);
+                }
+            }
+        });
+
+        // markCoveredEntriesAndExits(visitedVertices);
+
+        long end = System.currentTimeMillis();
+        Log.println("Mapping traces to vertices took: " + (end - start) + " ms.");
+
+        Log.println("Number of visited vertices: " + visitedVertices.size());
+        return new ArrayList<>(visitedVertices);
+    }
+
+    /**
+     * The (basic block) traces provided through the instrumentation can potentially diverge from the basic blocks in
+     * the graph. This happens because we split basic blocks upon certain invoke instructions into smaller basic blocks.
+     * In order to mark not only a single vertex but all vertices described through the basic block trace we need to
+     * check the instruction indices falling into the range of the basic block.
+     *
+     * @param visitedVertices The set of visited vertices.
+     * @param trace The execution trace that could not be mapped to a vertex.
+     * @return Returns the number of added vertices to the set of visited vertices.
+     */
+    private int lookupBasicBlockVertices(final Set<CFGVertex> visitedVertices, final String trace) {
+
+        int foundVertices = 0;
+        final String[] tokens = trace.split("->"); // className->methodName->basicBlockPosition->basicBlockSize->...
+
+        // Derive boundaries of basic block.
+        int startIndex = Integer.parseInt(tokens[2]);
+        int endIndex = startIndex + Integer.parseInt(tokens[3]) - 1;
+
+        // Derive the subgraph (set of vertices) described by the given trace.
+        final String methodSignature = tokens[0] + "->" + tokens[1];
+        final Set<CFGVertex> subGraph = getVertices()
+                .stream()
+                .filter(vertex -> vertex.getMethod().contains(methodSignature))
+                .collect(Collectors.toSet());
+
+        // Mark the vertices described through the basic block as visited.
+        for (final CFGVertex vertex : subGraph) {
+            final Statement statement = vertex.getStatement();
+            if (statement instanceof BlockStatement) {
+                final List<Statement> statements = ((BlockStatement) statement).getStatements();
+                int currStart = Util.getInstructionIndexFromBlockStatement(statement);
+                int currEnd = ((BasicStatement) statements.get(statements.size() - 1)).getInstructionIndex();
+                if (currStart >= startIndex && currEnd <= endIndex) {
+                    visitedVertices.add(vertex);
+                    foundVertices++;
+                }
+            } else if (statement instanceof EntryStatement && startIndex == 0) {
+                visitedVertices.add(vertex);
+                foundVertices++;
+            }
+        }
+        return foundVertices;
     }
 
     // TODO: Re-use computeApproachLevel & computeBranchDistance from base class.

@@ -53,8 +53,8 @@ public abstract class CDG extends CFG {
                 return;
             }
 
-            // mapEntryTraceToVertex(graph, visitedVertices, trace);
-            // mapExitTraceToVertex(graph, visitedVertices, trace);
+            // mapEntryTraceToVertex(visitedVertices, trace);
+            // mapExitTraceToVertex(visitedVertices, trace);
 
             // mark actual vertex corresponding to trace
             var visitedVertex = lookupVertex(trace);
@@ -66,11 +66,58 @@ public abstract class CDG extends CFG {
             }
         });
 
+        // markCoveredEntriesAndExits(visitedVertices);
+
         long end = System.currentTimeMillis();
         Log.println("Mapping traces to vertices took: " + (end - start) + " ms.");
 
         Log.println("Number of visited vertices: " + visitedVertices.size());
         return new ArrayList<>(visitedVertices);
+    }
+
+    /**
+     * Marks covered entry and exit vertices from the given graph by adding them to the set of visited vertices.
+     * We treat virtual entry/exit vertices as covered if at least one cdg successor of them has been covered.
+     *
+     * @param visitedVertices The set of visited vertices.
+     */
+    @SuppressWarnings("unused")
+    private void markCoveredEntriesAndExits(final Set<CFGVertex> visitedVertices) {
+
+        // TODO: Conduct a code review and preferably avoid this expensive operation if possible.
+
+        visitedVertices.add(graph.getEntry());  // Add global entry.
+        boolean changed = true;
+
+        // Since we are not aware of the traversal order, we have to repeat the process until there are no
+        // new visited virtual entries/exits to be added to the set of visited vertices.
+        while (changed) {
+            changed = false;
+
+            for (final CFGVertex vertex : getVertices()) {
+
+                // Skip vertices already marked as covered and virtual connect vertices.
+                if (visitedVertices.contains(vertex) || vertex.getMethod().startsWith("Connect->")) {
+                    continue;
+                }
+
+                if (vertex.isEntryVertex() || vertex.isExitVertex()) {
+                    final Set<CFGVertex> cdgSuccessors = getOutgoingEdges(vertex)
+                            .stream()
+                            .map(CFGEdge::getTarget)
+                            .collect(Collectors.toSet());
+
+                    // Check if at least one cdg successor has been covered.
+                    for (CFGVertex successor : cdgSuccessors) {
+                        if (visitedVertices.contains(successor)) {
+                            visitedVertices.add(vertex);
+                            changed = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**
