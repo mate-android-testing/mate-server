@@ -58,6 +58,11 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     private final de.uni_passau.fim.auermich.android_graphs.core.graphs.calltree.CallTree callTree;
 
     /**
+     * Caches a mapping from trace to vertex.
+     */
+    private final Map<String, CallTreeVertex> traceToVertexCache;
+
+    /**
      * The set of discovered components, e.g. activities.
      */
     private final Set<Component> components;
@@ -100,6 +105,7 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     public CallTree(File apkPath, boolean excludeARTClasses, boolean resolveOnlyAUTClasses,
                     Path appsDir, String packageName, String stackTracePath) {
         this.callTree = GraphUtils.constructCallTree(apkPath, excludeARTClasses, resolveOnlyAUTClasses);
+        this.traceToVertexCache = initTraceToVertexCache();
         this.interCFG = new InterCFG(callTree.getInterCFG(), appsDir, packageName);
         this.shortestPathAlgorithm = callTree.initCHManyToManyShortestPathAlgorithm();
         this.components = callTree.getInterCFG().getComponents();
@@ -107,6 +113,19 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         this.stackTrace = loadStackTrace(appsDir, packageName, stackTracePath);
         this.analyzedStackTraceLines = analyzeStackTrace(appsDir, packageName);
         this.requiredConstructors = analyzeRequiredConstructors();
+    }
+
+    /**
+     * Initializes the trace to vertex cache.
+     *
+     * @return Returns the trace to vertex cache.
+     */
+    private Map<String, CallTreeVertex> initTraceToVertexCache() {
+        final Map<String, CallTreeVertex> traceToVertexCache = new HashMap<>();
+        for (final CallTreeVertex vertex : callTree.getVertices()) {
+            traceToVertexCache.put(vertex.getMethod(), vertex);
+        }
+        return traceToVertexCache;
     }
 
     /**
@@ -847,6 +866,7 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      */
     @Override
     public int getDistance(CallTreeVertex source, CallTreeVertex target) {
+        // TODO: Employ cache if necessary!
         return callTree.getShortestDistance(source, target);
     }
 
@@ -855,7 +875,16 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      */
     @Override
     public CallTreeVertex lookupVertex(String trace) {
-        return callTree.lookUpVertex(trace);
+        if (traceToVertexCache.containsKey(trace)) {
+            return traceToVertexCache.get(trace);
+        } else {
+            try {
+                return callTree.lookUpVertex(trace);
+            } catch (Exception e) {
+                Log.printWarning(e.getMessage());
+                return null;
+            }
+        }
     }
 
     /**
@@ -873,21 +902,21 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         final Set<CallTreeVertex> visitedVertices = Collections.newSetFromMap(new ConcurrentHashMap<CallTreeVertex, Boolean>());
 
         // map trace to vertex
-        traces.parallelStream().forEach(trace -> {
+        traces.parallelStream().forEach(trace -> { // className->methodName->basicBlockPosition->basicBlockSize->...
 
             if (trace.contains(":")) {
                 // skip branch distance trace and traces without a matching vertex pair.
                 return;
             }
 
-            // mapEntryTraceToVertex(visitedVertices, trace);
-            // mapExitTraceToVertex(visitedVertices, trace);
+            final String[] tokens = trace.split("->");
+            final String method = tokens[0] + "->" + tokens[1];
 
             // mark actual vertex corresponding to trace
-            var visitedVertex = lookupVertex(trace);
+            var visitedVertex = lookupVertex(method);
 
             if (visitedVertex == null) {
-                Log.printWarning("Couldn't derive vertex for trace: " + trace);
+                Log.printWarning("Couldn't derive vertex for trace: " + method);
             } else {
                 visitedVertices.add(visitedVertex);
             }
@@ -898,54 +927,6 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
 
         Log.println("Number of visited vertices: " + visitedVertices.size());
         return new ArrayList<>(visitedVertices);
-    }
-
-    /**
-     * Maps an entry trace to its vertex.
-     *
-     * @param visitedVertices The set of visited vertices.
-     * @param trace The potential entry trace.
-     */
-    @SuppressWarnings("unused")
-    private void mapEntryTraceToVertex(final Set<CallTreeVertex> visitedVertices, final String trace) {
-
-        // mark virtual entry
-        final String entryMarker = "->entry";
-        final int entryIndex = trace.indexOf(entryMarker);
-        if (entryIndex != -1) {
-            final String entryTrace = trace.substring(0, entryIndex + entryMarker.length());
-            final CallTreeVertex visitedEntry = lookupVertex(entryTrace);
-
-            if (visitedEntry != null) {
-                visitedVertices.add(visitedEntry);
-            } else {
-                Log.printWarning("Couldn't derive vertex for entry trace: " + entryTrace);
-            }
-        }
-    }
-
-    /**
-     * Maps an exit trace to its vertex.
-     *
-     * @param visitedVertices The set of visited vertices.
-     * @param trace The potential exit trace.
-     */
-    @SuppressWarnings("unused")
-    private void mapExitTraceToVertex(final Set<CallTreeVertex> visitedVertices, final String trace) {
-
-        // mark virtual exit
-        final String exitMarker = "->exit";
-        final int exitIndex = trace.indexOf(exitMarker);
-        if (exitIndex != -1) {
-            final String exitTrace = trace.substring(0, exitIndex + exitMarker.length());
-            final CallTreeVertex visitedExit = lookupVertex(exitTrace);
-
-            if (visitedExit != null) {
-                visitedVertices.add(visitedExit);
-            } else {
-                Log.printWarning("Couldn't derive vertex for exit trace: " + exitTrace);
-            }
-        }
     }
 
     /**
