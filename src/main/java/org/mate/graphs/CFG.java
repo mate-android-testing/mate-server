@@ -49,12 +49,12 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
     /**
      * Contains the instrumented branches of the AUT. This also includes case statements belonging to switch instructions.
      */
-    private static final String BRANCHES_FILE = "branches.txt";
+    protected static final String BRANCHES_FILE = "branches.txt";
 
     /**
      * Contains the instrumented basic blocks of the AUT. This also includes instrumented branch statements.
      */
-    private static final String BLOCKS_FILE = "blocks.txt";
+    protected static final String BLOCKS_FILE = "blocks.txt";
 
     /**
      * Caches a mapping from trace to vertex for the most relevant vertices, e.g. branch, case, if and switch vertices.

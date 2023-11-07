@@ -1,19 +1,24 @@
 package org.mate.graphs;
 
-import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGEdge;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
-import de.uni_passau.fim.auermich.android_graphs.core.statements.BasicStatement;
 import de.uni_passau.fim.auermich.android_graphs.core.statements.BlockStatement;
-import de.uni_passau.fim.auermich.android_graphs.core.statements.Statement;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.GraphUtils;
-import de.uni_passau.fim.auermich.android_graphs.core.utility.InstructionUtils;
+import org.mate.graphs.util.Util;
 import org.mate.util.Log;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+/**
+ * Represents an intra-procedural CFG. Note that the construction assumes the AUT have been instrumented with the
+ * basic block coverage instrumentation module and the blocks.txt file is present.
+ */
 public class IntraCFG extends CFG {
 
     public IntraCFG(File apkPath, String method, boolean useBasicBlocks, Path appsDir, String packageName) {
@@ -30,48 +35,10 @@ public class IntraCFG extends CFG {
 
         final Map<String, CFGVertex> traceToVertexCache = new HashMap<>();
 
-        // virtual entry and exit vertex
-        traceToVertexCache.put(graph.getEntry().getMethod() + "->entry", graph.getEntry());
-        traceToVertexCache.put(graph.getExit().getMethod() + "->exit", graph.getExit());
+        for (CFGVertex vertex : getVertices()) {
 
-        // handle branch + if and switch stmt vertices
-        for (CFGVertex branchVertex : branchVertices) {
-
-            // a branch can potentially have multiple predecessors (shared branch)
-            Set<CFGVertex> ifOrSwitchVertices = graph.getIncomingEdges(branchVertex).stream()
-                    .map(CFGEdge::getSource)
-                    .filter(vertex -> vertex.isIfVertex() || vertex.isSwitchVertex())
-                    .collect(Collectors.toSet());
-
-            // if or switch vertex
-            for (CFGVertex ifOrSwitchVertex : ifOrSwitchVertices) {
-
-                Statement statement = ifOrSwitchVertex.getStatement();
-
-                // TODO: handle basic statements
-                if (statement instanceof BlockStatement) {
-                    // the last statement is always a basic statement of an if vertex
-                    BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getLastStatement();
-                    if (InstructionUtils.isBranchingInstruction(basicStatement.getInstruction())) {
-                        traceToVertexCache.put(ifOrSwitchVertex.getMethod()
-                                + "->if->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
-                    } else if (InstructionUtils.isSwitchInstruction(basicStatement.getInstruction())) {
-                        traceToVertexCache.put(ifOrSwitchVertex.getMethod()
-                                + "->switch->" + basicStatement.getInstructionIndex(), ifOrSwitchVertex);
-                    }
-                    else {
-                        Log.printWarning("Unexpected block statement: " + statement + " for method " + ifOrSwitchVertex.getMethod());
-                    }
-                }
-            }
-
-            Statement statement = branchVertex.getStatement();
-
-            // TODO: handle basic statements
-            if (statement instanceof BlockStatement) {
-                // each statement within a block statement is a basic statement
-                BasicStatement basicStatement = (BasicStatement) ((BlockStatement) statement).getFirstStatement();
-                traceToVertexCache.put(branchVertex.getMethod() + "->" + basicStatement.getInstructionIndex(), branchVertex);
+            if (!vertex.isEntryVertex() && !vertex.isExitVertex()) { // only for basic blocks
+                initStatementVertexToVertexCache(vertex, traceToVertexCache);
             }
         }
 
@@ -80,6 +47,47 @@ public class IntraCFG extends CFG {
         Log.println("Size of TraceToVertexCache: " + traceToVertexCache.size());
 
         return traceToVertexCache;
+    }
+
+    /**
+     * Initialises the trace to vertex mapping for branch vertices.
+     *
+     * @param vertex The statement vertex that will be added to the trace to vertex cache mapping.
+     * @param traceToVertexCache The trace to vertex mapping.
+     */
+    private void initStatementVertexToVertexCache(final CFGVertex vertex, final Map<String, CFGVertex> traceToVertexCache) {
+        BlockStatement statement = (BlockStatement) vertex.getStatement();
+        int index = Util.getInstructionIndexFromBlockStatement(statement);
+        int operationCount = statement.getStatements().size();
+        String branchSuffix = vertex.isBranchVertex() ? "isBranch" : "noBranch";
+        traceToVertexCache.put(vertex.getMethod() + "->" + index + "->" + operationCount + "->" + branchSuffix, vertex);
+    }
+
+    /**
+     * Retrieves the list of branch vertices, those that could be actually instrumented.
+     *
+     * @return Returns the branch vertices.
+     */
+    @Override
+    protected List<CFGVertex> initBranchVertices() {
+
+        // TODO: The branch vertices of the intraCFG are likely irrelevant and should be better dropped at all!
+
+        final Path appDir = appsDir.resolve(appName);
+        final File blocksFile = appDir.resolve(BLOCKS_FILE).toFile();
+        final List<String> branches = new ArrayList<>();
+        final String method = graph.getMethodName();
+
+        // Extract branches from blocks.txt file
+        try (Stream<String> stream = Files.lines(blocksFile.toPath(), StandardCharsets.UTF_8)) {
+            // hopefully this preserves the order (remove blank line at end)
+            branches.addAll(stream.filter(line -> line.startsWith(method)
+                    && line.endsWith("->isBranch")).collect(Collectors.toList()));
+        } catch (IOException e) {
+            throw new IllegalStateException("Error occurred during processing of " + BLOCKS_FILE + " file!", e);
+        }
+
+        return mapBranchesToVertices(branches);
     }
 
     /**
@@ -94,20 +102,12 @@ public class IntraCFG extends CFG {
 
         branches.parallelStream().forEach(branch -> {
 
-            String[] tokens = branch.split("->");
+            final CFGVertex branchVertex = lookupVertex(branch);
 
-            // retrieve fully qualified method name (class name + method name)
-            final String method = tokens[0] + "->" + tokens[1];
-
-            if (method.equals(graph.getMethodName())) {
-
-                final CFGVertex branchVertex = lookupVertex(branch);
-
-                if (branchVertex == null) {
-                    Log.printWarning("Couldn't derive vertex for branch: " + branch);
-                } else {
-                    branchVertices.add(branchVertex);
-                }
+            if (branchVertex == null) {
+                Log.printWarning("Couldn't derive vertex for branch: " + branch);
+            } else {
+                branchVertices.add(branchVertex);
             }
         });
 
