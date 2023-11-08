@@ -83,10 +83,10 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     private final StackTrace stackTrace;
 
     /**
-     * The list of target call tree vertices, i.e. the list of methods encoded in the stack trace in reversed order
-     * (from bottom to top, i.e. the way one would actually cover them).
+     * The list of target vertices, i.e. the list of methods encoded in the stack trace lines in reversed order
+     * (from bottom to top, i.e. in call hierarchy order).
      */
-    private List<CallTreeVertex> callTreeVertices;
+    private final List<CallTreeVertex> targetVertices;
 
     /**
      * The set of required constructor cals.
@@ -114,6 +114,7 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         this.stackTrace = loadStackTrace(appsDir, packageName, stackTracePath);
         this.analyzedStackTraceLines = analyzeStackTrace(appsDir, packageName);
         this.requiredConstructors = analyzeRequiredConstructors();
+        this.targetVertices = computeTargetVertices();
     }
 
     /**
@@ -242,11 +243,11 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     }
 
     /**
-     * Initialises the target vertices for crash reproduction.
+     * Initialises the target vertices, i.e., the set of target methods encoded in the stack trace lines.
      *
      * @return Returns the target vertices for crash reproduction.
      */
-    public List<CFGVertex> getTargetVertices() {
+    private List<CallTreeVertex> computeTargetVertices() {
 
         // Retrieve the target vertices from the stack trace lines.
         final List<CFGVertex> targetInterCFGVertices = stackTrace.getStackTraceAtLines()
@@ -262,20 +263,29 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         }
 
         // Map the interCFG vertices to the callTree vertices, i.e. (the methods encoded in the stack trace lines).
-        callTreeVertices = targetInterCFGVertices.stream()
+        final List<CallTreeVertex> targetVertices = targetInterCFGVertices.stream()
                 .map(CFGVertex::getMethod)
                 .map(CallTreeVertex::new)
                 .collect(Collectors.toList());
 
         // Reverse since we want to cover them (the stacktrace actually) from bottom to top.
-        Collections.reverse(callTreeVertices);
+        Collections.reverse(targetVertices);
 
         // The target vertices must be reachable in the call tree.
-        if (callTree.getShortestPathWithStops(callTreeVertices).isEmpty()) {
+        if (callTree.getShortestPathWithStops(targetVertices).isEmpty()) {
             throw new IllegalStateException("No path from root to target vertices!");
         }
 
-        return targetInterCFGVertices;
+        return targetVertices;
+    }
+
+    /**
+     * Retrieves the target vertices for crash reproduction.
+     *
+     * @return Returns the target vertices for crash reproduction.
+     */
+    public List<CallTreeVertex> getTargetVertices() {
+        return Collections.unmodifiableList(targetVertices);
     }
 
     /**
@@ -815,7 +825,7 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     private int getCallTreeDistance(final Set<String> coveredMethods) {
 
         // the call tree vertices describing the stack trace methods (targets) in reversed order (operate on copy since being modified)
-        final List<CallTreeVertex> targetMethodVertices = new ArrayList<>(this.callTreeVertices);
+        final List<CallTreeVertex> targetMethodVertices = new ArrayList<>(this.targetVertices);
 
         // describes the lastly covered target method in the stack trace (from bottom to top ordered!)
         Optional<CallTreeVertex> lastCoveredTargetMethod = Optional.empty();
