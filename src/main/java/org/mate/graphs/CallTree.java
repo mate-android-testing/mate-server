@@ -83,7 +83,8 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     private final StackTrace stackTrace;
 
     /**
-     * The list of target call tree vertices.
+     * The list of target call tree vertices, i.e. the list of methods encoded in the stack trace in reversed order
+     * (from bottom to top, i.e. the way one would actually cover them).
      */
     private List<CallTreeVertex> callTreeVertices;
 
@@ -113,6 +114,25 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         this.stackTrace = loadStackTrace(appsDir, packageName, stackTracePath);
         this.analyzedStackTraceLines = analyzeStackTrace(appsDir, packageName);
         this.requiredConstructors = analyzeRequiredConstructors();
+    }
+
+    /**
+     * Computes the crash distance for the given chromosome.
+     *
+     * @param chromosome The chromosome for which the crash distance should be computed.
+     * @param tracesPerFile The traces per file.
+     * @param traces The set of traces.
+     * @return Returns the crash distance for the given chromosome.
+     */
+    public double getCrashDistance(final String chromosome, final List<Set<String>> tracesPerFile,
+                                   final Set<String> traces) {
+        double callTreeDistance = getCallTreeDistance(chromosome, tracesPerFile);
+        double basicBlockDistance = getBasicBlockDistance(chromosome, tracesPerFile);
+        double reachedConstructorsPercentage = getNumberOfReachedConstructors(chromosome, traces);
+        Log.println("CallTreeDistance: " + callTreeDistance);
+        Log.println("BasicBlockDistance: " + basicBlockDistance);
+        Log.println("ReachedConstructorsPercentage: " + reachedConstructorsPercentage);
+        return (basicBlockDistance + callTreeDistance + reachedConstructorsPercentage) / 3;
     }
 
     /**
@@ -236,18 +256,18 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
                 .flatMap(Collection::stream)
                 .collect(Collectors.toList());
 
-        // At least a single line (target) in the stack trace must refer to the AUT.
+        // At least a single line (target method) in the stack trace must refer to the AUT.
         if (targetInterCFGVertices.isEmpty()) {
             throw new IllegalStateException("No targets found for stack trace!");
         }
 
-        // Map the interCFG vertices to the callTree vertices.
+        // Map the interCFG vertices to the callTree vertices, i.e. (the methods encoded in the stack trace lines).
         callTreeVertices = targetInterCFGVertices.stream()
                 .map(CFGVertex::getMethod)
                 .map(CallTreeVertex::new)
                 .collect(Collectors.toList());
 
-        // TODO: Why do we reverse the list?
+        // Reverse since we want to cover them (the stacktrace actually) from bottom to top.
         Collections.reverse(callTreeVertices);
 
         // The target vertices must be reachable in the call tree.
@@ -560,58 +580,77 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     /**
      * Computes a mapping that describes which stack trace line (target method) has been covered by the given traces.
      *
-     * @param traces The given traces.
+     * @param traces The given traces of a single action.
      * @return Returns a mapping that tracks which target method (stack trace line) has been covered by the traces.
      */
     private Map<AtStackTraceLine, Boolean> reachedTargetMethods(final Set<String> traces) {
 
-        final Set<String> reachedMethods = traces.stream().map(Util::traceToMethod).collect(Collectors.toSet());
+        final Set<String> coveredMethods = traces.stream().map(Util::traceToMethod).collect(Collectors.toSet());
 
-        final Map<AtStackTraceLine, Boolean> reachedTargetMethods = analyzedStackTraceLines.entrySet().stream()
+        final Map<AtStackTraceLine, Boolean> coveredTargetMethods = analyzedStackTraceLines.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, stackTraceLine -> {
+                    // map a stack trace line to its method and check whether it has been covered by the traces
+                    // TODO: Directly map the stack trace line to its method.
                     final String method = Util.expectOne(stackTraceLine.getValue().getInterCFGVertices().stream()
                             .map(CFGVertex::getMethod)
                             .collect(Collectors.toSet()));
-                    return reachedMethods.contains(method);
+                    return coveredMethods.contains(method);
                 }));
-        onlyAllowCoveredIfPredecessorCoveredAsWell(reachedTargetMethods);
-        return reachedTargetMethods;
+        // TODO: Check whether this is hindering the search.
+        unsetIfPrecedingStackTraceLineIsNotCovered(coveredTargetMethods);
+        return coveredTargetMethods;
     }
 
-    // TODO: Need help here for understanding!
-    private void onlyAllowCoveredIfPredecessorCoveredAsWell(final Map<AtStackTraceLine, Boolean> map) {
-        // We are only interested in a covered method if its predecessor from the stack trace was reached as well
-        // TODO Does not consider the following case:
-        // Stack trace from crash we are trying to reproduce:
-        // at com.example.Class2.method2()
-        // at com.example.Class1.method1()
-        //
-        // Traces
-        // - com.example.Class2.method2() covered
-        // - com.example.Class1.method1() covered
-        //
-        // Result
-        // - com.example.Class1.method1() will be marked as reached -> fine
-        // - com.example.Class2.method2() will be marked as reached
-        //      -> Case: method2 is called by method3
-        //      -> should ideally not be marked as reached (since it was not called by method1)
+    /**
+     * Unsets an AUT stack trace line and any succeeding stack trace line as covered if the preceding stack trace line
+     * has not been covered.
+     *
+     * @param stackTraceLines A mapping that describes for each AUT stack trace line whether it was covered.
+     */
+    private void unsetIfPrecedingStackTraceLineIsNotCovered(final Map<AtStackTraceLine, Boolean> stackTraceLines) {
 
-        var orderedEntries = stackTrace.getStackTraceAtLines()
-                .filter(map::containsKey)
-                .map(line -> map.entrySet().stream().filter(e -> e.getKey().equals(line)).findAny())
+        // We only consider a stack trace line as truly covered if also its predecessor stack trace line has been covered.
+        // Example:
+        //
+        // Stacktrace (ordered from bottom to top):
+        // at com.example.Class1.method1()
+        // at com.example.Class2.method2()
+        //
+        // Covered methods described by traces in the order they would be called:
+        // - com.example.Class1.method1()
+        // - com.example.Class1.method3()
+        // - com.example.Class2.method2()
+        //
+        // Result:
+        // The stack trace imposes the order method1() -> method2() while the traces impose the order method1() ->
+        // method3() -> method2(), i.e., method2() was called through method3() unlike expected in the stack trace,
+        // thus we should consider method2() as not being covered (wrong call order).
+
+        // Retrieve the 'at' stack trace lines from top to bottom.
+        var stackTraceLinesOrdered = stackTrace.getStackTraceAtLines()
+                // ignore stack trace lines not belonging to the AUT
+                .filter(stackTraceLines::containsKey)
+                // TODO: This check seems to be redundant to be honest.
+                .map(stackTraceLine -> stackTraceLines.entrySet()
+                        .stream()
+                        .filter(entry -> entry.getKey().equals(stackTraceLine))
+                        .findAny())
                 .map(Optional::orElseThrow)
                 .collect(Collectors.toList());
-        Collections.reverse(orderedEntries);
 
-        Iterator<Map.Entry<AtStackTraceLine, Boolean>> coveredStackTraceLineIterator = orderedEntries.listIterator();
+        // Reverse to have them ordered from bottom to top, i.e. in call hierarchy.
+        Collections.reverse(stackTraceLinesOrdered);
 
-        while (coveredStackTraceLineIterator.hasNext() && coveredStackTraceLineIterator.next().getValue()) {
-            // Run from bottom to top of stack trace lines until an uncovered line is reached
+        final Iterator<Map.Entry<AtStackTraceLine, Boolean>> stackTraceLineIterator
+                = stackTraceLinesOrdered.listIterator();
+
+        while (stackTraceLineIterator.hasNext() && stackTraceLineIterator.next().getValue()) {
+            // Run from bottom to top of stack trace lines until an uncovered stack trace line is reached.
         }
 
-        // Set remaining lines to not covered, since predecessor is also not covered
-        while (coveredStackTraceLineIterator.hasNext()) {
-            coveredStackTraceLineIterator.next().setValue(false);
+        // Unset remaining stack trace lines as covered, since predecessor is also not covered.
+        while (stackTraceLineIterator.hasNext()) {
+            stackTraceLineIterator.next().setValue(false);
         }
     }
 
@@ -667,11 +706,13 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
                 .max(Comparator.comparingLong(tuple -> tuple.getY().values().stream().filter(b -> b).count()))
                 .orElseThrow();
 
-        return bestTraces.getY().entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> {
-                    final int distance = e.getValue()
+        // Compute the basic block distance for each stack trace line.
+        return bestTraces.getY().entrySet().stream() // Set<Map.Entry<AtStackTraceLine, Boolean>>
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> {
+                    final int distance = entry.getValue()
                             // only need to compute distance if we reached the target method (stack trace line)
-                            ? getBasicBlockDistance(bestTraces.getX(), e.getKey())
+                            ? getBasicBlockDistance(bestTraces.getX(), entry.getKey())
+                            // did not cover target method (stack trace line)
                             : Integer.MAX_VALUE;
 
                     // normalize distance in [0,1]
@@ -741,13 +782,16 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
 
         Log.println("Computing the call tree distance for the chromosome: " + chromosome);
 
-        // We don't want to mix the traces of different actions, since our target action should produce all traces
-        // necessary to cover the stack trace methods.
-        // If we mix the traces then it's possible that we get a call tree distance of zero even if the target methods
-        // are called from different actions
-        // (and never just by one action). Then we have technically reached all target methods, but not in the right sequence
+        /*
+        * We cannot simply compare all traces at once to the stack trace since this does not guarantee that the final action
+        * actually triggered the crash and hence produced the same stack trace. In theory it could happen that the combined
+        * set of traces fully covers the stack trace lines but actually didn't trigger the crash. Thus, we need to compare
+        * the traces per action.
+         */
         double callTreeDistance = tracesPerFile.stream()
+                // map to method format to be conformable with call tree structure
                 .map(traces -> traces.stream().map(Util::traceToMethod).collect(Collectors.toSet()))
+                // compute distance for every single action
                 .mapToInt(this::getCallTreeDistance)
                 .min().orElseThrow();
 
@@ -762,40 +806,43 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     }
 
     /**
-     * Computes the call tree distance between the target vertices and the given traces.
+     * Computes the call tree distance between the target methods encoded in the stack trace and the covered methods
+     * described by the traces.
      *
-     * @param traces The given traces.
-     * @return Returns the call tree distance.
+     * @param coveredMethods The covered methods of a single action.
+     * @return Returns the call tree distance between the covered and target methods.
      */
-    private int getCallTreeDistance(final Set<String> traces) {
+    private int getCallTreeDistance(final Set<String> coveredMethods) {
 
-        // the call tree vertices describing the stack trace in reversed order (operate on copy since being modified)
-        final List<CallTreeVertex> callTreeVertices = new ArrayList<>(this.callTreeVertices);
+        // the call tree vertices describing the stack trace methods (targets) in reversed order (operate on copy since being modified)
+        final List<CallTreeVertex> targetMethodVertices = new ArrayList<>(this.callTreeVertices);
 
-        Optional<CallTreeVertex> lastCoveredVertex = Optional.empty();
+        // describes the lastly covered target method in the stack trace (from bottom to top ordered!)
+        Optional<CallTreeVertex> lastCoveredTargetMethod = Optional.empty();
 
-        while (!callTreeVertices.isEmpty() && traces.contains(callTreeVertices.get(0).getMethod())) {
+        while (!targetMethodVertices.isEmpty() && coveredMethods.contains(targetMethodVertices.get(0).getMethod())) {
             // remove target vertices that we have already covered
-            lastCoveredVertex = Optional.of(callTreeVertices.remove(0));
+            lastCoveredTargetMethod = Optional.of(targetMethodVertices.remove(0));
         }
 
-        if (callTreeVertices.isEmpty()) {
-            // We have already reached all targets, thus a distance of 0.
+        if (targetMethodVertices.isEmpty()) {
+            // We have reached all target methods, thus a distance of 0.
             return 0;
-        } else if (lastCoveredVertex.isPresent()) {
-            // We partially covered the targets, thus the distance is defined as the minimal path length from the last
-            // covered vertex through the remaining targets.
-            return callTree.getShortestPathWithStops(lastCoveredVertex.get(), callTreeVertices).orElseThrow().getLength();
+        } else if (lastCoveredTargetMethod.isPresent()) {
+            // We partially covered the target methods, thus the distance is defined as the minimal path length from the last
+            // covered method through the remaining target methods.
+            return callTree.getShortestPathWithStops(lastCoveredTargetMethod.get(), targetMethodVertices).orElseThrow().getLength();
         } else {
-            // TODO: Computing the minimal path between every single trace and the targets can be expensive. Track it
-            //  or compute the distance in advance. Alternatively, use a different metric in this case.
-            // We have not found any targets yet, thus the distance is defined as the minimal path length from a trace
-            // through the targets.
+            // We have not covered any target methods yet, thus the distance is defined as the minimal path length from
+            // a covered method (trace) through the target methods.
+
+            // TODO: Computing the minimal path between every single trace and the target methods can be expensive. Track
+            //  it or compute the distance in advance. Alternatively, use a different metric in this case.
             int minDistance = Integer.MAX_VALUE;
 
-            for (String trace : traces) {
+            for (final String coveredMethod : coveredMethods) {
                 var path
-                        = callTree.getShortestPathWithStops(new CallTreeVertex(trace), callTreeVertices);
+                        = callTree.getShortestPathWithStops(new CallTreeVertex(coveredMethod), targetMethodVertices);
                 if (path.isPresent()) {
                     final int distance = path.get().getLength();
 
@@ -806,22 +853,6 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
             }
             return minDistance;
         }
-    }
-
-    /**
-     * Computes the crash distance for the given chromosome.
-     *
-     * @param chromosome The chromosome for which the crash distance should be computed.
-     * @param tracesPerFile The traces per file.
-     * @param traces The set of traces.
-     * @return Returns the crash distance for the given chromosome.
-     */
-    public double getCrashDistance(final String chromosome, final List<Set<String>> tracesPerFile,
-                                   final Set<String> traces) {
-        double callTreeDistance = getCallTreeDistance(chromosome, tracesPerFile);
-        double basicBlockDistance = getBasicBlockDistance(chromosome, tracesPerFile);
-        double reachedConstructorsPercentage = getNumberOfReachedConstructors(chromosome, traces);
-        return (basicBlockDistance + callTreeDistance + reachedConstructorsPercentage) / 3;
     }
 
     /**
