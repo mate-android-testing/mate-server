@@ -91,4 +91,9 @@ public class StackTrace {
                 .filter(line -> line instanceof AtStackTraceLine)
                 .map(l -> (AtStackTraceLine) l);
     }
+
+    @Override
+    public String toString() {
+        return stackTraceLines.stream().map(StackTraceLine::toString).collect(Collectors.joining(System.lineSeparator()));
+    }
 }
