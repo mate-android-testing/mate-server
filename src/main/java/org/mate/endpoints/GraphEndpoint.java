@@ -516,6 +516,7 @@ public class GraphEndpoint implements Endpoint {
         }
 
         final boolean raw = Boolean.parseBoolean(request.getParameter("raw"));
+        final String chromosome = request.getParameter("chromosome");
 
         final File appDir = new File(appsDir.toFile(), graph.getAppName());
         final File drawDir = new File(appDir, "graph-drawings");
@@ -530,10 +531,17 @@ public class GraphEndpoint implements Endpoint {
             final Set<Vertex> targetVertices = new HashSet<>(this.targetVertices);
 
             // retrieve the visited vertices
-            final Set<Vertex> visitedVertices = new HashSet<>(getVisitedVertices(appDir, null));
+            final Set<Vertex> visitedVertices = new HashSet<>(getVisitedVertices(appDir, chromosome));
 
-            // draw the graph where target and visited vertices are marked in different colours
-            graph.draw(drawDir, visitedVertices, targetVertices);
+            if (chromosome != null) {
+                final File chromosomeDir = new File(drawDir, chromosome);
+                chromosomeDir.mkdirs();
+                // draw the graph where target and visited vertices are marked in different colours
+                graph.draw(chromosomeDir, visitedVertices, targetVertices);
+            } else {
+                // draw the graph where target and visited vertices are marked in different colours
+                graph.draw(drawDir, visitedVertices, targetVertices);
+            }
         }
 
         return new Message("/graph/draw");
