@@ -677,9 +677,7 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         // retrieve the intra CFG corresponding to the given stack trace line
         final var analyzedStackTraceLine = analyzedStackTraceLines.get(stackTraceLine);
         final IntraCFG intraCFG = analyzedStackTraceLine.getIntraCFG();
-
-        final String targetMethod = analyzedStackTraceLine.getIntraCFGVertices().stream()
-                .findAny().orElseThrow().getMethod();
+        final String targetMethod = intraCFG.getMethod();
 
         int minDistance = Integer.MAX_VALUE;
 

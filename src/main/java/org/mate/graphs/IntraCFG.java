@@ -21,8 +21,23 @@ import java.util.stream.Stream;
  */
 public class IntraCFG extends CFG {
 
+    /**
+     * The method that is represented by the intraCFG.
+     */
+    private final String method;
+
     public IntraCFG(File apkPath, String method, boolean useBasicBlocks, Path appsDir, String packageName) {
         super(GraphUtils.constructIntraCFG(apkPath, method, useBasicBlocks), appsDir, packageName);
+        this.method = method;
+    }
+
+    /**
+     * Returns the method that is represented by the intraCFG.
+     *
+     * @return Returns the method that is represented by the intraCFG.
+     */
+    public String getMethod() {
+        return method;
     }
 
     /**
