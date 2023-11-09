@@ -110,4 +110,18 @@ public final class Util {
             return collection.stream().findAny().orElseThrow();
         }
     }
+
+    /**
+     * Checks whether the given class represents a primitive class.
+     *
+     * @param className The class to be checked.
+     * @return Returns {@code true} if the class is a primitive class, otherwise {@code false}.
+     */
+    public static boolean isPrimitiveClass(final String className) {
+        if (className.startsWith("[")) { // array type
+            return false;
+        } else {
+            return !className.startsWith("L"); // no object type
+        }
+    }
 }

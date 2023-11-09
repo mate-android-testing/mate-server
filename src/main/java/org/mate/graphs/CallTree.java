@@ -209,36 +209,37 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         // Analyse every 'at' stack trace line that belongs to the given package and comes in consecutive order.
         return getLastConsecutiveLines(stackTrace.getStackTraceAtLines()
                 .collect(Collectors.toList()), packageName).stream()
-                .collect(Collectors.toMap(Function.identity(), line -> {
+                .collect(Collectors.toMap(Function.identity(), stackTraceLine -> {
 
-                    // Retrieve the inter-procedural CFG vertices that are mapped to the given stack trace line.
-                    final Set<CFGVertex> targetInterCFGVertices = getTargetVerticesForStackTraceLine(line);
+                    // TODO: Directly compute the 'sourceCodeLineNumberIntraCFGVertices' from the stack trace line!
 
-                    // TODO: Retrieve the target method name directly from the method name encoded in the stack trace line.
-                    final String targetMethod = Util.expectOne(targetInterCFGVertices.stream()
+                    // Retrieve the interCFG vertices that are mapped to the given stack trace line.
+                    final Set<CFGVertex> sourceCodeLineNumberInterCFGVertices
+                            = getSourceCodeLineNumberInterCFGVertices(stackTraceLine);
+
+                    // This seems to be a bit awkward but the target method name can't be derived from the stack trace
+                    // line since the return type is not encoded in the stack trace line.
+                    final String targetMethod = Util.expectOne(sourceCodeLineNumberInterCFGVertices.stream()
                             .map(CFGVertex::getMethod)
                             .collect(Collectors.toSet()));
 
                     // create the intraCFG matching the target method (method encoded in the stack trace line)
                     final IntraCFG intraCFG = new IntraCFG(apk.getApkFile(), targetMethod, true, appsDir, packageName);
 
-                    // TODO: Remove once we can assure that those vertices are identical to the interTargetVertices!
-                    final Set<CFGVertex> targetIntraCFGVertices = targetInterCFGVertices.stream()
-                            .flatMap(interVertex -> Util.tracesForStatement(interVertex.getStatement()))
+                    // We need to map the interCFG vertices back to the intraCFG vertices since we define the basic block
+                    // distance on the latter graph. Since an interCFG splits basic blocks upon the occurrence of invoke
+                    // instructions there are potentially multiple interCFG vertices for a single vertex in the intraCFG.
+                    // However, the traces produced by the basic block instrumentation are unaware of this splitting and
+                    // map directly to the intraCFG vertices, thus this re-mapping is necessary and reasonable.
+                    final Set<CFGVertex> sourceCodeLineNumberIntraCFGVertices = sourceCodeLineNumberInterCFGVertices.stream()
+                            .flatMap(interCFGVertex -> Util.tracesForStatement(interCFGVertex.getStatement()))
                             .map(intraCFG::lookupVertex)
                             .collect(Collectors.toSet());
 
-                    if (!targetInterCFGVertices.equals(targetIntraCFGVertices)) {
-                        Log.println("Not same set of vertices!");
-                        Log.println("InterCFG vertices: " + targetInterCFGVertices);
-                        Log.println("IntraCFG vertices: " + targetIntraCFGVertices);
-                    }
-
                     // Retrieves the required constructors to properly call the target method in the stack trace line.
-                    final var requiredConstructorCalls = getRequiredConstructorCalls(line);
+                    final var requiredConstructorCalls = getRequiredConstructorCalls(stackTraceLine);
 
-                    return new AnalyzedStackTraceLine(targetInterCFGVertices, intraCFG,
-                            targetIntraCFGVertices, requiredConstructorCalls);
+                    return new AnalyzedStackTraceLine(intraCFG, sourceCodeLineNumberIntraCFGVertices, requiredConstructorCalls);
                 }));
     }
 
@@ -249,21 +250,23 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      */
     private List<CallTreeVertex> computeTargetVertices() {
 
-        // Retrieve the target vertices from the stack trace lines.
-        final List<CFGVertex> targetInterCFGVertices = stackTrace.getStackTraceAtLines()
+        // TODO: Directly derive the target call tree vertices from the analyzed stack trace lines!
+
+        // Retrieve the target intraCFG vertices from the stack trace lines.
+        final List<CFGVertex> targetIntraCFGVertices = stackTrace.getStackTraceAtLines()
                 .filter(analyzedStackTraceLines::containsKey)
                 .map(analyzedStackTraceLines::get)
-                .map(AnalyzedStackTraceLine::getInterCFGVertices)
+                .map(AnalyzedStackTraceLine::getSourceCodeLineNumberIntraCFGVertices)
                 .flatMap(Collection::stream)
                 .collect(Collectors.toList());
 
         // At least a single line (target method) in the stack trace must refer to the AUT.
-        if (targetInterCFGVertices.isEmpty()) {
+        if (targetIntraCFGVertices.isEmpty()) {
             throw new IllegalStateException("No targets found for stack trace!");
         }
 
-        // Map the interCFG vertices to the callTree vertices, i.e. (the methods encoded in the stack trace lines).
-        final List<CallTreeVertex> targetVertices = targetInterCFGVertices.stream()
+        // Map the intraCFG vertices to the callTree vertices, i.e. (the methods encoded in the stack trace lines).
+        final List<CallTreeVertex> targetVertices = targetIntraCFGVertices.stream()
                 .map(CFGVertex::getMethod)
                 .map(CallTreeVertex::new)
                 .collect(Collectors.toList());
@@ -317,17 +320,17 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     }
 
     /**
-     * Retrieves the (inter-procedural) target vertices associated with the given stack trace line.
+     * Retrieves the interCFG vertices that map to the source code line number encoded in the given stack trace line.
      *
-     * @param line The given (at) stack trace line.
-     * @return Returns the target vertices associated with the given stack trace line.
+     * @param stackTraceLine The given (at) stack trace line.
+     * @return Returns the interCFG vertices associated with the given stack trace line.
      */
-    private Set<CFGVertex> getTargetVerticesForStackTraceLine(final AtStackTraceLine line) {
+    private Set<CFGVertex> getSourceCodeLineNumberInterCFGVertices(final AtStackTraceLine stackTraceLine) {
 
-        // Retrieve the method and bytecode instructions that refer to the source code line number of the stack trace line.
-        var mappedMethodAndByteCodeInstructions = getInstructionsForLine(line).orElseThrow();
+        // Retrieve the method and bytecode instructions that refer to the source code line number encoded in the stack trace line.
+        var mappedMethodAndByteCodeInstructions = getInstructionsForLine(stackTraceLine).orElseThrow();
 
-        // Map the bytecode instructions back to vertices in the inter-procedural CFG. Since we use basic blocks for the
+        // Map the bytecode instructions back to vertices in the interCFG. Since we use basic blocks for the
         // interCFG, multiple (consecutive) instructions potentially map to the same vertex.
         return mappedMethodAndByteCodeInstructions.getY().stream()
                 .map(instruction -> interCFG.findVertexByInstruction(mappedMethodAndByteCodeInstructions.getX(), instruction))
@@ -337,11 +340,11 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     /**
      * Retrieves the set of required constructors calls for the given stack trace line.
      *
-     * @param line The given stack trace line.
+     * @param stackTraceLine The given stack trace line.
      * @return Returns the set of required constructor calls.
      */
-    private Set<String> getRequiredConstructorCalls(final AtStackTraceLine line) {
-        return getInstructionsForLine(line)
+    private Set<String> getRequiredConstructorCalls(final AtStackTraceLine stackTraceLine) {
+        return getInstructionsForLine(stackTraceLine)
                 .stream()
                 .flatMap(methodAndInstructions -> Stream.concat(
                         // Required constructors to reach the method containing the instruction
@@ -352,33 +355,35 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
                 .collect(Collectors.toSet());
     }
 
-    // TODO: Understand and fix documentation.
-
     /**
+     * Retrieves required constructors derived from the given instruction, i.e. we derive from the target method of an
+     * invoke instructions required constructor calls.
      *
-     * @param instruction
-     * @return
+     * @param instruction The instruction from which required constructors should be derived.
+     * @return Returns a set of required constructors derived from the given instruction.
      */
     private Stream<String> getRequiredConstructorCalls(final BuilderInstruction instruction) {
 
-        // What is this instruction essentially, an invoke-instruction?
-        if (instruction.getOpcode().referenceType == ReferenceType.METHOD) {
-            final String methodName = ((ReferenceInstruction) instruction).getReference().toString();
-            return getRequiredConstructorCalls(methodName);
-        } else {
-            // TODO: What does the below TODO mean?
-            // TODO add more cases (e.g. when accessing a field)
-            return Stream.empty();
+        if (InstructionUtils.isInvokeInstruction(instruction)) {
+            final String invokedMethod = ((ReferenceInstruction) instruction).getReference().toString();
+            final String dottedClassName = ClassUtils.dottedClassName(MethodUtils.getClassName(invokedMethod));
+            // TODO: Whitelist additional packages belonging to the AUT.
+            if (dottedClassName.startsWith(getAppName())) {
+                return getRequiredConstructorCalls(invokedMethod);
+            }
         }
+
+        // TODO: May derive additional constructors from field accesses performed by the instructions.
+        return Stream.empty();
     }
 
     /**
      * Retrieves the required constructor calls to properly invoke the given target method, i.e. for each parameter of
-     * the target method the class constructor needs to called. In addition, all constructors of the target method's
+     * the target method all class constructors needs to be called. In addition, all constructors of the target method's
      * class are considered.
      *
      * @param methodName The method name of the target method.
-     * @return Returns a stream of required constructor calls to properly invoke the target method.
+     * @return Returns a set of required constructor calls to properly invoke the target method.
      */
     private Stream<String> getRequiredConstructorCalls(final String methodName) {
 
@@ -386,25 +391,31 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
                 = MethodUtils.searchForTargetMethod(apk.getDexFiles(), methodName);
 
         if (classMethodTuple.isEmpty()) {
-            Log.printWarning("Was not able to find method " + methodName);
+            Log.printWarning("Was not able to find method: " + methodName);
             return Stream.empty();
         } else {
             final Method targetMethod = classMethodTuple.get().getY();
             final String className = MethodUtils.getClassName(methodName);
+
+            // TODO: It is probably not necessary to call all class constructors to be able to reproduce the crash.
             final List<String> classConstructors = new ArrayList<>(ClassUtils.getConstructors(classMethodTuple.get().getX()));
 
-            // TODO: Ignore constructors of primitive types + Android-specific constructors.
-
             /*
-             * Retrieves the required constructors to properly call the target method, i.e. for each parameter (some class)
-             * of the target method (which might be itself a constructor) the constructor of that class needs to invoked.
-             * In addition, all constructors of the target method's class are considered or only the static constructor
-             * if the target method is static.
+            * Iterate over all parameters of the target method and include the class constructors of each parameter.
+            * In addition, include the class constructors of the target method itself or the static constructor if the
+            * target method is static.
              */
             return Stream.concat(
                     // This is an over approximation, since it's always possible to pass null as a value, thus not every
                     // parameter might be actually required to call the method.
-                    targetMethod.getParameterTypes().stream().map(Objects::toString).flatMap(this::getConstructors),
+                    targetMethod.getParameterTypes()
+                            .stream()
+                            .map(Objects::toString)
+                            // TODO: Convert array types to its class name.
+                            .filter(classNameOfParameter -> !Util.isPrimitiveClass(classNameOfParameter))
+                            // TODO: Whitelist additional packages belonging to the AUT.
+                            .filter(classNameOfParameter -> ClassUtils.dottedClassName(classNameOfParameter).startsWith(getAppName()))
+                            .flatMap(this::getConstructors),
                     // Add the static constructor if the target method is static, otherwise all class constructors.
                     MethodUtil.isStatic(targetMethod)
                             ? Stream.of(className + "-><clinit>()V")
@@ -490,14 +501,16 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
             return Optional.empty();
         }
 
-        final String fileName = stackTraceLine.getFileName().orElse(stackTraceLine.getClassName() + ".java");
+        final String sourceFileName = stackTraceLine.getFileName().orElse(stackTraceLine.getClassName() + ".java");
         final String dottedClassName = stackTraceLine.getPackageName() + "." + stackTraceLine.getClassName();
 
-        for (DexFile dexFile : apk.getDexFiles()) {
-            for (ClassDef classDef : dexFile.getClasses()) {
-                if (fileName.equals(classDef.getSourceFile())
+        for (final DexFile dexFile : apk.getDexFiles()) {
+            for (final ClassDef classDef : dexFile.getClasses()) {
+                if (sourceFileName.equals(classDef.getSourceFile())
                         || ClassUtils.dottedClassName(classDef.toString()).equals(dottedClassName)) {
-                    for (Method method : classDef.getMethods()) {
+                    for (final Method method : classDef.getMethods()) {
+                        // NOTE: Below check matches any overloaded method but the internal check on the source code line
+                        // number ensures we are referring to the correct method encoded in the stack trace line.
                         if (method.toString().contains(stackTraceLine.getMethodName()) && method.getImplementation() != null) {
 
                             final Set<BuilderInstruction> instructionsAtLine = new HashSet<>();
@@ -510,7 +523,7 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
                              * Retrieve the line number from the debug items and check whether they match the line number
                              * of the given stack trace line.
                              */
-                            for (BuilderInstruction instruction : instructions) {
+                            for (final BuilderInstruction instruction : instructions) {
                                 // TODO: The line number is only attached to the first bytecode instruction, but all
                                 //  subsequent instructions up to the next line number also refer to the same line.
                                 if (Util.getLineNumber(instruction.getLocation().getDebugItems())
@@ -600,11 +613,8 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         final Map<AtStackTraceLine, Boolean> coveredTargetMethods = analyzedStackTraceLines.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, stackTraceLine -> {
                     // map a stack trace line to its method and check whether it has been covered by the traces
-                    // TODO: Directly map the stack trace line to its method.
-                    final String method = Util.expectOne(stackTraceLine.getValue().getInterCFGVertices().stream()
-                            .map(CFGVertex::getMethod)
-                            .collect(Collectors.toSet()));
-                    return coveredMethods.contains(method);
+                    final String targetMethod = stackTraceLine.getValue().getIntraCFG().getMethod();
+                    return coveredMethods.contains(targetMethod);
                 }));
         // TODO: Check whether this is hindering the search.
         unsetIfPrecedingStackTraceLineIsNotCovered(coveredTargetMethods);
@@ -640,7 +650,7 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         var stackTraceLinesOrdered = stackTrace.getStackTraceAtLines()
                 // ignore stack trace lines not belonging to the AUT
                 .filter(stackTraceLines::containsKey)
-                // TODO: This check seems to be redundant to be honest.
+                // TODO: This check (map operation) seems to be redundant to be honest.
                 .map(stackTraceLine -> stackTraceLines.entrySet()
                         .stream()
                         .filter(entry -> entry.getKey().equals(stackTraceLine))
@@ -665,26 +675,27 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     }
 
     /**
-     * Retrieves the minimal basic block distance (approach level) between the given traces and the target method
-     * contained in the stack trace.
+     * Computes the minimal basic block distance (approach level) between the given traces and the intraCFG vertices
+     * referring to the encoded source code line number of the given stack trace line.
      *
-     * @param traces The set of traces.
-     * @param stackTraceLine The stack trace line containing the target method.
+     * @param traces The set of traces of a single action.
+     * @param stackTraceLine The 'at' stack trace line that has been covered at the method level.
      * @return Returns the minimal basic block distance between the traces and the target method.
      */
     private int getBasicBlockDistance(final Set<String> traces, final AtStackTraceLine stackTraceLine) {
 
-        // retrieve the intra CFG corresponding to the given stack trace line
+        // Retrieve the intraCFG corresponding to the given stack trace line.
         final var analyzedStackTraceLine = analyzedStackTraceLines.get(stackTraceLine);
         final IntraCFG intraCFG = analyzedStackTraceLine.getIntraCFG();
         final String targetMethod = intraCFG.getMethod();
 
         int minDistance = Integer.MAX_VALUE;
 
-        for (String trace : traces) {
+        // Compute the minimal approach level between the traces and the intraCFG vertices referring to the encoded
+        // source code line number of the given stack trace line.
+        for (final String trace : traces) {
             if (Util.traceToMethod(trace).equals(targetMethod)) {
-                int distance = analyzedStackTraceLine.getIntraCFGVertices().stream()
-                        // TODO: Employ a cache for the distances!
+                int distance = analyzedStackTraceLine.getSourceCodeLineNumberIntraCFGVertices().stream()
                         .map(targetVertex -> intraCFG.getDistance(intraCFG.lookupVertex(trace), targetVertex))
                         .map(dist -> dist == -1 ? Integer.MAX_VALUE : dist) // -1 means not reachable
                         .min(Integer::compare)
@@ -708,17 +719,19 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      */
     private Map<AtStackTraceLine, Double> getNormalizedBasicBlockDistances(final List<Set<String>> tracesPerFile) {
 
-        // Look for the traces that reached most target methods.
+        // TODO: Is it sensible to consider the traces per action here and not the entire traces as a whole?
+
+        // Look for the traces of a single action that covered most target methods.
         final var bestTraces = tracesPerFile.stream()
                 .map(traces -> new Tuple<>(traces, reachedTargetMethods(traces)))
                 .max(Comparator.comparingLong(tuple -> tuple.getY().values().stream().filter(b -> b).count()))
                 .orElseThrow();
 
-        // Compute the basic block distance for each stack trace line.
+        // Compute the basic block distance between the best action (most covered target methods) and each stack trace line.
         return bestTraces.getY().entrySet().stream() // Set<Map.Entry<AtStackTraceLine, Boolean>>
                 .collect(Collectors.toMap(Map.Entry::getKey, entry -> {
                     final int distance = entry.getValue()
-                            // only need to compute distance if we reached the target method (stack trace line)
+                            // only need to compute distance if the action covered the target method (stack trace line)
                             ? getBasicBlockDistance(bestTraces.getX(), entry.getKey())
                             // did not cover target method (stack trace line)
                             : Integer.MAX_VALUE;
@@ -739,8 +752,10 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      */
     private double getBasicBlockDistance(final String chromosome, final List<Set<String>> tracesPerFile) {
 
-        Log.println("Computing the call tree distance for the chromosome: " + chromosome);
+        Log.println("Computing the basic block distance for the chromosome: " + chromosome);
 
+        // TODO: If the line numbers have been stripped from the stack trace and/or aren't contained in the APK, we should
+        //  ignore the basic block distance completely.
         final Map<AtStackTraceLine, Double> basicBlockDistances = getNormalizedBasicBlockDistances(tracesPerFile);
 
         // computes the average basic block distance
@@ -764,10 +779,10 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         Log.println("Computing number of reached constructors for the chromosome: " + chromosome);
 
         // track which methods have been visited by the traces
-        final Set<String> reachedMethods = traces.stream().map(Util::traceToMethod).collect(Collectors.toSet());
+        final Set<String> coveredMethods = traces.stream().map(Util::traceToMethod).collect(Collectors.toSet());
 
         // count how many constructors have been reached
-        double reachedConstructors = requiredConstructors.stream().filter(reachedMethods::contains).count();
+        double reachedConstructors = requiredConstructors.stream().filter(coveredMethods::contains).count();
 
         // normalize in the range [0,1]
         double normalisedNumberOfReachedConstructors = requiredConstructors.size() == 0
