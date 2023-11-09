@@ -127,13 +127,14 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      */
     public double getCrashDistance(final String chromosome, final List<Set<String>> tracesPerFile,
                                    final Set<String> traces) {
-        double callTreeDistance = getCallTreeDistance(chromosome, tracesPerFile);
-        double basicBlockDistance = getBasicBlockDistance(chromosome, tracesPerFile);
-        double reachedConstructorsPercentage = getNumberOfReachedConstructors(chromosome, traces);
+        
+        final double callTreeDistance = getCallTreeDistance(chromosome, tracesPerFile);
+        final double basicBlockDistance = getBasicBlockDistance(chromosome, tracesPerFile);
+        final double constructorDistance = getConstructorDistance(chromosome, traces);
         Log.println("CallTreeDistance: " + callTreeDistance);
         Log.println("BasicBlockDistance: " + basicBlockDistance);
-        Log.println("ReachedConstructorsPercentage: " + reachedConstructorsPercentage);
-        return (basicBlockDistance + callTreeDistance + reachedConstructorsPercentage) / 3;
+        Log.println("ConstructorDistance: " + constructorDistance);
+        return (callTreeDistance + basicBlockDistance + constructorDistance) / 3;
     }
 
     /**
@@ -768,30 +769,32 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     }
 
     /**
-     * Retrieves the number (percentage) of reached constructors for the given chromosome.
+     * Computes the constructor distance for the given chromosome, i.e. the relative number of non covered constructors.
      *
-     * @param chromosome The chromosome for which the number of reached constructors should be derived.
+     * @param chromosome The chromosome for which the constructor distance should be derived.
      * @param traces The traces for the given chromosome.
-     * @return Returns the number of reached constructors for the given chromosome.
+     * @return Returns the relative number of non covered constructors.
      */
-    private double getNumberOfReachedConstructors(final String chromosome, final Set<String> traces) {
+    private double getConstructorDistance(final String chromosome, final Set<String> traces) {
 
-        Log.println("Computing number of reached constructors for the chromosome: " + chromosome);
+        Log.println("Computing constructors distance for the chromosome: " + chromosome);
 
         // track which methods have been visited by the traces
         final Set<String> coveredMethods = traces.stream().map(Util::traceToMethod).collect(Collectors.toSet());
 
-        // count how many constructors have been reached
-        double reachedConstructors = requiredConstructors.stream().filter(coveredMethods::contains).count();
+        // count how many constructors have been covered / non covered
+        double coveredConstructors = requiredConstructors.stream().filter(coveredMethods::contains).count();
+        double nonCoveredConstructors = requiredConstructors.size() - coveredConstructors;
 
         // normalize in the range [0,1]
-        double normalisedNumberOfReachedConstructors = requiredConstructors.size() == 0
-                ? 1
-                : reachedConstructors / requiredConstructors.size();
+        double normalisedConstructorDistance = requiredConstructors.size() == 0
+                // TODO: There should be at least a single required constructor so this case should never happen actually!
+                ? 0
+                : nonCoveredConstructors / requiredConstructors.size();
 
-        Log.println("Number of reached constructors for " + chromosome + " is: " + normalisedNumberOfReachedConstructors);
+        Log.println("Number of non covered constructors for " + chromosome + " is: " + nonCoveredConstructors);
 
-        return normalisedNumberOfReachedConstructors;
+        return normalisedConstructorDistance;
     }
 
     /**
