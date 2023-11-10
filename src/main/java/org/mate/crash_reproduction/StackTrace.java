@@ -92,8 +92,37 @@ public class StackTrace {
                 .map(l -> (AtStackTraceLine) l);
     }
 
+    /**
+     * Returns a textual representation for the stack trace.
+     *
+     * @return Returns a textual representation for the stack trace.
+     */
     @Override
     public String toString() {
         return stackTraceLines.stream().map(StackTraceLine::toString).collect(Collectors.joining(System.lineSeparator()));
+    }
+
+    /**
+     * Compares two stack traces for equality by comparing each single stack trace line.
+     *
+     * @param o The other stack trace.
+     * @return Returns {@code true} if the two stack traces are identical, otherwise {@code false}.
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        StackTrace that = (StackTrace) o;
+        return Objects.equals(stackTraceLines, that.stackTraceLines);
+    }
+
+    /**
+     * Computes a hash code for the stack trace.
+     *
+     * @return Returns the computed hash code for the stack trace.
+     */
+    @Override
+    public int hashCode() {
+        return Objects.hash(stackTraceLines);
     }
 }

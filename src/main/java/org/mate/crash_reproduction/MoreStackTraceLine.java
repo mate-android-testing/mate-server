@@ -1,5 +1,6 @@
 package org.mate.crash_reproduction;
 
+import java.util.Objects;
 import java.util.stream.Stream;
 
 /**
@@ -55,5 +56,18 @@ public class MoreStackTraceLine implements StackTraceLine {
     @Override
     public String toString() {
         return "... " + numberOfSubsequentLines + " more";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        MoreStackTraceLine that = (MoreStackTraceLine) o;
+        return numberOfSubsequentLines == that.numberOfSubsequentLines;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(numberOfSubsequentLines);
     }
 }
