@@ -24,6 +24,8 @@ public class CausedByStackTraceLine implements StackTraceLine {
      */
     private final String message;
 
+    // TODO: Extract package name from stack trace line.
+
     /**
      * Initialises a 'caused by' stack trace line without an exception message.
      *
@@ -52,6 +54,7 @@ public class CausedByStackTraceLine implements StackTraceLine {
      */
     @Override
     public boolean isFromPackage(String packageName) {
+        // TODO: Fix this once package name is extracted from stack trace line.
         return true;
     }
 
