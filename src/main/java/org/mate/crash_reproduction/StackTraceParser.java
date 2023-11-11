@@ -32,6 +32,7 @@ public final class StackTraceParser {
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(:.*\\)"), StackTraceParser::parseSpecialAtStackTraceLine);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(.*SyntheticClass\\)"), StackTraceParser::parseSpecialAtStackTraceLine);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(Unknown Source\\)"), StackTraceParser::parseSpecialAtStackTraceLine);
+        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(lambda\\)"), StackTraceParser::parseSpecialAtStackTraceLine);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\((\\S+)\\.java\\)"), StackTraceParser::parseAtStackTraceLineWithoutLineNumber);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\((\\S+)\\.kt\\)"), StackTraceParser::parseAtStackTraceLineWithoutLineNumber);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("\\.\\.\\. (\\d+) more"), StackTraceParser::parseMoreStackTraceLine);
