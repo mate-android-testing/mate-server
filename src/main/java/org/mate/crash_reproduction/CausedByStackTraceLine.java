@@ -55,7 +55,12 @@ public class CausedByStackTraceLine implements StackTraceLine {
      */
     @Override
     public boolean isFromPackage(String packageName) {
-        // TODO: Fix this once package name is extracted from stack trace line.
+        /*
+        * Although we could extract the package name from the stack trace line and compare to the provided package name,
+        * this clause likely refers to a Java-internal exception, e.g. java.lang.IllegalStateException, and thus a check
+        * on the package name of the AUT would fail. However, we probably would like to include this line and its
+        * consecutive lines for further analysis, e.g., it could contain some relevant input.
+         */
         return true;
     }
 
