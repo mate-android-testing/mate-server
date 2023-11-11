@@ -41,6 +41,11 @@ import java.util.stream.StreamSupport;
 public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
 
     /**
+     * The directory where the stack traces are saved.
+     */
+    private static final String STACK_TRACES_DIR = "stack_traces";
+
+    /**
      * The employed shortest path algorithm. For individual vertices the bi-directional dijkstra seems to be the fastest
      * option, while for resolving the shortest paths between many vertices, the CH many-to-many shortest path algorithm
      * appears to be the best option.
@@ -94,6 +99,16 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     private final Set<String> requiredConstructors;
 
     /**
+     * The path to the apps directory.
+     */
+    private final Path appsDir;
+
+    /**
+     * The package name of the AUT.
+     */
+    private final String packageName;
+
+    /**
      * Constructs a new call tree with the given properties.
      *
      * @param apkPath The path to the APK file.
@@ -105,6 +120,8 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      */
     public CallTree(File apkPath, boolean excludeARTClasses, boolean resolveOnlyAUTClasses,
                     Path appsDir, String packageName, String stackTracePath) {
+        this.appsDir = appsDir;
+        this.packageName = packageName;
         this.callTree = GraphUtils.constructCallTree(apkPath, excludeARTClasses, resolveOnlyAUTClasses);
         this.traceToVertexCache = initTraceToVertexCache();
         this.interCFG = new InterCFG(callTree.getInterCFG(), appsDir, packageName);
@@ -118,6 +135,26 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     }
 
     /**
+     * Reads the stack trace produced by the given chromosome if any.
+     *
+     * @param chromosome The name of the chromosome.
+     * @return Returns the stack trace associated with the given chromosome or {@code null} if no stack trace exists.
+     */
+    private StackTrace readStackTrace(final String chromosome) {
+        final File appDir = new File(appsDir.toFile(), packageName);
+        File stackTracesBaseDir = new File(appDir, STACK_TRACES_DIR);
+        File stackTraceFile = new File(stackTracesBaseDir, chromosome + ".txt");
+        if (!stackTraceFile.exists()) {
+            return null;
+        } else {
+            // TODO: Adapt loadStackTrace() to accept final path.
+            stackTracesBaseDir = new File(STACK_TRACES_DIR);
+            stackTraceFile = new File(stackTracesBaseDir, chromosome + ".txt");
+            return loadStackTrace(appsDir, packageName, stackTraceFile.getPath());
+        }
+    }
+
+    /**
      * Computes the crash distance for the given chromosome.
      *
      * @param chromosome The chromosome for which the crash distance should be computed.
@@ -127,7 +164,14 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      */
     public double getCrashDistance(final String chromosome, final List<Set<String>> tracesPerFile,
                                    final Set<String> traces) {
-        
+
+        final StackTrace stackTrace = readStackTrace(chromosome);
+        if (stackTrace != null) {
+            if (stackTrace.equals(this.stackTrace)) { // we could successfully reproduce crash
+                return 0.0;
+            }
+        }
+
         final double callTreeDistance = getCallTreeDistance(chromosome, tracesPerFile);
         final double basicBlockDistance = getBasicBlockDistance(chromosome, tracesPerFile);
         final double constructorDistance = getConstructorDistance(chromosome, traces);
@@ -485,8 +529,8 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      */
     public Stream<String> getTokensForStackTrace(final StackTrace stackTrace, final String packageName) {
         return stackTrace.getStackTraceAtLines()
-                .filter(l -> l.isFromPackage(packageName))
-                .filter(line -> line.getFileName().isPresent() && line.getLineNumber().isPresent())
+                .filter(stackTraceLine -> stackTraceLine.isFromPackage(packageName))
+                .filter(stackTraceLine -> stackTraceLine.getFileName().isPresent() && stackTraceLine.getLineNumber().isPresent())
                 .flatMap(this::getTokensFromStackTraceLine);
     }
 
