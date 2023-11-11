@@ -209,6 +209,9 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
 
         // Analyse every 'at' stack trace line that belongs to the given package and comes in consecutive order.
         return getLastConsecutiveLines(stackTrace.getStackTraceAtLines()
+                // NOTE: We require the line number information to map the stack trace lines to the respective vertices
+                // in the intraCFG!
+                .filter(stackTraceLine -> stackTraceLine.getLineNumber().isPresent())
                 .collect(Collectors.toList()), packageName).stream()
                 .collect(Collectors.toMap(Function.identity(), stackTraceLine -> {
 
