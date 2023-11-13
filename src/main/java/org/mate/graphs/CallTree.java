@@ -331,7 +331,7 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     }
 
     /**
-     * Retrieves the target vertices for crash reproduction.
+     * Retrieves the target vertices for crash reproduction, i.e., the set of target methods encoded in the stack trace lines.
      *
      * @return Returns the target vertices for crash reproduction.
      */
@@ -593,51 +593,70 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         return Optional.empty();
     }
 
-    // TODO: Understand and document.
+    /**
+     * Derives tokens from the given stack trace line, i.e., tokens are extracted both from the underlying instruction(s)
+     * described by the stack trace line and menu items associated with the underlying instruction(s).
+     *
+     * @param stackTraceLine The given stack trace line.
+     * @return Returns the tokens associated with the given stack trace line.
+     */
     private Stream<String> getTokensFromStackTraceLine(final AtStackTraceLine stackTraceLine) {
-        var result = getInstructionsForLine(stackTraceLine).orElseThrow();
-        return result.getY().stream()
+        var methodAndInstructions = getInstructionsForLine(stackTraceLine).orElseThrow();
+        return methodAndInstructions.getY().stream()
                 .flatMap(instruction -> Stream.concat(
                         getTokensFromInstruction(instruction),
-                        getMenuItemFromLine(result.getX(), instruction).stream()
+                        getMenuItemFromInstruction(methodAndInstructions.getX(), instruction).stream()
                                 .map(MenuItemWithResolvedTitle::getTitle)
                 ));
     }
 
-    // TODO: Understand and document.
-    private Optional<MenuItemWithResolvedTitle> getMenuItemFromLine(final Method method, final BuilderInstruction instruction) {
+    /**
+     * Tries to derive a menu item (id) from the given method and instruction.
+     *
+     * @param method The given method.
+     * @param instruction The given instruction.
+     * @return Returns an optional menu item (id) associated with the given method and instruction.
+     */
+    private Optional<MenuItemWithResolvedTitle> getMenuItemFromInstruction(final Method method, final BuilderInstruction instruction) {
+        // Check whether the given method belongs to an activity.
         return getComponentByNameAndType(MethodUtils.getClassName(method.toString()), ComponentType.ACTIVITY)
-                .flatMap(c -> {
-                    if (c instanceof Activity) {
-                        Map<Method, List<MenuItemWithResolvedTitle>> menus = ((Activity) c).getMenus();
+                .flatMap(activity -> {
+                    // Retrieve the menus associated with the given activity.
+                    final Map<Method, List<MenuItemWithResolvedTitle>> menus = ((Activity) activity).getMenus();
 
-                        // need to resolve on create menu method
-                        return Optional.ofNullable(MenuUtils.ITEM_SELECT_METHOD_TO_ON_CREATE_MENU.get(MethodUtils.getMethodName(method)))
-                                .map(onCreateMenuMethod -> MethodUtils.getClassName(method.toString()) + "->" + onCreateMenuMethod)
-                                .flatMap(fullyQualifiedOnCreateMenuMethod -> menus.entrySet().stream().filter(e -> e.getKey().toString().equals(fullyQualifiedOnCreateMenuMethod)).findAny())
-                                .map(Map.Entry::getValue);
-                    }
-                    return Optional.empty();
+                    // Check whether the method represents a menu item selection method, e.g., onOptionsItemSelected().
+                    return Optional.ofNullable(MenuUtils.ITEM_SELECT_METHOD_TO_ON_CREATE_MENU.get(MethodUtils.getMethodName(method)))
+                            .map(onCreateMenuMethod -> MethodUtils.getClassName(method) + "->" + onCreateMenuMethod)
+                            .flatMap(fullyQualifiedOnCreateMenuMethod -> menus.entrySet().stream()
+                                    .filter(entry -> MethodUtils.deriveMethodSignature(entry.getKey()).equals(fullyQualifiedOnCreateMenuMethod))
+                                    .findAny())
+                            .map(Map.Entry::getValue);
                 })
                 .flatMap(menuItems -> {
+                    // Map the menu item to a menu item id.
                     Optional<String> menuItemId = MenuUtils.getMenuItemStringId(instruction, method, apk.getDexFiles());
-
                     return menuItemId.flatMap(id -> menuItems.stream().filter(item -> item.getId().equals(id)).findAny());
                 });
     }
 
-    // TODO: Understand and document.
+    /**
+     * Derives tokens from the given instruction.
+     *
+     * @param instruction The instruction from which tokens should be derived.
+     * @return Returns the tokens associated with the given instruction.
+     */
     private Stream<String> getTokensFromInstruction(final Instruction instruction) {
 
         if (instruction instanceof ReferenceInstruction) {
             ReferenceInstruction referenceInstruction = (ReferenceInstruction) instruction;
 
-            if (referenceInstruction.getReferenceType() == ReferenceType.STRING) {
+            if (referenceInstruction.getReferenceType() == ReferenceType.STRING) { // const-string instruction
+                // Split string reference into words, e.g., "my user-input" -> ["my", "user", "input"].
                 return Arrays.stream(referenceInstruction.getReference().toString().split("[-_\\s]"));
-            } else if (referenceInstruction.getReferenceType() == ReferenceType.METHOD) {
-                // TODO: Here we have again some ignore cases...
+            } else if (referenceInstruction.getReferenceType() == ReferenceType.METHOD) { // invoke instruction
+                // Split the plain method name into words upon each camel case.
+                // TODO: Why do we ignore those specific methods?
                 final Set<String> ignoreMethods = Set.of("<init>", "doInBackground");
-                // TODO: There is a utility function for this.
                 final String methodName = MethodUtils.getMethodName(referenceInstruction.getReference().toString())
                         .split("\\(")[0];
                 return ignoreMethods.contains(methodName) ? Stream.empty() : TokenUtil.splitCamelCase(methodName)

@@ -350,7 +350,7 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Retrieves the stack trace (lines).
+     * Retrieves the 'at' stack trace (lines).
      *
      * @param request The request message.
      * @return Returns a response message containing the stack trace (lines).
@@ -369,7 +369,7 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Retrieves the stack trace tokens.
+     * Retrieves the stack trace tokens that are used to determine promising actions.
      *
      * @param request The request message.
      * @return Returns a response message containing the stack trace tokens.
@@ -397,6 +397,7 @@ public class GraphEndpoint implements Endpoint {
             pos++;
         }
 
+        Log.println("StackTrace tokens: " + tokens);
         return builder.build();
     }
 
@@ -413,6 +414,8 @@ public class GraphEndpoint implements Endpoint {
         }
 
         final CallTree callTree = (CallTree) graph;
+
+        Log.println("StackTrace user tokens: " + callTree.getStackTrace().getUserTokens());
 
         return new Message.MessageBuilder("/graph/stack_trace_user_tokens")
                 .withParameter("tokens", String.join(",", callTree.getStackTrace().getUserTokens()))

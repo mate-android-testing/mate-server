@@ -26,7 +26,7 @@ import java.util.stream.Stream;
  */
 public class StackTrace {
 
-    // TODO: What is this?
+    // TODO: How did we derive those irrelevant tokens?
     private static final Set<String> IGNORE_TOKENS = Set.of("in", "and", "but", "the");
 
     /**
