@@ -322,7 +322,7 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         // Reverse since we want to cover them (the stacktrace actually) from bottom to top.
         Collections.reverse(targetVertices);
 
-        // The target vertices must be reachable in the call tree.
+        // The target vertices must be reachable and a path through them in stack trace order must exist.
         if (callTree.getShortestPathWithStops(targetVertices).isEmpty()) {
             throw new IllegalStateException("No path from root to target vertices!");
         }
@@ -933,8 +933,15 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
             int minDistance = Integer.MAX_VALUE;
 
             for (final String coveredMethod : coveredMethods) {
+
+                final CallTreeVertex coveredMethodVertex = new CallTreeVertex(coveredMethod);
+                if (!getVertices().contains(coveredMethodVertex)) {
+                    Log.printWarning("Method not contained in call tree: " + coveredMethodVertex.getMethod());
+                    continue;
+                }
+
                 var path
-                        = callTree.getShortestPathWithStops(new CallTreeVertex(coveredMethod), targetMethodVertices);
+                        = callTree.getShortestPathWithStops(coveredMethodVertex, targetMethodVertices);
                 if (path.isPresent()) {
                     final int distance = path.get().getLength();
 
