@@ -840,7 +840,8 @@ public class InterCFG extends CFG {
         if (vertices.size() == 1) {
             return vertices.stream().findAny().orElseThrow();
         } else {
-            throw new NoSuchElementException("Instruction not resolvable in graph!");
+            throw new NoSuchElementException("Instruction not resolvable in graph: "
+                    + method + "->" + builderInstruction.getLocation().getIndex());
         }
     }
 }
