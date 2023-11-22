@@ -2,8 +2,8 @@ package org.mate.graphs;
 
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.Vertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.mate.util.Log;
 import org.mate.util.Pair;
 
@@ -17,7 +17,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class InterCDGTest {
 
@@ -47,7 +47,7 @@ public class InterCDGTest {
     /**
      * Reads in the traces and initialises the graph once before any test is executed.
      */
-    @BeforeClass
+    @BeforeAll
     public static void setup() {
         Log.registerLogger(new Log()); // Required for the logger invocations.
         traces = readTraceFile(TRACES_FILE);

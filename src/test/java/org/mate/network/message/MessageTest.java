@@ -1,8 +1,8 @@
 package org.mate.network.message;
 
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.mate.network.message.serialization.Lexer;
 import org.mate.network.message.serialization.Parser;
 import org.mate.network.message.serialization.Serializer;
@@ -13,21 +13,22 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MessageTest {
-    Message message;
-    Message message2;
-    Message message3;
-    String subject;
-    String subject2;
-    String subject3;
-    String k1;
-    String k2;
-    String k3;
-    String v1;
-    String v2;
-    String v3;
 
-    @Before
-    public void setup() {
+    static Message message;
+    static Message message2;
+    static Message message3;
+    static String subject;
+    static String subject2;
+    static String subject3;
+    static String k1;
+    static String k2;
+    static String k3;
+    static String v1;
+    static String v2;
+    static String v3;
+
+    @BeforeAll
+    public static void setup() {
         subject = "sub\\;~";
         subject2 = "message2";
         subject3 = "sub3\\;~";
@@ -49,16 +50,17 @@ public class MessageTest {
 
         message3 = new Message(subject3);
     }
+
     @Test
-    public void test_MessageBuilder() {
+    public void testMessageBuilder() {
         Message.MessageBuilder messageBuilder = new Message.MessageBuilder(subject);
         Message builtMessage = messageBuilder.withParameter(k1, v1).withParameter(k2, v2).build();
 
-        Assert.assertEquals(message, builtMessage);
+        Assertions.assertEquals(message, builtMessage);
     }
 
     @Test
-    public void test_MessageSerializer() {
+    public void testMessageSerializer() {
         StringBuilder sb = new StringBuilder(Serializer.escapeParameterValue(subject));
         sb.append(Lexer.END_PARAMETER_CHAR)
                 .append(k1)
@@ -80,11 +82,11 @@ public class MessageTest {
             actual.add(b);
         }
 
-        Assert.assertEquals(expected, actual);
+        Assertions.assertEquals(expected, actual);
     }
 
     @Test
-    public void test_MessageRoundTrip() {
+    public void testMessageRoundTrip() {
         byte[] serializedMessage = Serializer.serialize(message);
         byte[] serializedMessage2 = Serializer.serialize(message2);
         byte[] serializedMessage3 = Serializer.serialize(message3);
@@ -112,8 +114,8 @@ public class MessageTest {
         Message parsedMessage2 = parser.nextMessage();
         Message parsedMessage3 = parser.nextMessage();
 
-        Assert.assertEquals(message, parsedMessage);
-        Assert.assertEquals(message2, parsedMessage2);
-        Assert.assertEquals(message3, parsedMessage3);
+        Assertions.assertEquals(message, parsedMessage);
+        Assertions.assertEquals(message2, parsedMessage2);
+        Assertions.assertEquals(message3, parsedMessage3);
     }
 }
