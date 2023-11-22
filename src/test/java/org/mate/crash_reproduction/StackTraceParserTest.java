@@ -19,8 +19,15 @@ public class StackTraceParserTest {
     }
 
     @Test
-    public void testStackTrace() {
+    public void testStackTrace1() {
         final File stackTraceFile = new File(RESOURCES, "stack_trace_1.txt");
+        Assertions.assertDoesNotThrow(() -> StackTraceParser.parse(
+                Files.lines(stackTraceFile.toPath()).collect(Collectors.toList())));
+    }
+
+    @Test
+    public void testStackTrace2() {
+        final File stackTraceFile = new File(RESOURCES, "stack_trace_2.txt");
         Assertions.assertDoesNotThrow(() -> StackTraceParser.parse(
                 Files.lines(stackTraceFile.toPath()).collect(Collectors.toList())));
     }
