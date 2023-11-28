@@ -679,7 +679,10 @@ public class InterCFG extends CFG {
         Log.println("Number of branch vertices: " + branchVertices.size());
 
         if (branchVertices.size() != branches.size()) {
-            throw new IllegalStateException("Couldn't derive for certain branches the corresponding branch vertices!");
+            // We can't throw here an exception since most sub graphs aren't fully connected due to impreciseness during
+            // the graph construction process or the fact that dead code may exist in the code base of the AUT.
+            Log.printWarning("Couldn't derive for certain branches the corresponding branch vertices!");
+            // throw new IllegalStateException("Couldn't derive for certain branches the corresponding branch vertices!");
         }
 
         return branchVertices;
