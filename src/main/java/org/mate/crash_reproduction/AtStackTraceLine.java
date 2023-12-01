@@ -152,7 +152,17 @@ public class AtStackTraceLine implements StackTraceLine {
      */
     @Override
     public boolean isFromPackage(String packageName) {
-        return getPackageName().startsWith(packageName);
+        if (getPackageName().startsWith(packageName)) {
+            return true;
+        } else {
+            // Heuristic: At the least the first two packages must match.
+            final String[] packages = packageName.split("\\.");
+            if (packages.length < 2) {
+                return false;
+            } else {
+                return getPackageName().startsWith(packages[0] + "." + packages[1]);
+            }
+        }
     }
 
     /**
