@@ -22,13 +22,13 @@ public class StackTraceParserTest {
     public void testStackTrace1() {
         final File stackTraceFile = new File(RESOURCES, "stack_trace_1.txt");
         Assertions.assertDoesNotThrow(() -> StackTraceParser.parse(
-                Files.lines(stackTraceFile.toPath()).collect(Collectors.toList())));
+                Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()), "de.k3b.android.androFotoFinder"));
     }
 
     @Test
     public void testStackTrace2() {
         final File stackTraceFile = new File(RESOURCES, "stack_trace_2.txt");
         Assertions.assertDoesNotThrow(() -> StackTraceParser.parse(
-                Files.lines(stackTraceFile.toPath()).collect(Collectors.toList())));
+                Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()), "com.ichi2.anki"));
     }
 }
