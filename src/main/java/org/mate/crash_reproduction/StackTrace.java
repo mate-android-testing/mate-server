@@ -130,11 +130,11 @@ public class StackTrace {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         StackTrace that = (StackTrace) o;
-        return Objects.equals(stackTraceLines, that.stackTraceLines)
+        return packageName.equals(that.packageName) && (Objects.equals(stackTraceLines, that.stackTraceLines)
                 // NOTE: If the stack trace was produced on a different emulator it is likely that the stack trace line
                 // numbers diverge that belong to the Android framework, thus it reasonable to compare only the 'at'
                 // stack trace lines belonging to the AUT.
-                || Objects.equals(getStackTraceAtLinesOfAUT(), that.getStackTraceAtLinesOfAUT());
+                || Objects.equals(getStackTraceAtLinesOfAUT(), that.getStackTraceAtLinesOfAUT()));
     }
 
     /**
@@ -144,6 +144,6 @@ public class StackTrace {
      */
     @Override
     public int hashCode() {
-        return Objects.hash(stackTraceLines) + Objects.hash(getStackTraceAtLinesOfAUT());
+        return Objects.hash(packageName, stackTraceLines, getStackTraceAtLinesOfAUT());
     }
 }
