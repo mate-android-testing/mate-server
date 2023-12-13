@@ -35,12 +35,18 @@ public class StackTrace {
     private final List<StackTraceLine> stackTraceLines;
 
     /**
+     * The package name of the AUT.
+     */
+    private final String packageName;
+
+    /**
      * Initialises a stack trace.
      *
      * @param stackTraceLines The individual stack trace lines.
      */
-    public StackTrace(List<StackTraceLine> stackTraceLines) {
+    public StackTrace(List<StackTraceLine> stackTraceLines, String packageName) {
         this.stackTraceLines = stackTraceLines;
+        this.packageName = packageName;
     }
 
     /**
@@ -82,6 +88,17 @@ public class StackTrace {
     }
 
     /**
+     * Retrieves the 'at' stack trace lines belonging to the AUT.
+     *
+     * @return Returns the {@link AtStackTraceLine} lines belonging to the AUT.
+     */
+    public List<AtStackTraceLine> getStackTraceAtLinesOfAUT() {
+        return getStackTraceAtLines()
+                .filter(stackTraceLine -> stackTraceLine.isFromPackage(packageName))
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Retrieves the 'at' stack trace lines.
      *
      * @return Returns the {@link AtStackTraceLine} lines.
@@ -113,7 +130,11 @@ public class StackTrace {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         StackTrace that = (StackTrace) o;
-        return Objects.equals(stackTraceLines, that.stackTraceLines);
+        return Objects.equals(stackTraceLines, that.stackTraceLines)
+                // NOTE: If the stack trace was produced on a different emulator it is likely that the stack trace line
+                // numbers diverge that belong to the Android framework, thus it reasonable to compare only the 'at'
+                // stack trace lines belonging to the AUT.
+                || Objects.equals(getStackTraceAtLinesOfAUT(), that.getStackTraceAtLinesOfAUT());
     }
 
     /**
@@ -123,6 +144,6 @@ public class StackTrace {
      */
     @Override
     public int hashCode() {
-        return Objects.hash(stackTraceLines);
+        return Objects.hash(stackTraceLines) + Objects.hash(getStackTraceAtLinesOfAUT());
     }
 }

@@ -226,7 +226,7 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         }
 
         try {
-            return StackTraceParser.parse(Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()));
+            return StackTraceParser.parse(Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()), packageName);
         } catch (IOException e) {
             Log.printError("Could not read stack trace file from '" + stackTraceFile.getAbsolutePath() + "'!");
             throw new UncheckedIOException(e);

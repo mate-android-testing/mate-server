@@ -49,14 +49,15 @@ public final class StackTraceParser {
      * Parses a list of lines into specific stack trace lines.
      *
      * @param lines The raw input lines.
+     * @param packageName The package name.
      * @return Returns a list of parsed stack trace lines.
      */
-    public static StackTrace parse(final List<String> lines) {
+    public static StackTrace parse(final List<String> lines, final String packageName) {
         final List<StackTraceLine> parsedLines = lines.stream()
                 .map(String::trim)
                 .map(StackTraceParser::parseLine)
                 .collect(Collectors.toList());
-        return new StackTrace(parsedLines);
+        return new StackTrace(parsedLines, packageName);
     }
 
     /**
