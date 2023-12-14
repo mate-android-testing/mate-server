@@ -168,6 +168,9 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         final StackTrace stackTrace = readStackTrace(chromosome);
         if (stackTrace != null) {
             if (stackTrace.equals(this.stackTrace)) { // we could successfully reproduce crash
+                Log.println("CallTreeDistance: " + 0.0d);
+                Log.println("BasicBlockDistance: " + 0.0d);
+                Log.println("ConstructorDistance: " + 0.0d);
                 return 0.0;
             }
         }
