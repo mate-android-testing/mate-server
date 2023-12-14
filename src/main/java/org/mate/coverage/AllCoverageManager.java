@@ -310,7 +310,7 @@ public class AllCoverageManager {
         coverageDTO.setMethodCoverage(methodCoverage);
         Log.println("We have a total method coverage of " + methodCoverage + "%.");
 
-        double branchCoverage = (double) numberOfCoveredBranches / numberOfBranches * 100;
+        double branchCoverage = numberOfCoveredBranches == 0 ? 0.0d : (double) numberOfCoveredBranches / numberOfBranches * 100;
         coverageDTO.setBranchCoverage(branchCoverage);
         Log.println("We have a total branch coverage of " + branchCoverage + "%");
 
