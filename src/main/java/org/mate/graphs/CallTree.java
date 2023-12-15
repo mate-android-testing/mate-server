@@ -178,10 +178,35 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         final double callTreeDistance = getCallTreeDistance(chromosome, tracesPerFile);
         final double basicBlockDistance = getBasicBlockDistance(chromosome, tracesPerFile);
         final double constructorDistance = getConstructorDistance(chromosome, traces);
+        final double crashDistance = (callTreeDistance + basicBlockDistance + constructorDistance) / 3;
         Log.println("CallTreeDistance: " + callTreeDistance);
         Log.println("BasicBlockDistance: " + basicBlockDistance);
         Log.println("ConstructorDistance: " + constructorDistance);
-        return (callTreeDistance + basicBlockDistance + constructorDistance) / 3;
+        if (crashDistance == 0.0) {
+            // NOTE: We can actually cover all stack trace lines but may not reproduce the crash. This can happen for
+            // instance when the crash is state dependent, e.g., relying upon a specific input which is handed over to a
+            // method out of our control (Android Framework), e.g., to a database. Since we only consider the stack trace
+            // lines belonging to the AUT we have no guidance whether the remaining stack trace lines were covered in the
+            // correct order as well. To avoid that the search stops here we need to return a crash distance > 0.
+            // Example:
+            // Caused by: android.database.sqlite.SQLiteException: near "bug": syntax error (code 1)
+            //at android.database.sqlite.SQLiteConnection.nativePrepareStatement(Native Method)
+            //at android.database.sqlite.SQLiteConnection.acquirePreparedStatement(SQLiteConnection.java:887)
+            //at android.database.sqlite.SQLiteConnection.prepare(SQLiteConnection.java:498)
+            //at android.database.sqlite.SQLiteSession.prepare(SQLiteSession.java:588)
+            //at android.database.sqlite.SQLiteProgram.<init>(SQLiteProgram.java:58)
+            //at android.database.sqlite.SQLiteQuery.<init>(SQLiteQuery.java:37)
+            //at android.database.sqlite.SQLiteDirectCursorDriver.query(SQLiteDirectCursorDriver.java:44)
+            //at android.database.sqlite.SQLiteDatabase.rawQueryWithFactory(SQLiteDatabase.java:1316)
+            //at android.database.sqlite.SQLiteDatabase.rawQuery(SQLiteDatabase.java:1255)
+            //at com.olam.DatabaseHelper.getSimilarStems(DatabaseHelper.java:115)
+            //at com.olam.MainSearch$doSearch.doInBackground(MainSearch.java:255)
+            //at com.olam.MainSearch$doSearch.doInBackground(MainSearch.java:228
+            Log.println("Covered all stack trace lines belonging to the AUT without actually triggering the crash!");
+            return 0.01d;
+        } else {
+            return crashDistance;
+        }
     }
 
     /**
