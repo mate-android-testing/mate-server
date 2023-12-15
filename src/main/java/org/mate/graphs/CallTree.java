@@ -764,6 +764,8 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         // Compute the minimal approach level between the traces and the intraCFG vertices referring to the encoded
         // source code line number of the given stack trace line.
         for (final String trace : traces) {
+            // We covered the stack trace line at the method level, thus it is sufficient to consider only the traces
+            // referring to the stack trace line (target method).
             if (Util.traceToMethod(trace).equals(targetMethod)) {
                 int distance = analyzedStackTraceLine.getSourceCodeLineNumberIntraCFGVertices().stream()
                         .map(targetVertex -> intraCFG.getDistance(intraCFG.lookupVertex(trace), targetVertex))
