@@ -165,6 +165,8 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     public double getCrashDistance(final String chromosome, final List<Set<String>> tracesPerFile,
                                    final Set<String> traces) {
 
+        // TODO: Employ multiple caches since this function is called after each single action of a chromosome.
+
         final StackTrace stackTrace = readStackTrace(chromosome);
         if (stackTrace != null) {
             if (stackTrace.equals(this.stackTrace)) { // we could successfully reproduce crash
