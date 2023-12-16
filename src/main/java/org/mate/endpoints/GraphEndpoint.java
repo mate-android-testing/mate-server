@@ -462,8 +462,8 @@ public class GraphEndpoint implements Endpoint {
      * @return Returns the traces per file / action.
      */
     private List<Set<String>> getTracesPerFile(Message request) {
-        return getTraceFiles(request).stream()
-                .map(f -> new HashSet<>(readTraces(List.of(f))))
+        return getTraceFiles(request).parallelStream()
+                .map(tracesFile -> new HashSet<>(readTraces(List.of(tracesFile))))
                 .collect(Collectors.toList());
     }
 
