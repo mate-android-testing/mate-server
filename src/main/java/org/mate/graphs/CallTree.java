@@ -158,12 +158,10 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      * Computes the crash distance for the given chromosome.
      *
      * @param chromosome The chromosome for which the crash distance should be computed.
-     * @param tracesPerFile The traces per file.
-     * @param traces The set of traces.
+     * @param tracesPerAction The traces per action.
      * @return Returns the crash distance for the given chromosome.
      */
-    public double getCrashDistance(final String chromosome, final List<Set<String>> tracesPerFile,
-                                   final Set<String> traces) {
+    public double getCrashDistance(final String chromosome, final List<Set<String>> tracesPerAction) {
 
         // TODO: Employ multiple caches since this function is called after each single action of a chromosome.
 
@@ -177,13 +175,25 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
             }
         }
 
-        final double callTreeDistance = getCallTreeDistance(chromosome, tracesPerFile);
-        final double basicBlockDistance = getBasicBlockDistance(chromosome, tracesPerFile);
-        final double constructorDistance = getConstructorDistance(chromosome, traces);
+        // Map traces to method format to be conformable with call tree structure.
+        final List<Set<String>> coveredMethodsPerAction = tracesPerAction.stream()
+                .map(t -> t.stream().map(Util::traceToMethod).collect(Collectors.toSet()))
+                .collect(Collectors.toList());
+
+        // Combine the covered methods.
+        final Set<String> coveredMethods = coveredMethodsPerAction.stream()
+                .flatMap(Set::stream)
+                .collect(Collectors.toSet());
+
+        final double callTreeDistance = getCallTreeDistance(chromosome, coveredMethodsPerAction);
+        final double basicBlockDistance = getBasicBlockDistance(chromosome, tracesPerAction);
+        final double constructorDistance = getConstructorDistance(chromosome, coveredMethods);
         final double crashDistance = (callTreeDistance + basicBlockDistance + constructorDistance) / 3;
+
         Log.println("CallTreeDistance: " + callTreeDistance);
         Log.println("BasicBlockDistance: " + basicBlockDistance);
         Log.println("ConstructorDistance: " + constructorDistance);
+
         if (crashDistance == 0.0) {
             // NOTE: We can actually cover all stack trace lines but may not reproduce the crash. This can happen for
             // instance when the crash is state dependent, e.g., relying upon a specific input which is handed over to a
@@ -205,7 +215,7 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
             //at com.olam.MainSearch$doSearch.doInBackground(MainSearch.java:255)
             //at com.olam.MainSearch$doSearch.doInBackground(MainSearch.java:228
             Log.println("Covered all stack trace lines belonging to the AUT without actually triggering the crash!");
-            return 0.01d;
+            return 0.01d; // epsilon
         } else {
             return crashDistance;
         }
@@ -813,21 +823,22 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      * Computes the normalized basic block distance between the given traces and the target methods described by the
      * stack trace.
      *
-     * @param tracesPerFile The given traces per file. One file essentially represents the traces of a single action.
+     * @param tracesPerAction The given traces per action.
      * @return Returns a mapping that describes for each stack trace line the normalized basic block distance.
      */
-    private Map<AtStackTraceLine, Double> getNormalizedBasicBlockDistances(final List<Set<String>> tracesPerFile) {
+    private Map<AtStackTraceLine, Double> getNormalizedBasicBlockDistances(final List<Set<String>> tracesPerAction) {
 
         // TODO: Is it sensible to consider the traces per action here and not the entire traces as a whole?
 
         // Look for the traces of a single action that covered most target methods.
-        final var bestTraces = tracesPerFile.stream()
+        final var bestTraces = tracesPerAction.parallelStream()
                 .map(traces -> new Tuple<>(traces, reachedTargetMethods(traces)))
+                .sequential()
                 .max(Comparator.comparingLong(tuple -> tuple.getY().values().stream().filter(b -> b).count()))
                 .orElseThrow();
 
         // Compute the basic block distance between the best action (most covered target methods) and each stack trace line.
-        return bestTraces.getY().entrySet().stream() // Set<Map.Entry<AtStackTraceLine, Boolean>>
+        return bestTraces.getY().entrySet().parallelStream() // Set<Map.Entry<AtStackTraceLine, Boolean>>
                 .collect(Collectors.toMap(Map.Entry::getKey, entry -> {
                     final int distance = entry.getValue()
                             // only need to compute distance if the action covered the target method (stack trace line)
@@ -846,23 +857,23 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      * Retrieves the normalized (average) basic block distance between the traces and the target methods.
      *
      * @param chromosome The chromosome for which the basic block distance should be derived.
-     * @param tracesPerFile The traces per file (action).
+     * @param tracesPerAction The traces per action.
      * @return Returns the normalized basic block distance for the given chromosome.
      */
-    private double getBasicBlockDistance(final String chromosome, final List<Set<String>> tracesPerFile) {
+    private double getBasicBlockDistance(final String chromosome, final List<Set<String>> tracesPerAction) {
 
         Log.println("Computing the basic block distance for the chromosome: " + chromosome);
 
         // TODO: If the line numbers have been stripped from the stack trace and/or aren't contained in the APK, we should
         //  ignore the basic block distance completely.
-        final Map<AtStackTraceLine, Double> basicBlockDistances = getNormalizedBasicBlockDistances(tracesPerFile);
+        // Compute for each stack trace line the basic block distance.
+        final Map<AtStackTraceLine, Double> basicBlockDistances = getNormalizedBasicBlockDistances(tracesPerAction);
 
-        // computes the average basic block distance
-        double sum = basicBlockDistances.values().stream().mapToDouble(d -> d).sum();
-        double averageBasicBlockDistance = sum / basicBlockDistances.size();
+        // Compute the average basic block distance.
+        final double sum = basicBlockDistances.values().stream().mapToDouble(d -> d).sum();
+        final double averageBasicBlockDistance = sum / basicBlockDistances.size();
 
         Log.println("Basic block distance for " + chromosome + " is: " + averageBasicBlockDistance);
-
         return averageBasicBlockDistance;
     }
 
@@ -870,28 +881,24 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      * Computes the constructor distance for the given chromosome, i.e. the relative number of non covered constructors.
      *
      * @param chromosome The chromosome for which the constructor distance should be derived.
-     * @param traces The traces for the given chromosome.
+     * @param coveredMethods The covered methods of the given chromosome.
      * @return Returns the relative number of non covered constructors.
      */
-    private double getConstructorDistance(final String chromosome, final Set<String> traces) {
+    private double getConstructorDistance(final String chromosome, final Set<String> coveredMethods) {
 
         Log.println("Computing constructors distance for the chromosome: " + chromosome);
 
-        // track which methods have been visited by the traces
-        final Set<String> coveredMethods = traces.stream().map(Util::traceToMethod).collect(Collectors.toSet());
-
         // count how many constructors have been covered / non covered
-        double coveredConstructors = requiredConstructors.stream().filter(coveredMethods::contains).count();
-        double nonCoveredConstructors = requiredConstructors.size() - coveredConstructors;
+        final double coveredConstructors = requiredConstructors.stream().filter(coveredMethods::contains).count();
+        final double nonCoveredConstructors = requiredConstructors.size() - coveredConstructors;
 
         // normalize in the range [0,1]
-        double normalisedConstructorDistance = requiredConstructors.size() == 0
+        final double normalisedConstructorDistance = requiredConstructors.size() == 0
                 // TODO: There should be at least a single required constructor so this case should never happen actually!
                 ? 0
                 : nonCoveredConstructors / requiredConstructors.size();
 
         Log.println("Number of non covered constructors for " + chromosome + " is: " + nonCoveredConstructors);
-
         return normalisedConstructorDistance;
     }
 
@@ -899,10 +906,10 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      * Retrieves the normalized call tree distance for the given chromosome.
      *
      * @param chromosome The chromosome for which the call tree distance should be derived.
-     * @param tracesPerFile The traces per file (action).
+     * @param coveredMethodsPerAction The covered methods (described through the traces) per action.
      * @return Returns the normalized call tree distance for the given chromosome.
      */
-    private double getCallTreeDistance(final String chromosome, final List<Set<String>> tracesPerFile) {
+    private double getCallTreeDistance(final String chromosome, final List<Set<String>> coveredMethodsPerAction) {
 
         Log.println("Computing the call tree distance for the chromosome: " + chromosome);
 
@@ -912,14 +919,11 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         * set of traces fully covers the stack trace lines but actually didn't trigger the crash. Thus, we need to compare
         * the traces per action.
          */
-        double callTreeDistance = tracesPerFile.stream()
-                // map to method format to be conformable with call tree structure
-                .map(traces -> traces.stream().map(Util::traceToMethod).collect(Collectors.toSet()))
-                // compute distance for every single action
+        final double callTreeDistance = coveredMethodsPerAction.stream()
                 .mapToInt(this::getCallTreeDistance)
                 .min().orElseThrow();
 
-        double normalizedCallTreeDistance = callTreeDistance == Integer.MAX_VALUE
+        final double normalizedCallTreeDistance = callTreeDistance == Integer.MAX_VALUE
                 ? 1
                 : callTreeDistance / (callTreeDistance + 1);
 
