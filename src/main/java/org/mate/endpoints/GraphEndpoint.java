@@ -438,7 +438,7 @@ public class GraphEndpoint implements Endpoint {
 
         final String chromosome = request.getParameter("chromosome");
         final List<Set<String>> tracesPerFile = getTracesPerFile(request);
-        final Set<String> traces = getTraces(request);
+        final Set<String> traces = tracesPerFile.stream().flatMap(Set::stream).collect(Collectors.toSet());
         double crashDistance = callTree.getCrashDistance(chromosome, tracesPerFile, traces);
 
         return new Message.MessageBuilder("/graph/get_crash_distance")
