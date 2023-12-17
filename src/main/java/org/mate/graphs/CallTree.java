@@ -959,9 +959,11 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         * set of traces fully covers the stack trace lines but actually didn't trigger the crash. Thus, we need to compare
         * the traces per action.
          */
-        final double callTreeDistance = coveredMethodsPerAction.stream()
+        final double callTreeDistance = coveredMethodsPerAction.parallelStream()
                 .mapToInt(this::getCallTreeDistance)
-                .min().orElseThrow();
+                .sequential()
+                .min()
+                .orElseThrow();
 
         final double normalizedCallTreeDistance = callTreeDistance == Integer.MAX_VALUE
                 ? 1
