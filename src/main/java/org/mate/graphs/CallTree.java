@@ -106,6 +106,11 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     private final GraphPath<CallTreeVertex, CallTreeEdge> targetPath;
 
     /**
+     * Caches all computed graph paths to speed up the call tree distance computation.
+     */
+    private final Map<String, Optional<GraphPath<CallTreeVertex, CallTreeEdge>>> cache = new ConcurrentHashMap<>();
+
+    /**
      * The set of required constructor cals.
      */
     private final Set<String> requiredConstructors;
@@ -161,8 +166,19 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
             if (!targetVertices.contains(callTreeVertex)) {
                 // NOTE: It is sufficient to pre-compute the path to the first target vertex (the bottom method in the
                 // stack trace) since the path through the target vertices is fixed by the stack trace.
-                callTree.getShortestPath(callTreeVertex, firstTargetVertex);
+                cache.put(callTreeVertex.getMethod() + "-->" + firstTargetVertex.getMethod(),
+                        callTree.getShortestPath(callTreeVertex, firstTargetVertex));
             }
+        }
+
+        // Pre-compute the path between every target vertex and the last target vertex. This information is required
+        // when we partially covered the stack trace lines and need to compute the call tree distance between the lastly
+        // covered stack trace line and the remaining (uncovered) stack trace lines.
+        final CallTreeVertex lastTargetVertex = targetVertices.get(targetVertices.size() - 1);
+        for (int i = 0; i < targetVertices.size() - 1; i++) {
+            final CallTreeVertex source = targetVertices.get(i);
+            cache.put(source.getMethod() + "-->" + lastTargetVertex.getMethod(),
+                    callTree.getShortestPathWithStops(source, targetVertices.subList(i + 1, targetVertices.size())));
         }
         long end = System.currentTimeMillis();
         Log.println("Initialising cache took: " + (end - start) + "ms");
@@ -1001,13 +1017,14 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         } else if (lastCoveredTargetMethod.isPresent()) {
             // We partially covered the target methods, thus the distance is defined as the minimal path length from the last
             // covered method through the remaining target methods.
-            return callTree.getShortestPathWithStops(lastCoveredTargetMethod.get(), targetMethodVertices).orElseThrow().getLength();
+
+            final CallTreeVertex lastTargetVertex = targetVertices.get(targetVertices.size() - 1);
+            final String key = lastCoveredTargetMethod.get().getMethod() + "-->" + lastTargetVertex.getMethod();
+            return cache.get(key).orElseThrow().getLength();
         } else {
             // We have not covered any target methods yet, thus the distance is defined as the minimal path length from
             // a covered method (trace) through the target methods.
 
-            // TODO: Computing the minimal path between every single trace and the target methods can be expensive. Track
-            //  it or compute the distance in advance. Alternatively, use a different metric in this case.
             int minDistance = Integer.MAX_VALUE;
             
             final CallTreeVertex firstTargetVertex = targetVertices.get(0);
@@ -1026,7 +1043,9 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
                 * NOTE: We only need to compute the shortest path to the first target vertex since the path through the
                 * remaining target vertices is fixed by the underlying stack trace.
                  */
-                var path = callTree.getShortestPath(coveredMethodVertex, firstTargetVertex);
+                final String key = coveredMethodVertex.getMethod() + "-->" + firstTargetVertex.getMethod();
+                final Optional<GraphPath<CallTreeVertex, CallTreeEdge>> path = cache.get(key);
+
                 if (path.isPresent()) {
                     // We simply add the pre-computed path length through the individual target vertices.
                     final int distance = path.get().getLength() + targetPath.getLength();
