@@ -145,8 +145,8 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         this.analyzedStackTraceLines = analyzeStackTrace(appsDir, packageName);
         this.requiredConstructors = analyzeRequiredConstructors();
         this.targetVertices = computeTargetVertices();
-        this.targetPath = callTree.getShortestPath(targetVertices.get(0),
-                targetVertices.get(targetVertices.size() - 1)).orElseThrow();
+        this.targetPath = callTree.getShortestPathWithStops(targetVertices.get(0),
+                targetVertices.subList(1, targetVertices.size())).orElseThrow();
         initCache();
     }
 
