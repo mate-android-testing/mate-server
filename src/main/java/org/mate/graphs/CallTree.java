@@ -1009,11 +1009,13 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
             int minDistance = Integer.MAX_VALUE;
             
             final CallTreeVertex firstTargetVertex = targetVertices.get(0);
-
+            final Set<CallTreeVertex> callTreeVertices = new HashSet<>(getVertices());
+            
             for (final String coveredMethod : coveredMethods) {
 
                 final CallTreeVertex coveredMethodVertex = new CallTreeVertex(coveredMethod);
-                if (!getVertices().contains(coveredMethodVertex)) {
+
+                if (!callTreeVertices.contains(coveredMethodVertex)) {
                     Log.printWarning("Method not contained in call tree: " + coveredMethodVertex.getMethod());
                     continue;
                 }
