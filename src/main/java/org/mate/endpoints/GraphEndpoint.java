@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -49,6 +50,11 @@ public class GraphEndpoint implements Endpoint {
      */
     private List<? extends Vertex> targetVertices;
 
+    /**
+     * Caches the traces read per file.
+     */
+    private final Map<File, Set<String>> tracesCache = new ConcurrentHashMap<>();
+
     public GraphEndpoint(AndroidEnvironment androidEnvironment, Path appsDir) {
         this.androidEnvironment = androidEnvironment;
         this.appsDir = appsDir;
@@ -64,6 +70,8 @@ public class GraphEndpoint implements Endpoint {
             return getBranchDistance(request);
         } else if (request.getSubject().startsWith("/graph/get_crash_distance")) {
             return getCrashDistance(request);
+        } else if (request.getSubject().startsWith("/graph/invalidate_cache")) {
+            return invalidateCache();
         } else if (request.getSubject().startsWith("/graph/draw")) {
             return drawGraph(request);
         } else if (request.getSubject().startsWith("/graph/stack_trace_tokens")) {
@@ -419,6 +427,18 @@ public class GraphEndpoint implements Endpoint {
 
         return new Message.MessageBuilder("/graph/stack_trace_user_tokens")
                 .withParameter("tokens", String.join(",", callTree.getStackTrace().getUserTokens()))
+                .build();
+    }
+
+    /**
+     * Invalidates the traces cache. This should be called once the traces of a chromosome are not needed any longer, e.g.,
+     * when a generation is evolved.
+     *
+     * @return Returns an empty response message.
+     */
+    private Message invalidateCache() {
+        tracesCache.clear();
+        return new Message.MessageBuilder("/graph/invalidate_cache")
                 .build();
     }
 
@@ -863,11 +883,18 @@ public class GraphEndpoint implements Endpoint {
         Set<String> traces = new LinkedHashSet<>();
 
         for (File traceFile : tracesFiles) {
-            try (Stream<String> stream = Files.lines(traceFile.toPath(), StandardCharsets.UTF_8)) {
-                traces.addAll(stream.collect(Collectors.toList()));
-            } catch (IOException e) {
-                Log.println("Reading traces.txt failed!");
-                throw new IllegalStateException(e);
+
+            if (tracesCache.containsKey(traceFile)) {
+                traces.addAll(tracesCache.get(traceFile));
+            } else {
+                try (Stream<String> stream = Files.lines(traceFile.toPath(), StandardCharsets.UTF_8)) {
+                    var currentTraces = stream.collect(Collectors.toSet());
+                    traces.addAll(currentTraces);
+                    tracesCache.put(traceFile, currentTraces);
+                } catch (IOException e) {
+                    Log.println("Reading traces.txt failed!");
+                    throw new IllegalStateException(e);
+                }
             }
         }
 
