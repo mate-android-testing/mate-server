@@ -1011,8 +1011,8 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
             int minDistance = Integer.MAX_VALUE;
             
             final CallTreeVertex firstTargetVertex = targetVertices.get(0);
-            final Set<CallTreeVertex> callTreeVertices = new HashSet<>(getVertices());
-            
+            final Set<CallTreeVertex> callTreeVertices = callTree.getVertices();
+
             for (final String coveredMethod : coveredMethods) {
 
                 final CallTreeVertex coveredMethodVertex = new CallTreeVertex(coveredMethod);
