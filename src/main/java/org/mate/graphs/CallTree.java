@@ -17,6 +17,7 @@ import de.uni_passau.fim.auermich.android_graphs.core.graphs.calltree.CallTreeEd
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.calltree.CallTreeVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.graphs.cfg.CFGVertex;
 import de.uni_passau.fim.auermich.android_graphs.core.utility.*;
+import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ManyToManyShortestPathsAlgorithm;
 import org.mate.crash_reproduction.*;
 import org.mate.graphs.util.Util;
@@ -94,6 +95,12 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     private final List<CallTreeVertex> targetVertices;
 
     /**
+     * Describes the shortest path through the {@link #targetVertices}. We pre-compute this path to speed up the call
+     * tree distance computation.
+     */
+    private final GraphPath<CallTreeVertex, CallTreeEdge> targetPath;
+
+    /**
      * The set of required constructor cals.
      */
     private final Set<String> requiredConstructors;
@@ -132,6 +139,27 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         this.analyzedStackTraceLines = analyzeStackTrace(appsDir, packageName);
         this.requiredConstructors = analyzeRequiredConstructors();
         this.targetVertices = computeTargetVertices();
+        this.targetPath = callTree.getShortestPath(targetVertices.get(0),
+                targetVertices.get(targetVertices.size() - 1)).orElseThrow();
+        initCache();
+    }
+
+    /**
+     * Initialises the internal call tree distance cache by pre-computing the path between every vertex and the first
+     * target vertex.
+     */
+    private void initCache() {
+        long start = System.currentTimeMillis();
+        final CallTreeVertex firstTargetVertex = targetVertices.get(0);
+        for (CallTreeVertex callTreeVertex : callTree.getVertices()) {
+            if (!targetVertices.contains(callTreeVertex)) {
+                // NOTE: It is sufficient to pre-compute the path to the first target vertex (the bottom method in the
+                // stack trace) since the path through the target vertices is fixed by the stack trace.
+                callTree.getShortestPath(callTreeVertex, firstTargetVertex);
+            }
+        }
+        long end = System.currentTimeMillis();
+        Log.println("Initialising cache took: " + (end - start) + "ms");
     }
 
     /**
@@ -163,9 +191,8 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      */
     public double getCrashDistance(final String chromosome, final List<Set<String>> tracesPerAction) {
 
-        // TODO: Employ multiple caches since this function is called after each single action of a chromosome.
-
         final StackTrace stackTrace = readStackTrace(chromosome);
+
         if (stackTrace != null) {
             if (stackTrace.equals(this.stackTrace)) { // we could successfully reproduce crash
                 Log.println("CallTreeDistance: " + 0.0d);
@@ -967,6 +994,8 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
             // TODO: Computing the minimal path between every single trace and the target methods can be expensive. Track
             //  it or compute the distance in advance. Alternatively, use a different metric in this case.
             int minDistance = Integer.MAX_VALUE;
+            
+            final CallTreeVertex firstTargetVertex = targetVertices.get(0);
 
             for (final String coveredMethod : coveredMethods) {
 
@@ -976,11 +1005,14 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
                     continue;
                 }
 
-                var path
-                        = callTree.getShortestPathWithStops(coveredMethodVertex, targetMethodVertices);
+                /*
+                * NOTE: We only need to compute the shortest path to the first target vertex since the path through the
+                * remaining target vertices is fixed by the underlying stack trace.
+                 */
+                var path = callTree.getShortestPath(coveredMethodVertex, firstTargetVertex);
                 if (path.isPresent()) {
-                    final int distance = path.get().getLength();
-
+                    // We simply add the pre-computed path length through the individual target vertices.
+                    final int distance = path.get().getLength() + targetPath.getLength();
                     if (distance < minDistance) {
                         minDistance = distance;
                     }
