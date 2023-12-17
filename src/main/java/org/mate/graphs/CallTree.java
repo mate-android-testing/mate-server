@@ -89,6 +89,11 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
     private final StackTrace stackTrace;
 
     /**
+     * The stack traces as discovered by the individual chromosomes; serves as a cache.
+     */
+    private final Map<String, StackTrace> stackTraces;
+
+    /**
      * The list of target vertices, i.e. the list of methods encoded in the stack trace lines in reversed order
      * (from bottom to top, i.e. in call hierarchy order).
      */
@@ -136,6 +141,7 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         this.components = callTree.getInterCFG().getComponents();
         this.apk = callTree.getInterCFG().getApk();
         this.stackTrace = loadStackTrace(appsDir, packageName, stackTracePath);
+        this.stackTraces = new LinkedHashMap<>();
         this.analyzedStackTraceLines = analyzeStackTrace(appsDir, packageName);
         this.requiredConstructors = analyzeRequiredConstructors();
         this.targetVertices = computeTargetVertices();
@@ -169,6 +175,11 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      * @return Returns the stack trace associated with the given chromosome or {@code null} if no stack trace exists.
      */
     private StackTrace readStackTrace(final String chromosome) {
+
+        if (stackTraces.containsKey(chromosome)) {
+            return stackTraces.get(chromosome);
+        }
+
         final File appDir = new File(appsDir.toFile(), packageName);
         File stackTracesBaseDir = new File(appDir, STACK_TRACES_DIR);
         File stackTraceFile = new File(stackTracesBaseDir, chromosome + ".txt");
@@ -178,7 +189,9 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
             // TODO: Adapt loadStackTrace() to accept final path.
             stackTracesBaseDir = new File(STACK_TRACES_DIR);
             stackTraceFile = new File(stackTracesBaseDir, chromosome + ".txt");
-            return loadStackTrace(appsDir, packageName, stackTraceFile.getPath());
+            final StackTrace stackTrace = loadStackTrace(appsDir, packageName, stackTraceFile.getPath());
+            stackTraces.put(chromosome, stackTrace);
+            return stackTrace;
         }
     }
 
