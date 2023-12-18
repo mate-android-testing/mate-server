@@ -977,7 +977,6 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
          */
         final double callTreeDistance = coveredMethodsPerAction.parallelStream()
                 .mapToInt(this::getCallTreeDistance)
-                .sequential()
                 .min()
                 .orElseThrow();
 
@@ -1048,7 +1047,6 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
                         final Optional<GraphPath<CallTreeVertex, CallTreeEdge>> path = cache.getOrDefault(key, Optional.empty());
                         return path.isPresent() ? path.get().getLength() + targetPath.getLength() : Integer.MAX_VALUE;
                     })
-                    .sequential()
                     .min()
                     .orElse(Integer.MAX_VALUE);
 
