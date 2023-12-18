@@ -888,7 +888,7 @@ public class GraphEndpoint implements Endpoint {
                 traces.addAll(tracesCache.get(traceFile));
             } else {
                 try (Stream<String> stream = Files.lines(traceFile.toPath(), StandardCharsets.UTF_8)) {
-                    var currentTraces = stream.collect(Collectors.toSet());
+                    var currentTraces = stream.filter(line -> !line.isEmpty()).collect(Collectors.toSet());
                     traces.addAll(currentTraces);
                     tracesCache.put(traceFile, currentTraces);
                 } catch (IOException e) {
