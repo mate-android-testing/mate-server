@@ -1003,11 +1003,12 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         // the call tree vertices describing the stack trace methods (targets) in reversed order (operate on copy since being modified)
         final List<CallTreeVertex> targetMethodVertices = new ArrayList<>(this.targetVertices);
 
-        // describes the lastly covered target method in the stack trace (from bottom to top ordered!)
+        // Describes the lastly covered target method in the stack trace (from bottom to top ordered!).
         Optional<CallTreeVertex> lastCoveredTargetMethod = Optional.empty();
 
         while (!targetMethodVertices.isEmpty() && coveredMethods.contains(targetMethodVertices.get(0).getMethod())) {
-            // remove target vertices that we have already covered
+            // Remove target vertices that we have already covered but only if they got covered in the order defined by
+            // the stack trace, i.e., we need to cover the first target vertex first before we cover the second one.
             lastCoveredTargetMethod = Optional.of(targetMethodVertices.remove(0));
         }
 
@@ -1022,22 +1023,56 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
             final String key = lastCoveredTargetMethod.get().getMethod() + "-->" + lastTargetVertex.getMethod();
             return cache.get(key).orElseThrow().getLength();
         } else {
-            // We have not covered any target methods yet, thus the distance is defined as the minimal path length from
-            // a covered method (trace) through the target methods.
+            // We have not yet covered any target methods in the order they appear in the stack trace (from bottom to top),
+            // but we may have covered some intermediate target methods but without their predecessors. The distance in
+            // this case is defined as the minimal path length from a covered method to the first target method plus the
+            // fixed offset described by the path length through the target methods.
 
-            int minDistance = Integer.MAX_VALUE;
-            
             final CallTreeVertex firstTargetVertex = targetVertices.get(0);
             final Set<CallTreeVertex> callTreeVertices = callTree.getVertices();
 
-            for (final String coveredMethod : coveredMethods) {
+            int minDistance = coveredMethods.parallelStream()
+                    // Ignore covered methods that don't show up in the call tree.
+                    .filter(method -> callTreeVertices.contains(new CallTreeVertex(method)))
+                    // Compute distance from covered method through chain of target methods.
+                    .mapToInt(method -> {
+                        /*
+                         * NOTE: We only need to compute the shortest path to the first target vertex since the path through
+                         * the remaining target vertices is fixed by the underlying stack trace and we can simply add that
+                         * fixed path length. It can happen that the cache contains no entry if the covered method refers
+                         * to an intermediate target vertex, i.e. we may covered the second and third target method in
+                         * the stack trace but not the very first. Since there is typically no path back to a former
+                         * target method we simply ignore this case.
+                         */
+                        final String key = method + "-->" + firstTargetVertex.getMethod();
+                        final Optional<GraphPath<CallTreeVertex, CallTreeEdge>> path = cache.getOrDefault(key, Optional.empty());
+                        return path.isPresent() ? path.get().getLength() + targetPath.getLength() : Integer.MAX_VALUE;
+                    })
+                    .sequential()
+                    .min()
+                    .orElse(Integer.MAX_VALUE);
 
-                final CallTreeVertex coveredMethodVertex = new CallTreeVertex(coveredMethod);
+//            int minDistance = Integer.MAX_VALUE;
 
-                if (!callTreeVertices.contains(coveredMethodVertex)) {
-                    Log.printWarning("Method not contained in call tree: " + coveredMethodVertex.getMethod());
-                    continue;
-                }
+//            for (final String coveredMethod : coveredMethods) {
+//
+//                final CallTreeVertex coveredMethodVertex = new CallTreeVertex(coveredMethod);
+//
+//                if (!callTreeVertices.contains(coveredMethodVertex)) {
+//                    Log.printWarning("Method not contained in call tree: " + coveredMethodVertex.getMethod());
+//                    continue;
+//                }
+//
+//                final String key = coveredMethodVertex.getMethod() + "-->" + firstTargetVertex.getMethod();
+//                final Optional<GraphPath<CallTreeVertex, CallTreeEdge>> path = cache.getOrDefault(key, Optional.empty());
+//
+//                if (path.isPresent()) {
+//                    final int distance = path.get().getLength() + targetPath.getLength();
+//                    if (distance < minDistance) {
+//                        minDistance = distance;
+//                    }
+//                }
+//            }
 
                 /*
                 * NOTE: We only need to compute the shortest path to the first target vertex since the path through the
