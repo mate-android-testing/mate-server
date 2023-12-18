@@ -23,5 +23,21 @@ public final class Util {
             throw new RuntimeException(e);
         }
     }
+
+    /**
+     * Suspends the current thread for the specified number of milliseconds.
+     *
+     * @param ms The milliseconds the current thread should sleep.
+     */
+    public static void sleepMillis(final long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (final InterruptedException e) {
+            Log.printWarning("Interrupted during sleep");
+            Log.printWarning(e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
+
 }
 
