@@ -525,7 +525,7 @@ public class Device {
             }
 
             // give the tracer some time to start running
-            Util.sleep(1);
+            Util.sleepMillis(100);
 
             if (!waitForTracerToFinish()) {
                 throw new IllegalStateException("Exceeded maximal waiting time for tracer to finish dumping traces!");
