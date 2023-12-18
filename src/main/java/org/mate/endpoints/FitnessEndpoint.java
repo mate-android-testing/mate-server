@@ -43,6 +43,8 @@ public class FitnessEndpoint implements Endpoint {
 
         if (request.getSubject().startsWith("/fitness/store_fitness_data")) {
             return storeFitnessData(request);
+        } else if (request.getSubject().startsWith("/fitness/store_action_fitness_data")) {
+            return storeActionFitnessData(request);
         } else if (request.getSubject().startsWith("/fitness/copy_fitness_data")) {
             return copyFitnessData(request);
         } else if (request.getSubject().startsWith("/fitness/get_branches")) {
@@ -729,6 +731,51 @@ public class FitnessEndpoint implements Endpoint {
             }
         }
         return new Message("/fitness/copy_fitness_data");
+    }
+
+    /**
+     * Stores the fitness data for a chromosome's range of actions.
+     *
+     * @param request The request message.
+     * @return Returns a message describing the success/failure of the operation.
+     */
+    private Message storeActionFitnessData(Message request) {
+
+        final String fitnessFunction = request.getParameter("fitnessFunction");
+
+        switch (FitnessFunction.valueOf(fitnessFunction)) {
+            case CRASH_DISTANCE:
+                return storeBasicBlockActionFitnessData(request);
+            default:
+                final String errorMsg = "Fitness function " + fitnessFunction + " not yet supported!";
+                Log.printError(errorMsg);
+                return Messages.errorMessage(errorMsg);
+        }
+    }
+
+    /**
+     * Stores the basic block fitness data (traces) for a chromosome's range of actions.
+     *
+     * @param request The request message.
+     * @return Returns a message describing the success/failure of the operation.
+     */
+    private Message storeBasicBlockActionFitnessData(Message request) {
+
+        String deviceID = request.getParameter("deviceId");
+        String chromosome = request.getParameter("chromosome");
+        final int actions = Integer.parseInt(request.getParameter("actions"));
+
+        // Re-assemble the traces per action.
+        final Map<String, Set<String>> tracesPerAction = new LinkedHashMap<>();
+
+        for (int i = 0; i < actions; i++) {
+            final String actionID = i + "_" + chromosome;
+            tracesPerAction.put(actionID, Set.of(request.getParameter(actionID).split("\\+")));
+        }
+
+        Device device = Device.getDevice(deviceID);
+        device.storeTraces(chromosome, tracesPerAction);
+        return new Message("/fitness/store_action_fitness_data");
     }
 
     /**

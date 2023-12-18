@@ -8,6 +8,7 @@ import org.mate.util.Util;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -563,6 +564,48 @@ public class Device {
         } else {
             Log.println("Couldn't retrieve runtime permissions: " + permissions);
         }
+    }
+
+    /**
+     * Stores the given traces of the given test case chromosome onto disk.
+     *
+     * @param testCase The test case for which the traces should be stored to disk.
+     * @param tracesPerAction The traces recorded per action.
+     */
+    public void storeTraces(final String testCase, final Map<String, Set<String>> tracesPerAction) {
+
+        Log.println("Chromosome: " + testCase);
+
+        if (coveredTestCases.contains(testCase)) {
+            // We have already stored the traces for the given test case and don't want to overwrite (corrupt) them.
+            return;
+        }
+
+        File appDir = new File(appsDir.toFile(), packageName);
+        File tracesBaseDir = new File(new File(appDir, "traces"), testCase);
+
+        // create traces base directory if not yet present
+        if (!tracesBaseDir.exists()) {
+            Log.println("Creating traces base directory: " + tracesBaseDir.mkdirs());
+        }
+
+        // Generate for each action a corresponding traces file.
+        tracesPerAction.entrySet().parallelStream()
+                .forEach(entry -> {
+                    final File tracesFile = new File(tracesBaseDir, entry.getKey());
+                    try (PrintWriter writer = new PrintWriter(tracesFile)) {
+                        for (String trace : entry.getValue()) {
+                            if (!trace.isEmpty()) { // skip empty lines
+                                writer.println(trace);
+                            }
+                        }
+                    } catch (IOException e) {
+                       Log.printError("Couldn't write traces to file: " + e.getMessage());
+                       e.printStackTrace();
+                    }
+                });
+
+        coveredTestCases.add(testCase);
     }
 
     /**

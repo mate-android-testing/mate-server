@@ -497,11 +497,24 @@ public class GraphEndpoint implements Endpoint {
 
         final String packageName = request.getParameter("packageName");
         final String chromosome = request.getParameter("chromosome");
+        final Integer actions = request.getParameter("actions") != null
+                ? Integer.parseInt(request.getParameter("actions"))
+                : null;
 
         // collect the relevant traces files
         final Path appDir = appsDir.resolve(packageName);
         final File tracesDir = appDir.resolve("traces").toFile();
-        return getTraceFiles(tracesDir, chromosome);
+
+        if (actions != null) {
+            // We only want to retrieve the trace files of specific actions belonging to the chromosome.
+            final String chromosomes = IntStream.rangeClosed(0, actions)
+                    // The trace file encodes the action id followed by the chromosome id.
+                    .mapToObj(action -> chromosome + File.separator + action + "_" + chromosome)
+                    .collect(Collectors.joining("+"));
+            return getTraceFiles(tracesDir, chromosomes);
+        } else {
+            return getTraceFiles(tracesDir, chromosome);
+        }
     }
 
     /**
