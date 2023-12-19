@@ -742,6 +742,26 @@ public class Device {
             Log.println("Couldn't locate the traces.txt file on the external storage: " + files);
             Log.println("Re-try listening files on external storage...");
 
+            if (chromosome.equals("lastIncompleteTestCase")) {
+                /*
+                * There can be a race condition if MATE swallowed the interrupt generated when terminating the exploration
+                * thread. In such scenario MATE & MATE-Server would at the same time interact with the tracer and in the
+                * worst case one entity would remove the traces.txt while the other entity tries to read from it. We simply
+                * generate an empty traces file for the last incomplete test case.
+                 */
+                Log.println("Race condition detected!");
+                File appDir = new File(appsDir.toFile(), packageName);
+                File baseTracesDir = new File(appDir, "traces");
+                baseTracesDir.mkdirs();
+                File tracesFile = new File(baseTracesDir, chromosome);
+                try {
+                    tracesFile.createNewFile();
+                } catch (IOException e) {
+                    Log.println("Couldn't generate empty traces file!");
+                }
+                return;
+            }
+
             Util.sleep(3);
             logRuntimePermissions(packageName);
 
@@ -788,6 +808,23 @@ public class Device {
 
             Log.println("Couldn't pull traces.txt from emulator: " + pullOperation);
             Log.println("Re-try pulling traces.txt from emulator...");
+
+            if (chromosome.equals("lastIncompleteTestCase")) {
+                /*
+                 * There can be a race condition if MATE swallowed the interrupt generated when terminating the exploration
+                 * thread. In such scenario MATE & MATE-Server would at the same time interact with the tracer and in the
+                 * worst case one entity would remove the traces.txt while the other entity tries to read from it. We simply
+                 * generate an empty traces file for the last incomplete test case.
+                 */
+                Log.println("Race condition detected!");
+                try {
+                    tracesFile.createNewFile();
+                } catch (IOException e) {
+                    Log.println("Couldn't generate empty traces file!");
+                }
+                return;
+            }
+
             Util.sleep(3);
 
             Log.println("Old Files: " + files);
@@ -833,34 +870,39 @@ public class Device {
             Log.println("Couldn't read number of traces from info.txt:", e);
         }
 
-        // remove trace file from emulator
-        var removeTraceFileOp = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
-                "rm", "-f", EXTERNAL_STORAGE + "/traces.txt");
+        if (!chromosome.equals("lastIncompleteTestCase")) {
+            // There is no need to remove those files for the very last test. This implicitly avoids to handle the race
+            // condition that could happen here.
 
-        // remove info file from emulator
-        var removeInfoFileOp = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
-                "rm", "-f", EXTERNAL_STORAGE + "/info.txt");
+            // remove trace file from emulator
+            var removeTraceFileOp = ProcessRunner.runProcess(
+                    androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                    "rm", "-f", EXTERNAL_STORAGE + "/traces.txt");
 
-        var removeTracesError = removeTraceFileOp.isErr()
-                || (removeTraceFileOp.getOk().stream().anyMatch(s -> s.contains("adb"))
-                && removeTraceFileOp.getOk().stream().anyMatch(s -> s.contains("error")));
+            // remove info file from emulator
+            var removeInfoFileOp = ProcessRunner.runProcess(
+                    androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                    "rm", "-f", EXTERNAL_STORAGE + "/info.txt");
 
-        if (removeTracesError) {
-            throw new IllegalStateException("Couldn't remove traces.txt from emulator: " + removeTraceFileOp);
-        } else {
-            Log.println("Remove Trace File Operation: " + removeTraceFileOp.getOk());
-        }
+            var removeTracesError = removeTraceFileOp.isErr()
+                    || (removeTraceFileOp.getOk().stream().anyMatch(s -> s.contains("adb"))
+                    && removeTraceFileOp.getOk().stream().anyMatch(s -> s.contains("error")));
 
-        var removeInfoError = removeInfoFileOp.isErr()
-                || (removeInfoFileOp.getOk().stream().anyMatch(s -> s.contains("adb"))
-                && removeInfoFileOp.getOk().stream().anyMatch(s -> s.contains("error")));
+            if (removeTracesError) {
+                throw new IllegalStateException("Couldn't remove traces.txt from emulator: " + removeTraceFileOp);
+            } else {
+                Log.println("Remove Trace File Operation: " + removeTraceFileOp.getOk());
+            }
 
-        if (removeInfoError) {
-            throw new IllegalStateException("Couldn't remove info.txt from emulator: " + removeInfoFileOp);
-        } else {
-            Log.println("Remove Info File Operation: " + removeInfoFileOp.getOk());
+            var removeInfoError = removeInfoFileOp.isErr()
+                    || (removeInfoFileOp.getOk().stream().anyMatch(s -> s.contains("adb"))
+                    && removeInfoFileOp.getOk().stream().anyMatch(s -> s.contains("error")));
+
+            if (removeInfoError) {
+                throw new IllegalStateException("Couldn't remove info.txt from emulator: " + removeInfoFileOp);
+            } else {
+                Log.println("Remove Info File Operation: " + removeInfoFileOp.getOk());
+            }
         }
     }
 
