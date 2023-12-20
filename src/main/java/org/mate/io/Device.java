@@ -462,7 +462,7 @@ public class Device {
         if (isTracerRunning()) {
             Log.println("Tracer is running, waiting...");
 
-            final long maxWaitTimeInSeconds = 120;
+            final long maxWaitTimeInSeconds = 10;
 
             long currentTime = System.currentTimeMillis();
             final long startTime = currentTime;
