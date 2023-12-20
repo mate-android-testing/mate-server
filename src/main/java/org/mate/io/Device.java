@@ -626,16 +626,20 @@ public class Device {
      *
      * @param fileContent The file content to be written.
      * @param fileName The file to which should be written.
+     * @return Returns {@code true} if the operation succeeded, otherwise {@code false}.
      */
-    public void writeContentToFile(final String fileContent, final String fileName) {
+    public boolean writeContentToFile(final String fileContent, final String fileName) {
 
         final Path filePath = appsDir.resolve(packageName).resolve(fileName);
 
         try {
             Files.createDirectories(filePath.getParent());
             Files.writeString(filePath, fileContent);
+            return true;
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            Log.println("Couldn't write content to file: " + e.getMessage());
+            e.printStackTrace();
+            return false;
         }
     }
 
