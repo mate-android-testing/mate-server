@@ -482,6 +482,9 @@ public class GraphEndpoint implements Endpoint {
      * @return Returns the traces per file / action.
      */
     private List<Set<String>> getTracesPerFile(Message request) {
+        // NOTE: Although the traces are read in a parallel fashion, the collector maintains the encounter order of the
+        // original list, which is important since we want to process the traces in a specific order, e.g. in action order.
+        // https://stackoverflow.com/questions/29709140/why-parallel-stream-get-collected-sequentially-in-java-8
         return getTraceFiles(request).parallelStream()
                 .map(tracesFile -> new HashSet<>(readTraces(List.of(tracesFile))))
                 .collect(Collectors.toList());
@@ -870,6 +873,23 @@ public class GraphEndpoint implements Endpoint {
                             Files.walk(tracesDir.toPath().resolve(chromosome))
                                     .filter(Files::isRegularFile)
                                     .map(Path::toFile)
+                                    // If the chromosome refers to a folder, the contained files, e.g., the traces
+                                    // belonging to the individual actions might be picked up in an arbitrary order
+                                    // without below comparator.
+                                    .sorted((file1, file2) -> {
+                                        if (file1.getName().endsWith("_" + chromosome)) {
+                                            // NOTE: Comparing based on the creation date doesn't work
+                                            // since we might have created them in a parallel fashion.
+                                            final int id1 = Integer.parseInt(file1.getName().split("_")[0]);
+                                            final int id2 = Integer.parseInt(file2.getName().split("_")[0]);
+                                            return Integer.compare(id1, id2);
+                                        } else {
+                                            // This serves just as a fallback mechanism when the chromosome refers to
+                                            // a single file or a test suite. In fact, in the former case no sorting is
+                                            // needed at all.
+                                            return Long.compare(file1.lastModified(), file2.lastModified());
+                                        }
+                                    })
                                     .collect(Collectors.toList()));
                 } catch (IOException e) {
                     Log.printError("Couldn't retrieve traces files!");
