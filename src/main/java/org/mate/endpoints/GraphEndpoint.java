@@ -68,6 +68,8 @@ public class GraphEndpoint implements Endpoint {
             return getBranchDistanceVector(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
             return getBranchDistance(request);
+        } else if (request.getSubject().startsWith("/graph/get_crash_distance_vector")) {
+            return getCrashDistanceVector(request);
         } else if (request.getSubject().startsWith("/graph/get_crash_distance")) {
             return getCrashDistance(request);
         } else if (request.getSubject().startsWith("/graph/invalidate_cache")) {
@@ -439,6 +441,37 @@ public class GraphEndpoint implements Endpoint {
     private Message invalidateCache() {
         tracesCache.clear();
         return new Message.MessageBuilder("/graph/invalidate_cache")
+                .build();
+    }
+
+    /**
+     * Retrieves the crash distances for the given chromosome.
+     *
+     * @param request The request message.
+     * @return Returns a response message containing the computed crash distances of the individual actions.
+     */
+    private Message getCrashDistanceVector(final Message request) {
+
+        if (!(graph instanceof CallTree)) {
+            throw new UnsupportedOperationException("Crash reproduction only available on call tree so far!");
+        }
+
+        CallTree callTree = (CallTree) graph;
+
+        final String chromosome = request.getParameter("chromosome");
+        final List<Set<String>> tracesPerAction = getTracesPerFile(request);
+
+        final List<String> crashDistances = new ArrayList<>(tracesPerAction.size());
+
+        // Compute the crash distance for the individual actions by adding the traces from the previous actions (n-1)
+        // when evaluating the crash distance for the n-th action.
+        for (int i = 0; i < tracesPerAction.size(); i++) {
+            double crashDistance = callTree.getCrashDistance(chromosome, tracesPerAction.subList(0, i + 1));
+            crashDistances.add(String.valueOf(crashDistance));
+        }
+
+        return new Message.MessageBuilder("/graph/get_crash_distance_vector")
+                .withParameter("crash_distance_vector", String.join("+", crashDistances))
                 .build();
     }
 
