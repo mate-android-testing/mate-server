@@ -133,7 +133,9 @@ public class StackTrace {
         return packageName.equals(that.packageName) && (Objects.equals(stackTraceLines, that.stackTraceLines)
                 // NOTE: If the stack trace was produced on a different emulator it is likely that the stack trace line
                 // numbers diverge that belong to the Android framework, thus it reasonable to compare only the 'at'
-                // stack trace lines belonging to the AUT.
+                // stack trace lines belonging to the AUT. Moreover, the top stack trace line containing the exception
+                // message or any 'caused by' lines might contain dynamic object ids, which makes the comparison on those
+                // lines tricky.
                 || Objects.equals(getStackTraceAtLinesOfAUT(), that.getStackTraceAtLinesOfAUT()));
     }
 
