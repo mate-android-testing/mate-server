@@ -130,13 +130,14 @@ public class StackTrace {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         StackTrace that = (StackTrace) o;
-        return packageName.equals(that.packageName) && (Objects.equals(stackTraceLines, that.stackTraceLines)
+        return packageName.equals(that.packageName) && ((Objects.equals(stackTraceLines, that.stackTraceLines)
                 // NOTE: If the stack trace was produced on a different emulator it is likely that the stack trace line
                 // numbers diverge that belong to the Android framework, thus it reasonable to compare only the 'at'
                 // stack trace lines belonging to the AUT. Moreover, the top stack trace line containing the exception
                 // message or any 'caused by' lines might contain dynamic object ids, which makes the comparison on those
-                // lines tricky.
-                || Objects.equals(getStackTraceAtLinesOfAUT(), that.getStackTraceAtLinesOfAUT()));
+                // lines tricky. However, it could theoretically happen that we can't distinguish between two crashes
+                // originating in the same line (there can be multiple statements in a single source code line).
+                || Objects.equals(getStackTraceAtLinesOfAUT(), that.getStackTraceAtLinesOfAUT())));
     }
 
     /**
