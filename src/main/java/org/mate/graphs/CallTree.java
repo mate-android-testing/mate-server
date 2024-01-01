@@ -1030,7 +1030,7 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
             final CallTreeVertex firstTargetVertex = targetVertices.get(0);
             final Set<CallTreeVertex> callTreeVertices = callTree.getVertices();
 
-            int minDistance = coveredMethods.parallelStream()
+            return coveredMethods.parallelStream()
                     // Ignore covered methods that don't show up in the call tree.
                     .filter(method -> callTreeVertices.contains(new CallTreeVertex(method)))
                     // Compute distance from covered method through chain of target methods.
@@ -1049,45 +1049,6 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
                     })
                     .min()
                     .orElse(Integer.MAX_VALUE);
-
-//            int minDistance = Integer.MAX_VALUE;
-
-//            for (final String coveredMethod : coveredMethods) {
-//
-//                final CallTreeVertex coveredMethodVertex = new CallTreeVertex(coveredMethod);
-//
-//                if (!callTreeVertices.contains(coveredMethodVertex)) {
-//                    Log.printWarning("Method not contained in call tree: " + coveredMethodVertex.getMethod());
-//                    continue;
-//                }
-//
-//                final String key = coveredMethodVertex.getMethod() + "-->" + firstTargetVertex.getMethod();
-//                final Optional<GraphPath<CallTreeVertex, CallTreeEdge>> path = cache.getOrDefault(key, Optional.empty());
-//
-//                if (path.isPresent()) {
-//                    final int distance = path.get().getLength() + targetPath.getLength();
-//                    if (distance < minDistance) {
-//                        minDistance = distance;
-//                    }
-//                }
-//            }
-
-                /*
-                * NOTE: We only need to compute the shortest path to the first target vertex since the path through the
-                * remaining target vertices is fixed by the underlying stack trace.
-                 */
-                final String key = coveredMethodVertex.getMethod() + "-->" + firstTargetVertex.getMethod();
-                final Optional<GraphPath<CallTreeVertex, CallTreeEdge>> path = cache.get(key);
-
-                if (path.isPresent()) {
-                    // We simply add the pre-computed path length through the individual target vertices.
-                    final int distance = path.get().getLength() + targetPath.getLength();
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                    }
-                }
-            }
-            return minDistance;
         }
     }
 
