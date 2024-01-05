@@ -347,6 +347,8 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      */
     private Map<AtStackTraceLine, AnalyzedStackTraceLine> analyzeStackTrace(final Path appsDir, final String packageName) {
 
+        // TODO: Handle stack trace lines that belong to the AUT but are interspersed with other stack trace lines!
+
         // Analyse every 'at' stack trace line that belongs to the given package and comes in consecutive order.
         return getLastConsecutiveLines(stackTrace.getStackTraceAtLines()
                 // NOTE: We require the line number information to map the stack trace lines to the respective vertices
