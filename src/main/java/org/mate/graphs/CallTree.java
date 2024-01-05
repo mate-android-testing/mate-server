@@ -415,6 +415,36 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         final List<CallTreeVertex> targetVertices = targetIntraCFGVertices.stream()
                 .map(CFGVertex::getMethod)
                 .map(CallTreeVertex::new)
+                // NOTE: The stack trace may list redundant stack trace lines, which in turn show up multiple times in
+                // this list. This is problematic since we check at the very end whether a path goes through those methods
+                // in the call tree. In fact, by including those redundant methods we potentially introduce a path that
+                // does not even exist. On the other hand, we cannot simply remove any redundant method since it might
+                // be a valid sequence, e.g., a recursive method may show multiple times in the stack trace and accordingly
+                // a self-loop should exist in the call tree for that particular method. Since we cannot differentiate
+                // between these two cases, the only viable option is to adjust the stack trace in advance such that
+                // real redundant methods are cut off or replaced by a '... X more' stack trace line.
+                //
+                // Example:
+                // at hu.vsza.adsapi.Part.getPdfConnection(Part.java:34)
+                // at hu.vsza.adsdroid.PartList$DownloadDatasheet.doInBackground(PartList.java:56)
+                // at hu.vsza.adsdroid.PartList$DownloadDatasheet.doInBackground(PartList.java:48)
+                // Caused by: java.net.MalformedURLException: no protocol
+                // at hu.vsza.adsapi.Part.getPdfConnection(Part.java:34)
+                // at hu.vsza.adsdroid.PartList$DownloadDatasheet.doInBackground(PartList.java:56)
+                // at hu.vsza.adsdroid.PartList$DownloadDatasheet.doInBackground(PartList.java:48)
+                //
+                // If we provide the stack trace as given in the example, we assume that an edge from getPdfConnection()
+                // to doInBackground() exists, which is actually not the case. Instead we need to adjust the stack trace
+                // as follows:
+                //
+                // at hu.vsza.adsapi.Part.getPdfConnection(Part.java:34)
+                // at hu.vsza.adsdroid.PartList$DownloadDatasheet.doInBackground(PartList.java:56)
+                // at hu.vsza.adsdroid.PartList$DownloadDatasheet.doInBackground(PartList.java:48)
+                // Caused by: java.net.MalformedURLException: no protocol
+                // ... 3 more
+                //
+                // If we can differentiate between those two cases in the future, we can simply add a .distinct() filter
+                // to remove redundant stack trace lines from the list.
                 .collect(Collectors.toList());
 
         // Reverse since we want to cover them (the stacktrace actually) from bottom to top.
