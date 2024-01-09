@@ -34,9 +34,9 @@ public class StackTraceParserTest {
     }
 
     @Test
-    public void testStackTraceComparison() throws IOException {
-        final File stackTraceFile1 = new File(RESOURCES, "stack_trace_1.txt");
-        final File stackTraceFile2 = new File(RESOURCES, "stack_trace_2.txt");
+    public void testStackTraceComparisonWithNBSP() throws IOException {
+        final File stackTraceFile1 = new File(RESOURCES, "stack_trace_3.txt");
+        final File stackTraceFile2 = new File(RESOURCES, "stack_trace_3_with_nbsp.txt");
         final StackTrace stackTrace1
                 = StackTraceParser.parse(Files.lines(stackTraceFile1.toPath()).collect(Collectors.toList()),
                 "com.fsck.k9");
