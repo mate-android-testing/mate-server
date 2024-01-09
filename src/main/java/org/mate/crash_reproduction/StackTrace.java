@@ -88,13 +88,22 @@ public class StackTrace {
     }
 
     /**
-     * Retrieves the 'at' stack trace lines belonging to the AUT.
+     * Retrieves the unique 'at' stack trace lines belonging to the AUT.
      *
-     * @return Returns the {@link AtStackTraceLine} lines belonging to the AUT.
+     * @return Returns the unique {@link AtStackTraceLine} lines belonging to the AUT.
      */
-    public List<AtStackTraceLine> getStackTraceAtLinesOfAUT() {
+    private List<AtStackTraceLine> getStackTraceAtLinesOfAUT() {
         return getStackTraceAtLines()
                 .filter(stackTraceLine -> stackTraceLine.isFromPackage(packageName))
+                // NOTE: Since the supplied target stack trace must have redundant stack trace lines removed or replaced
+                // by a '... X more' stack trace line to make the target path checking in the call tree functional (redundant
+                // stack trace lines could introduce a cycle in the path to be checked that actually doesn't exist in the
+                // call tree) but the logcat returns the stack trace in non-truncated form, we can only compare distinct
+                // stack trace lines. Otherwise, it would be infeasible to compare a truncated with an non-truncated
+                // stack trace that both refer to the same crash. The only theoretical downside is that a stack trace
+                // referring to a recursive method with multiple identical stack trace lines is indistinguishable from
+                // from a stack trace where the same recursive methods ends up with a different depth.
+                .distinct()
                 .collect(Collectors.toList());
     }
 

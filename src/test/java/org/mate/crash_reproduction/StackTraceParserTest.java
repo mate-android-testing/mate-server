@@ -45,4 +45,17 @@ public class StackTraceParserTest {
                 "com.fsck.k9");
         Assertions.assertEquals(stackTrace1, stackTrace2);
     }
+
+    @Test
+    public void testStackTraceComparisonTruncated() throws IOException {
+        final File stackTraceFile1 = new File(RESOURCES, "stack_trace_4.txt");
+        final File stackTraceFile2 = new File(RESOURCES, "stack_trace_4_truncated.txt");
+        final StackTrace stackTrace1
+                = StackTraceParser.parse(Files.lines(stackTraceFile1.toPath()).collect(Collectors.toList()),
+                "com.fsck.k9");
+        final StackTrace stackTrace2
+                = StackTraceParser.parse(Files.lines(stackTraceFile2.toPath()).collect(Collectors.toList()),
+                "com.fsck.k9");
+        Assertions.assertEquals(stackTrace1, stackTrace2);
+    }
 }
