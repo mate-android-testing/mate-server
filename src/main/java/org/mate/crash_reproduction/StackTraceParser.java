@@ -55,6 +55,8 @@ public final class StackTraceParser {
     public static StackTrace parse(final List<String> lines, final String packageName) {
         final List<StackTraceLine> parsedLines = lines.stream()
                 .map(String::trim)
+                // Removes a non-breaking space character: https://stackoverflow.com/questions/3318404/how-to-remove-nbsp-from-java-string
+                .map(str -> str.replace("\u00a0", ""))
                 .map(StackTraceParser::parseLine)
                 .collect(Collectors.toList());
         return new StackTrace(parsedLines, packageName);

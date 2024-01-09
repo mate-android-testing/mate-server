@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.mate.util.Log;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.util.stream.Collectors;
 
@@ -30,5 +31,18 @@ public class StackTraceParserTest {
         final File stackTraceFile = new File(RESOURCES, "stack_trace_2.txt");
         Assertions.assertDoesNotThrow(() -> StackTraceParser.parse(
                 Files.lines(stackTraceFile.toPath()).collect(Collectors.toList()), "com.ichi2.anki"));
+    }
+
+    @Test
+    public void testStackTraceComparison() throws IOException {
+        final File stackTraceFile1 = new File(RESOURCES, "stack_trace_1.txt");
+        final File stackTraceFile2 = new File(RESOURCES, "stack_trace_2.txt");
+        final StackTrace stackTrace1
+                = StackTraceParser.parse(Files.lines(stackTraceFile1.toPath()).collect(Collectors.toList()),
+                "com.fsck.k9");
+        final StackTrace stackTrace2
+                = StackTraceParser.parse(Files.lines(stackTraceFile2.toPath()).collect(Collectors.toList()),
+                "com.fsck.k9");
+        Assertions.assertEquals(stackTrace1, stackTrace2);
     }
 }
