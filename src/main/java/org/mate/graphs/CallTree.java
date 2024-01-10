@@ -450,6 +450,11 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
         // Reverse since we want to cover them (the stacktrace actually) from bottom to top.
         Collections.reverse(targetVertices);
 
+        // The target vertices must exist in the call tree.
+        if (!callTree.getVertices().containsAll(targetVertices)) {
+            throw new IllegalStateException("Not all target vertices exist in the call tree!");
+        }
+
         // The target vertices must be reachable and a path through them in stack trace order must exist.
         if (callTree.getShortestPathWithStops(targetVertices).isEmpty()) {
             throw new IllegalStateException("No path from root to target vertices!");
