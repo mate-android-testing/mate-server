@@ -1,10 +1,10 @@
 package org.mate.endpoints;
 
-import org.mate.io.ProcessRunner;
-import org.mate.util.AndroidEnvironment;
 import org.mate.io.Device;
-import org.mate.network.message.Message;
+import org.mate.io.ProcessRunner;
 import org.mate.network.Endpoint;
+import org.mate.network.message.Message;
+import org.mate.util.AndroidEnvironment;
 
 import java.util.List;
 
@@ -18,11 +18,15 @@ public class CrashEndpoint implements Endpoint {
     @Override
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/crash/stacktrace")) {
-            return new Message.MessageBuilder("/crash/stacktrace")
-                    .withParameter("stacktrace", getLatestCrashStackTrace(request.getParameter("deviceId")))
-                    .build();
+            final String stackTrace = getLatestCrashStackTrace(request.getParameter("deviceId"));
+            Message.MessageBuilder response = new Message.MessageBuilder("/crash/stacktrace");
+            if (stackTrace != null) {
+                response = response.withParameter("stacktrace", stackTrace);
+            }
+            return response.build();
         }
-        return null;
+        throw new IllegalArgumentException("Message request with subject: "
+                + request.getSubject() + " can't be handled by CrashEndpoint!");
     }
 
     private String getLatestCrashStackTrace(String deviceID) {
