@@ -82,10 +82,31 @@ public class GraphEndpoint implements Endpoint {
             return getStackTraceUserTokens(request);
         } else if (request.getSubject().startsWith("/graph/stack_trace")) {
             return getStackTrace(request);
+        } else if (request.getSubject().startsWith("/graph/get_number_of_branches")) {
+            return getNumberOfBranches(request);
         } else {
             throw new IllegalArgumentException("Message request with subject: "
                     + request.getSubject() + " can't be handled by GraphEndpoint!");
         }
+    }
+
+    /**
+     * Retrieves the number of actually connected branches in the underlying graph.
+     *
+     * @param request The request message.
+     * @return Returns a response containing the number of connected branches.
+     */
+    private Message getNumberOfBranches(final Message request) {
+
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
+        return new Message.MessageBuilder("/graph/get_number_of_branches")
+                // TODO: We rely here on the fact that target vertices refer to the connected branches, but we should
+                //  rather re-compute it to be on the safe side.
+                .withParameter("branches", String.valueOf(targetVertices.size()))
+                .build();
     }
 
     /**
