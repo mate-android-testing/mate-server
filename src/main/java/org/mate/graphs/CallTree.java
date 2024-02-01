@@ -384,7 +384,6 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
 
                     // Retrieves the required constructors to properly call the target method in the stack trace line.
                     final var requiredConstructorCalls = getRequiredConstructorCalls(stackTraceLine);
-
                     return new AnalyzedStackTraceLine(intraCFG, sourceCodeLineNumberIntraCFGVertices, requiredConstructorCalls);
                 }));
     }
@@ -677,11 +676,14 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
      */
     private Optional<Tuple<Method, Set<BuilderInstruction>>> getInstructionsForLine(final AtStackTraceLine stackTraceLine) {
 
+        Log.println("getInstructionsForLine: " + stackTraceLine);
+
         // If the stack trace line doesn't contain a line number, we can't map it to any bytecode instructions.
         if (stackTraceLine.getLineNumber().isEmpty()) {
             return Optional.empty();
         }
 
+        // TODO: Support kotlin (.kt) files!
         final String sourceFileName = stackTraceLine.getFileName().orElse(stackTraceLine.getClassName() + ".java");
         final String dottedClassName = stackTraceLine.getPackageName() + "." + stackTraceLine.getClassName();
 
@@ -699,6 +701,8 @@ public class CallTree implements Graph<CallTreeVertex, CallTreeEdge> {
                             final MutableMethodImplementation mutableMethodImplementation
                                     = new MutableMethodImplementation(method.getImplementation());
                             final List<BuilderInstruction> instructions = mutableMethodImplementation.getInstructions();
+
+                            Log.println("Searching for source code instruction: " + stackTraceLine.getLineNumber().get());
 
                             /*
                              * Retrieve the line number from the debug items and check whether they match the line number
