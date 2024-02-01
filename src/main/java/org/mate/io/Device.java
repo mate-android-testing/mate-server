@@ -655,6 +655,8 @@ public class Device {
         var takeSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
                 "-s", deviceID, "shell", "screencap", "-p", EXTERNAL_STORAGE + "/" + screenshotName);
 
+        Log.println("Screenshot operation: " + takeSS);
+
         // request files from external storage (sd card)
         Result<List<String>, String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
                 "-s", deviceID, "shell", "ls", EXTERNAL_STORAGE);
@@ -665,6 +667,7 @@ public class Device {
 
         // check whether the screenshot has been stored on the external storage
         if (!files.getOk().stream().anyMatch(str -> str.trim().equals(screenshotName))) {
+            Log.println("Files: " + files);
             throw new IllegalStateException("Couldn't locate " + screenshotName + " on the external storage!");
         }
 
