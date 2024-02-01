@@ -1,5 +1,6 @@
 package org.mate.crash_reproduction;
 
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -23,6 +24,8 @@ public class CausedByStackTraceLine implements StackTraceLine {
      * The (optional) exception message.
      */
     private final String message;
+
+    // TODO: Extract package name from stack trace line.
 
     /**
      * Initialises a 'caused by' stack trace line without an exception message.
@@ -52,6 +55,12 @@ public class CausedByStackTraceLine implements StackTraceLine {
      */
     @Override
     public boolean isFromPackage(String packageName) {
+        /*
+        * Although we could extract the package name from the stack trace line and compare to the provided package name,
+        * this clause likely refers to a Java-internal exception, e.g. java.lang.IllegalStateException, and thus a check
+        * on the package name of the AUT would fail. However, we probably would like to include this line and its
+        * consecutive lines for further analysis, e.g., it could contain some relevant input.
+         */
         return true;
     }
 
@@ -90,5 +99,18 @@ public class CausedByStackTraceLine implements StackTraceLine {
     @Override
     public String toString() {
         return line;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        CausedByStackTraceLine that = (CausedByStackTraceLine) o;
+        return Objects.equals(line, that.line) && Objects.equals(exception, that.exception) && Objects.equals(message, that.message);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(line, exception, message);
     }
 }

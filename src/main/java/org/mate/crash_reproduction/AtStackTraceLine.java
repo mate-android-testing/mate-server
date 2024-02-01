@@ -1,6 +1,7 @@
 package org.mate.crash_reproduction;
 
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -151,7 +152,17 @@ public class AtStackTraceLine implements StackTraceLine {
      */
     @Override
     public boolean isFromPackage(String packageName) {
-        return getPackageName().startsWith(packageName);
+        if (getPackageName().startsWith(packageName)) {
+            return true;
+        } else {
+            // Heuristic: At the least the first two packages must match.
+            final String[] packages = packageName.split("\\.");
+            if (packages.length < 2) {
+                return false;
+            } else {
+                return getPackageName().startsWith(packages[0] + "." + packages[1]);
+            }
+        }
     }
 
     /**
@@ -177,5 +188,20 @@ public class AtStackTraceLine implements StackTraceLine {
     @Override
     public String toString() {
         return line;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        AtStackTraceLine that = (AtStackTraceLine) o;
+        return Objects.equals(line, that.line) && Objects.equals(packageName, that.packageName)
+                && Objects.equals(className, that.className) && Objects.equals(methodName, that.methodName)
+                && Objects.equals(fileName, that.fileName) && Objects.equals(lineNumber, that.lineNumber);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(line, packageName, className, methodName, fileName, lineNumber);
     }
 }

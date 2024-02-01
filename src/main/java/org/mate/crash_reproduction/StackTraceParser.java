@@ -32,6 +32,7 @@ public final class StackTraceParser {
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(:.*\\)"), StackTraceParser::parseSpecialAtStackTraceLine);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(.*SyntheticClass\\)"), StackTraceParser::parseSpecialAtStackTraceLine);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(Unknown Source\\)"), StackTraceParser::parseSpecialAtStackTraceLine);
+        STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\(lambda\\)"), StackTraceParser::parseSpecialAtStackTraceLine);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\((\\S+)\\.java\\)"), StackTraceParser::parseAtStackTraceLineWithoutLineNumber);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("at (\\S+)\\.(\\S+)\\.(\\S+)\\((\\S+)\\.kt\\)"), StackTraceParser::parseAtStackTraceLineWithoutLineNumber);
         STACK_TRACE_LINE_PATTERNS.put(Pattern.compile("\\.\\.\\. (\\d+) more"), StackTraceParser::parseMoreStackTraceLine);
@@ -48,14 +49,17 @@ public final class StackTraceParser {
      * Parses a list of lines into specific stack trace lines.
      *
      * @param lines The raw input lines.
+     * @param packageName The package name.
      * @return Returns a list of parsed stack trace lines.
      */
-    public static StackTrace parse(final List<String> lines) {
+    public static StackTrace parse(final List<String> lines, final String packageName) {
         final List<StackTraceLine> parsedLines = lines.stream()
                 .map(String::trim)
+                // Removes a non-breaking space character: https://stackoverflow.com/questions/3318404/how-to-remove-nbsp-from-java-string
+                .map(str -> str.replace("\u00a0", ""))
                 .map(StackTraceParser::parseLine)
                 .collect(Collectors.toList());
-        return new StackTrace(parsedLines);
+        return new StackTrace(parsedLines, packageName);
     }
 
     /**

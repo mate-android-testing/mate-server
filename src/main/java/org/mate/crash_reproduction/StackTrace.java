@@ -26,7 +26,7 @@ import java.util.stream.Stream;
  */
 public class StackTrace {
 
-    // TODO: What is this?
+    // TODO: How did we derive those irrelevant tokens?
     private static final Set<String> IGNORE_TOKENS = Set.of("in", "and", "but", "the");
 
     /**
@@ -35,12 +35,18 @@ public class StackTrace {
     private final List<StackTraceLine> stackTraceLines;
 
     /**
+     * The package name of the AUT.
+     */
+    private final String packageName;
+
+    /**
      * Initialises a stack trace.
      *
      * @param stackTraceLines The individual stack trace lines.
      */
-    public StackTrace(List<StackTraceLine> stackTraceLines) {
+    public StackTrace(List<StackTraceLine> stackTraceLines, String packageName) {
         this.stackTraceLines = stackTraceLines;
+        this.packageName = packageName;
     }
 
     /**
@@ -82,6 +88,26 @@ public class StackTrace {
     }
 
     /**
+     * Retrieves the unique 'at' stack trace lines belonging to the AUT.
+     *
+     * @return Returns the unique {@link AtStackTraceLine} lines belonging to the AUT.
+     */
+    private List<AtStackTraceLine> getStackTraceAtLinesOfAUT() {
+        return getStackTraceAtLines()
+                .filter(stackTraceLine -> stackTraceLine.isFromPackage(packageName))
+                // NOTE: Since the supplied target stack trace must have redundant stack trace lines removed or replaced
+                // by a '... X more' stack trace line to make the target path checking in the call tree functional (redundant
+                // stack trace lines could introduce a cycle in the path to be checked that actually doesn't exist in the
+                // call tree) but the logcat returns the stack trace in non-truncated form, we can only compare distinct
+                // stack trace lines. Otherwise, it would be infeasible to compare a truncated with an non-truncated
+                // stack trace that both refer to the same crash. The only theoretical downside is that a stack trace
+                // referring to a recursive method with multiple identical stack trace lines is indistinguishable from
+                // from a stack trace where the same recursive methods ends up with a different depth.
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Retrieves the 'at' stack trace lines.
      *
      * @return Returns the {@link AtStackTraceLine} lines.
@@ -90,5 +116,46 @@ public class StackTrace {
         return stackTraceLines.stream()
                 .filter(line -> line instanceof AtStackTraceLine)
                 .map(l -> (AtStackTraceLine) l);
+    }
+
+    /**
+     * Returns a textual representation for the stack trace.
+     *
+     * @return Returns a textual representation for the stack trace.
+     */
+    @Override
+    public String toString() {
+        return stackTraceLines.stream().map(StackTraceLine::toString).collect(Collectors.joining(System.lineSeparator()));
+    }
+
+    /**
+     * Compares two stack traces for equality by comparing each single stack trace line.
+     *
+     * @param o The other stack trace.
+     * @return Returns {@code true} if the two stack traces are identical, otherwise {@code false}.
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        StackTrace that = (StackTrace) o;
+        return packageName.equals(that.packageName) && ((Objects.equals(stackTraceLines, that.stackTraceLines)
+                // NOTE: If the stack trace was produced on a different emulator it is likely that the stack trace line
+                // numbers diverge that belong to the Android framework, thus it reasonable to compare only the 'at'
+                // stack trace lines belonging to the AUT. Moreover, the top stack trace line containing the exception
+                // message or any 'caused by' lines might contain dynamic object ids, which makes the comparison on those
+                // lines tricky. However, it could theoretically happen that we can't distinguish between two crashes
+                // originating in the same line (there can be multiple statements in a single source code line).
+                || Objects.equals(getStackTraceAtLinesOfAUT(), that.getStackTraceAtLinesOfAUT())));
+    }
+
+    /**
+     * Computes a hash code for the stack trace.
+     *
+     * @return Returns the computed hash code for the stack trace.
+     */
+    @Override
+    public int hashCode() {
+        return Objects.hash(packageName, stackTraceLines, getStackTraceAtLinesOfAUT());
     }
 }

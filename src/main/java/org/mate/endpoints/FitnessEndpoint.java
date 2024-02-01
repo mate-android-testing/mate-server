@@ -43,6 +43,8 @@ public class FitnessEndpoint implements Endpoint {
 
         if (request.getSubject().startsWith("/fitness/store_fitness_data")) {
             return storeFitnessData(request);
+        } else if (request.getSubject().startsWith("/fitness/store_action_fitness_data")) {
+            return storeActionFitnessData(request);
         } else if (request.getSubject().startsWith("/fitness/copy_fitness_data")) {
             return copyFitnessData(request);
         } else if (request.getSubject().startsWith("/fitness/get_branches")) {
@@ -103,7 +105,6 @@ public class FitnessEndpoint implements Endpoint {
         // derive the coverage vector for the chromosome
         CoverageVector chromosomeCoverageVector = new CoverageVector(targets,
                 readTraces(getTraceFiles(tracesDir.toFile(), chromosome)));
-        Log.println("Coverage vector of chromosome " + chromosome + ": " + chromosomeCoverageVector);
 
         population.addAll(archive);
 
@@ -113,7 +114,6 @@ public class FitnessEndpoint implements Endpoint {
             List<File> tracesFiles = getTraceFiles(tracesDir.toFile(), member);
             Set<String> traces = readTraces(tracesFiles);
             CoverageVector coverageVector = new CoverageVector(targets, traces);
-            Log.println("Coverage vector of population chromosome " + member + ": " + coverageVector);
             return coverageVector;
         }).collect(Collectors.toList());
 
@@ -235,16 +235,28 @@ public class FitnessEndpoint implements Endpoint {
      */
     private List<String> getBranches(Path appDir) {
 
-        File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
+        // TODO: Both files have a different format. Unless the branches aren't actually needed except counting them,
+        //  it doesn't matter. Otherwise, we need to convert them to the same format or prefer those from the blocks.txt.
 
-        List<String> branches = new ArrayList<>();
+        final File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
+        final List<String> branches = new ArrayList<>();
 
-        try (Stream<String> stream = Files.lines(branchesFile.toPath(), StandardCharsets.UTF_8)) {
-            // hopefully this preserves the order (remove blank line at end)
-            branches.addAll(stream.filter(line -> line.length() > 0).collect(Collectors.toList()));
-        } catch (IOException e) {
-            Log.printError("Reading branches.txt failed!");
-            throw new IllegalStateException(e);
+        if (branchesFile.exists()) {
+            try (Stream<String> stream = Files.lines(branchesFile.toPath(), StandardCharsets.UTF_8)) {
+                // hopefully this preserves the order (remove blank line at end)
+                branches.addAll(stream.filter(line -> !line.isEmpty()).collect(Collectors.toList()));
+            } catch (IOException e) {
+                throw new IllegalStateException("Error occurred during processing of " + BRANCHES_FILE + " file!", e);
+            }
+        } else {
+            // Extract branches from blocks.txt file
+            final File blocksFile = appDir.resolve(BLOCKS_FILE).toFile();
+            try (Stream<String> stream = Files.lines(blocksFile.toPath(), StandardCharsets.UTF_8)) {
+                // hopefully this preserves the order (remove blank line at end)
+                branches.addAll(stream.filter(line -> line.endsWith("->isBranch")).collect(Collectors.toList()));
+            } catch (IOException e) {
+                throw new IllegalStateException("Error occurred during processing of " + BLOCKS_FILE + " file!", e);
+            }
         }
 
         return branches;
@@ -483,7 +495,7 @@ public class FitnessEndpoint implements Endpoint {
         switch (FitnessFunction.valueOf(fitnessFunction)) {
             case BRANCH_COVERAGE:
             case BRANCH_MULTI_OBJECTIVE:
-            case BRANCH_DISTANCE:
+            case BRANCH_DISTANCE_CFG:
             case BRANCH_DISTANCE_MULTI_OBJECTIVE:
                 return copyBranchFitnessData(request);
             case LINE_COVERAGE:
@@ -722,6 +734,51 @@ public class FitnessEndpoint implements Endpoint {
     }
 
     /**
+     * Stores the fitness data for a chromosome's range of actions.
+     *
+     * @param request The request message.
+     * @return Returns a message describing the success/failure of the operation.
+     */
+    private Message storeActionFitnessData(Message request) {
+
+        final String fitnessFunction = request.getParameter("fitnessFunction");
+
+        switch (FitnessFunction.valueOf(fitnessFunction)) {
+            case CRASH_DISTANCE:
+                return storeBasicBlockActionFitnessData(request);
+            default:
+                final String errorMsg = "Fitness function " + fitnessFunction + " not yet supported!";
+                Log.printError(errorMsg);
+                return Messages.errorMessage(errorMsg);
+        }
+    }
+
+    /**
+     * Stores the basic block fitness data (traces) for a chromosome's range of actions.
+     *
+     * @param request The request message.
+     * @return Returns a message describing the success/failure of the operation.
+     */
+    private Message storeBasicBlockActionFitnessData(Message request) {
+
+        String deviceID = request.getParameter("deviceId");
+        String chromosome = request.getParameter("chromosome");
+        final int actions = Integer.parseInt(request.getParameter("actions"));
+
+        // Re-assemble the traces per action.
+        final Map<String, Set<String>> tracesPerAction = new LinkedHashMap<>();
+
+        for (int i = 0; i < actions; i++) {
+            final String actionID = i + "_" + chromosome;
+            tracesPerAction.put(actionID, Set.of(request.getParameter(actionID).split("\\+")));
+        }
+
+        Device device = Device.getDevice(deviceID);
+        device.storeTraces(chromosome, tracesPerAction);
+        return new Message("/fitness/store_action_fitness_data");
+    }
+
+    /**
      * Stores the fitness data of the given chromosome.
      *
      * @param request The request specifying the operation.
@@ -734,7 +791,7 @@ public class FitnessEndpoint implements Endpoint {
         switch (FitnessFunction.valueOf(fitnessFunction)) {
             case BRANCH_COVERAGE:
             case BRANCH_MULTI_OBJECTIVE:
-            case BRANCH_DISTANCE:
+            case BRANCH_DISTANCE_CFG:
             case BRANCH_DISTANCE_MULTI_OBJECTIVE:
                 return storeBranchFitnessData(request);
             case LINE_COVERAGE:

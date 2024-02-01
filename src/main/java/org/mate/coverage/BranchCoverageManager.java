@@ -335,9 +335,9 @@ public final class BranchCoverageManager {
                     // each trace consists of className->methodName->branchID
                     String[] triple = trace.split("->");
 
-                    if (triple.length != 3 || trace.contains(":")
-                            || trace.endsWith("->exit") || trace.endsWith("->entry")) {
-                        // ignore traces related to if statements or branch distance or virtual entry/exit vertices
+                    if (triple.length != 3 || trace.contains(":")) {
+                            // || trace.endsWith("->exit") || trace.endsWith("->entry")) {
+                        // ignore traces related to if & switch statements or branch distance vertices
                         continue;
                     }
 

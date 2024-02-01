@@ -24,7 +24,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
     /**
      * The underlying CFG.
      */
-    protected final BaseCFG baseCFG;
+    protected final BaseCFG graph;
 
     /**
      * The package name of the AUT, e.g. com.zola.bmi.
@@ -39,7 +39,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      * option, while for resolving the shortest paths between many vertices, the CH many-to-many shortest path algorithm
      * appears to be the best option.
      */
-    private final ManyToManyShortestPathsAlgorithm<CFGVertex, CFGEdge> shortestPathAlgorithm;
+    protected final ManyToManyShortestPathsAlgorithm<CFGVertex, CFGEdge> shortestPathAlgorithm;
 
     /**
      * The path to the 'apps' folder.
@@ -49,7 +49,12 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
     /**
      * Contains the instrumented branches of the AUT. This also includes case statements belonging to switch instructions.
      */
-    private static final String BRANCHES_FILE = "branches.txt";
+    protected static final String BRANCHES_FILE = "branches.txt";
+
+    /**
+     * Contains the instrumented basic blocks of the AUT. This also includes instrumented branch statements.
+     */
+    protected static final String BLOCKS_FILE = "blocks.txt";
 
     /**
      * Caches a mapping from trace to vertex for the most relevant vertices, e.g. branch, case, if and switch vertices.
@@ -65,18 +70,108 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
     /**
      * Constructs a wrapper for a given control-flow graph.
      *
-     * @param baseCFG The actual control flow graph.
+     * @param graph The actual control flow graph.
      * @param appsDir The path to the apps directory.
      * @param appName The name of the app (the package name).
      */
-    public CFG(BaseCFG baseCFG, Path appsDir, String appName) {
-        this.baseCFG = baseCFG;
+    public CFG(BaseCFG graph, Path appsDir, String appName) {
+        this.graph = graph;
         this.appName = appName;
         this.appsDir = appsDir;
         this.traceToVertexCache = new HashMap<>(); // pre-init for initBranchVertices()!
         branchVertices = initBranchVertices();
-        shortestPathAlgorithm = baseCFG.initCHManyToManyShortestPathAlgorithm();
+        shortestPathAlgorithm = graph.initCHManyToManyShortestPathAlgorithm();
         traceToVertexCache = initTraceToVertexCache();
+    }
+
+    /**
+     * Maps the given set of traces to vertices in the graph.
+     *
+     * @param traces The set of traces that should be mapped to vertices.
+     * @return Returns the vertices described by the given set of traces.
+     */
+    @Override
+    public List<CFGVertex> lookupVertices(final List<String> traces) {
+
+        long start = System.currentTimeMillis();
+
+        // we need to mark vertices we visited
+        final Set<CFGVertex> visitedVertices = Collections.newSetFromMap(new ConcurrentHashMap<CFGVertex, Boolean>());
+
+        // map trace to vertex
+        traces.parallelStream().forEach(trace -> {
+
+            if (trace.contains(":")) {
+                // skip branch distance trace and traces without a matching vertex pair.
+                return;
+            }
+
+            // mapEntryTraceToVertex(visitedVertices, trace);
+            // mapExitTraceToVertex(visitedVertices, trace);
+
+            // mark actual vertex corresponding to trace
+            var visitedVertex = lookupVertex(trace);
+
+            if (visitedVertex == null) {
+                Log.printWarning("Couldn't derive vertex for trace: " + trace);
+            } else {
+                visitedVertices.add(visitedVertex);
+            }
+        });
+
+        long end = System.currentTimeMillis();
+        Log.println("Mapping traces to vertices took: " + (end - start) + " ms.");
+
+        Log.println("Number of visited vertices: " + visitedVertices.size());
+        return new ArrayList<>(visitedVertices);
+    }
+
+    /**
+     * Maps an entry trace to its vertex.
+     *
+     * @param visitedVertices The set of visited vertices.
+     * @param trace The potential entry trace.
+     */
+    @SuppressWarnings("unused")
+    private void mapEntryTraceToVertex(final Set<CFGVertex> visitedVertices, final String trace) {
+
+        // mark virtual entry
+        final String entryMarker = "->entry";
+        final int entryIndex = trace.indexOf(entryMarker);
+        if (entryIndex != -1) {
+            final String entryTrace = trace.substring(0, entryIndex + entryMarker.length());
+            final CFGVertex visitedEntry = lookupVertex(entryTrace);
+
+            if (visitedEntry != null) {
+                visitedVertices.add(visitedEntry);
+            } else {
+                Log.printWarning("Couldn't derive vertex for entry trace: " + entryTrace);
+            }
+        }
+    }
+
+    /**
+     * Maps an exit trace to its vertex.
+     *
+     * @param visitedVertices The set of visited vertices.
+     * @param trace The potential exit trace.
+     */
+    @SuppressWarnings("unused")
+    private void mapExitTraceToVertex(final Set<CFGVertex> visitedVertices, final String trace) {
+
+        // mark virtual exit
+        final String exitMarker = "->exit";
+        final int exitIndex = trace.indexOf(exitMarker);
+        if (exitIndex != -1) {
+            final String exitTrace = trace.substring(0, exitIndex + exitMarker.length());
+            final CFGVertex visitedExit = lookupVertex(exitTrace);
+
+            if (visitedExit != null) {
+                visitedVertices.add(visitedExit);
+            } else {
+                Log.printWarning("Couldn't derive vertex for exit trace: " + exitTrace);
+            }
+        }
     }
 
     /**
@@ -86,19 +181,26 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     protected List<CFGVertex> initBranchVertices() {
 
-        // TODO: Read from blocks.txt if branches.txt is not present.
-
         final Path appDir = appsDir.resolve(appName);
         final File branchesFile = appDir.resolve(BRANCHES_FILE).toFile();
-
         final List<String> branches = new ArrayList<>();
 
-        try (Stream<String> stream = Files.lines(branchesFile.toPath(), StandardCharsets.UTF_8)) {
-            // hopefully this preserves the order (remove blank line at end)
-            branches.addAll(stream.filter(line -> line.length() > 0).collect(Collectors.toList()));
-        } catch (IOException e) {
-            Log.printError("Reading " + BRANCHES_FILE + " failed!");
-            throw new IllegalStateException(e);
+        if (branchesFile.exists()) {
+            try (Stream<String> stream = Files.lines(branchesFile.toPath(), StandardCharsets.UTF_8)) {
+                // hopefully this preserves the order (remove blank line at end)
+                branches.addAll(stream.filter(line -> !line.isEmpty()).collect(Collectors.toList()));
+            } catch (IOException e) {
+                throw new IllegalStateException("Error occurred during processing of " + BRANCHES_FILE + " file!", e);
+            }
+        } else {
+            // Extract branches from blocks.txt file
+            final File blocksFile = appDir.resolve(BLOCKS_FILE).toFile();
+            try (Stream<String> stream = Files.lines(blocksFile.toPath(), StandardCharsets.UTF_8)) {
+                // hopefully this preserves the order (remove blank line at end)
+                branches.addAll(stream.filter(line -> line.endsWith("->isBranch")).collect(Collectors.toList()));
+            } catch (IOException e) {
+                throw new IllegalStateException("Error occurred during processing of " + BLOCKS_FILE + " file!", e);
+            }
         }
 
         return mapBranchesToVertices(branches);
@@ -127,7 +229,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public boolean isReachable(CFGVertex vertex) {
-        return shortestPathAlgorithm.getPath(baseCFG.getEntry(), vertex) != null;
+        return shortestPathAlgorithm.getPath(graph.getEntry(), vertex) != null;
     }
 
     /**
@@ -137,7 +239,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public List<CFGVertex> getVertices() {
-        return new ArrayList<>(baseCFG.getVertices());
+        return new ArrayList<>(graph.getVertices());
     }
 
     /**
@@ -145,7 +247,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public void draw(File outputPath) {
-        baseCFG.drawGraph(outputPath);
+        graph.drawGraph(outputPath);
     }
 
     /**
@@ -161,7 +263,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public void draw(File outputPath, Set<CFGVertex> visitedVertices, Set<CFGVertex> targets) {
-        baseCFG.drawGraph(outputPath, visitedVertices, targets);
+        graph.drawGraph(outputPath, visitedVertices, targets);
     }
 
     /**
@@ -172,7 +274,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public Set<CFGEdge> getOutgoingEdges(CFGVertex vertex) {
-        return baseCFG.getOutgoingEdges(vertex);
+        return graph.getOutgoingEdges(vertex);
     }
 
     /**
@@ -183,7 +285,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public Set<CFGEdge> getIncomingEdges(CFGVertex vertex) {
-        return baseCFG.getIncomingEdges(vertex);
+        return graph.getIncomingEdges(vertex);
     }
 
     /**
@@ -207,7 +309,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
             return traceToVertexCache.get(trace);
         } else {
             try {
-                return baseCFG.lookUpVertex(trace);
+                return graph.lookUpVertex(trace);
             } catch (Exception e) {
                 Log.printWarning(e.getMessage());
                 return null;
@@ -268,7 +370,7 @@ public abstract class CFG implements Graph<CFGVertex, CFGEdge> {
      */
     @Override
     public int size() {
-        return baseCFG.size();
+        return graph.size();
     }
 
     /**

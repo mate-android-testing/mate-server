@@ -8,7 +8,7 @@ import org.mate.util.Util;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.UncheckedIOException;
+import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -461,7 +461,7 @@ public class Device {
         if (isTracerRunning()) {
             Log.println("Tracer is running, waiting...");
 
-            final long maxWaitTimeInSeconds = 120;
+            final long maxWaitTimeInSeconds = 10;
 
             long currentTime = System.currentTimeMillis();
             final long startTime = currentTime;
@@ -525,7 +525,7 @@ public class Device {
             }
 
             // give the tracer some time to start running
-            Util.sleep(1);
+            Util.sleepMillis(100);
 
             if (!waitForTracerToFinish()) {
                 throw new IllegalStateException("Exceeded maximal waiting time for tracer to finish dumping traces!");
@@ -566,6 +566,48 @@ public class Device {
     }
 
     /**
+     * Stores the given traces of the given test case chromosome onto disk.
+     *
+     * @param testCase The test case for which the traces should be stored to disk.
+     * @param tracesPerAction The traces recorded per action.
+     */
+    public void storeTraces(final String testCase, final Map<String, Set<String>> tracesPerAction) {
+
+        Log.println("Chromosome: " + testCase);
+
+        if (coveredTestCases.contains(testCase)) {
+            // We have already stored the traces for the given test case and don't want to overwrite (corrupt) them.
+            return;
+        }
+
+        File appDir = new File(appsDir.toFile(), packageName);
+        File tracesBaseDir = new File(new File(appDir, "traces"), testCase);
+
+        // create traces base directory if not yet present
+        if (!tracesBaseDir.exists()) {
+            Log.println("Creating traces base directory: " + tracesBaseDir.mkdirs());
+        }
+
+        // Generate for each action a corresponding traces file.
+        tracesPerAction.entrySet().parallelStream()
+                .forEach(entry -> {
+                    final File tracesFile = new File(tracesBaseDir, entry.getKey());
+                    try (PrintWriter writer = new PrintWriter(tracesFile)) {
+                        for (String trace : entry.getValue()) {
+                            if (!trace.isEmpty()) { // skip empty lines
+                                writer.println(trace);
+                            }
+                        }
+                    } catch (IOException e) {
+                       Log.printError("Couldn't write traces to file: " + e.getMessage());
+                       e.printStackTrace();
+                    }
+                });
+
+        coveredTestCases.add(testCase);
+    }
+
+    /**
      * Waits for the tracer and afterwards pulls the traces.txt file from the external storage.
      *
      * @param chromosome Identifies either a test case or test suite.
@@ -583,16 +625,20 @@ public class Device {
      *
      * @param fileContent The file content to be written.
      * @param fileName The file to which should be written.
+     * @return Returns {@code true} if the operation succeeded, otherwise {@code false}.
      */
-    public void writeContentToFile(final String fileContent, final String fileName) {
+    public boolean writeContentToFile(final String fileContent, final String fileName) {
 
         final Path filePath = appsDir.resolve(packageName).resolve(fileName);
 
         try {
             Files.createDirectories(filePath.getParent());
             Files.writeString(filePath, fileContent);
+            return true;
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            Log.println("Couldn't write content to file: " + e.getMessage());
+            e.printStackTrace();
+            return false;
         }
     }
 
@@ -609,6 +655,8 @@ public class Device {
         var takeSS = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
                 "-s", deviceID, "shell", "screencap", "-p", EXTERNAL_STORAGE + "/" + screenshotName);
 
+        Log.println("Screenshot operation: " + takeSS);
+
         // request files from external storage (sd card)
         Result<List<String>, String> files = ProcessRunner.runProcess(androidEnvironment.getAdbExecutable(),
                 "-s", deviceID, "shell", "ls", EXTERNAL_STORAGE);
@@ -619,6 +667,7 @@ public class Device {
 
         // check whether the screenshot has been stored on the external storage
         if (!files.getOk().stream().anyMatch(str -> str.trim().equals(screenshotName))) {
+            Log.println("Files: " + files);
             throw new IllegalStateException("Couldn't locate " + screenshotName + " on the external storage!");
         }
 
@@ -699,6 +748,26 @@ public class Device {
             Log.println("Couldn't locate the traces.txt file on the external storage: " + files);
             Log.println("Re-try listening files on external storage...");
 
+            if (chromosome.equals("lastIncompleteTestCase")) {
+                /*
+                * There can be a race condition if MATE swallowed the interrupt generated when terminating the exploration
+                * thread. In such scenario MATE & MATE-Server would at the same time interact with the tracer and in the
+                * worst case one entity would remove the traces.txt while the other entity tries to read from it. We simply
+                * generate an empty traces file for the last incomplete test case.
+                 */
+                Log.println("Race condition detected!");
+                File appDir = new File(appsDir.toFile(), packageName);
+                File baseTracesDir = new File(appDir, "traces");
+                baseTracesDir.mkdirs();
+                File tracesFile = new File(baseTracesDir, chromosome);
+                try {
+                    tracesFile.createNewFile();
+                } catch (IOException e) {
+                    Log.println("Couldn't generate empty traces file!");
+                }
+                return;
+            }
+
             Util.sleep(3);
             logRuntimePermissions(packageName);
 
@@ -745,6 +814,23 @@ public class Device {
 
             Log.println("Couldn't pull traces.txt from emulator: " + pullOperation);
             Log.println("Re-try pulling traces.txt from emulator...");
+
+            if (chromosome.equals("lastIncompleteTestCase")) {
+                /*
+                 * There can be a race condition if MATE swallowed the interrupt generated when terminating the exploration
+                 * thread. In such scenario MATE & MATE-Server would at the same time interact with the tracer and in the
+                 * worst case one entity would remove the traces.txt while the other entity tries to read from it. We simply
+                 * generate an empty traces file for the last incomplete test case.
+                 */
+                Log.println("Race condition detected!");
+                try {
+                    tracesFile.createNewFile();
+                } catch (IOException e) {
+                    Log.println("Couldn't generate empty traces file!");
+                }
+                return;
+            }
+
             Util.sleep(3);
 
             Log.println("Old Files: " + files);
@@ -790,34 +876,39 @@ public class Device {
             Log.println("Couldn't read number of traces from info.txt:", e);
         }
 
-        // remove trace file from emulator
-        var removeTraceFileOp = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
-                "rm", "-f", EXTERNAL_STORAGE + "/traces.txt");
+        if (!chromosome.equals("lastIncompleteTestCase")) {
+            // There is no need to remove those files for the very last test. This implicitly avoids to handle the race
+            // condition that could happen here.
 
-        // remove info file from emulator
-        var removeInfoFileOp = ProcessRunner.runProcess(
-                androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
-                "rm", "-f", EXTERNAL_STORAGE + "/info.txt");
+            // remove trace file from emulator
+            var removeTraceFileOp = ProcessRunner.runProcess(
+                    androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                    "rm", "-f", EXTERNAL_STORAGE + "/traces.txt");
 
-        var removeTracesError = removeTraceFileOp.isErr()
-                || (removeTraceFileOp.getOk().stream().anyMatch(s -> s.contains("adb"))
-                && removeTraceFileOp.getOk().stream().anyMatch(s -> s.contains("error")));
+            // remove info file from emulator
+            var removeInfoFileOp = ProcessRunner.runProcess(
+                    androidEnvironment.getAdbExecutable(), "-s", deviceID, "shell",
+                    "rm", "-f", EXTERNAL_STORAGE + "/info.txt");
 
-        if (removeTracesError) {
-            throw new IllegalStateException("Couldn't remove traces.txt from emulator: " + removeTraceFileOp);
-        } else {
-            Log.println("Remove Trace File Operation: " + removeTraceFileOp.getOk());
-        }
+            var removeTracesError = removeTraceFileOp.isErr()
+                    || (removeTraceFileOp.getOk().stream().anyMatch(s -> s.contains("adb"))
+                    && removeTraceFileOp.getOk().stream().anyMatch(s -> s.contains("error")));
 
-        var removeInfoError = removeInfoFileOp.isErr()
-                || (removeInfoFileOp.getOk().stream().anyMatch(s -> s.contains("adb"))
-                && removeInfoFileOp.getOk().stream().anyMatch(s -> s.contains("error")));
+            if (removeTracesError) {
+                throw new IllegalStateException("Couldn't remove traces.txt from emulator: " + removeTraceFileOp);
+            } else {
+                Log.println("Remove Trace File Operation: " + removeTraceFileOp.getOk());
+            }
 
-        if (removeInfoError) {
-            throw new IllegalStateException("Couldn't remove info.txt from emulator: " + removeInfoFileOp);
-        } else {
-            Log.println("Remove Info File Operation: " + removeInfoFileOp.getOk());
+            var removeInfoError = removeInfoFileOp.isErr()
+                    || (removeInfoFileOp.getOk().stream().anyMatch(s -> s.contains("adb"))
+                    && removeInfoFileOp.getOk().stream().anyMatch(s -> s.contains("error")));
+
+            if (removeInfoError) {
+                throw new IllegalStateException("Couldn't remove info.txt from emulator: " + removeInfoFileOp);
+            } else {
+                Log.println("Remove Info File Operation: " + removeInfoFileOp.getOk());
+            }
         }
     }
 

@@ -41,15 +41,16 @@ repositories {
 dependencies {
     compile fileTree(dir: 'lib', include: '*.jar')
     compile group: 'org.jacoco', name: 'org.jacoco.report', version: '0.8.5'
-    testImplementation 'junit:junit:4.12'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
 
     // https://mvnrepository.com/artifact/org.apache.commons/commons-text
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.9'
 }
 
 test {
-    useJUnit()
-
+    useJUnitPlatform()
     maxHeapSize = '1G'
 }
 

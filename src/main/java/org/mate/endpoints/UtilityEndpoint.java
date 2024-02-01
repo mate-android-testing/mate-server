@@ -139,7 +139,7 @@ public class UtilityEndpoint implements Endpoint {
      * Writes the given content to a file.
      *
      * @param request The request message containing the content that should be written.
-     * @return Returns a dummy response message indicating success of the operation.
+     * @return Returns a response message indicating success or failure of the operation.
      */
     private Message writeContentToFile(Message request) {
 
@@ -148,9 +148,8 @@ public class UtilityEndpoint implements Endpoint {
         final String fileName = request.getParameter("fileName");
 
         Device device = Device.devices.get(deviceID);
-        device.writeContentToFile(fileContent, fileName);
-
-        return new Message.MessageBuilder("/utility/write_file").build();
+        boolean success = device.writeContentToFile(fileContent, fileName);
+        return Messages.buildResponse(request, success);
     }
 
     /**

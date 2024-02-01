@@ -28,6 +28,9 @@ public interface Graph<V extends Vertex, E extends Edge> {
     // searches for a vertex in the graph based on the given trace
     V lookupVertex(String trace);
 
+    // looks up multiple vertices at once described through the given traces
+    List<V> lookupVertices(List<String> traces);
+
     // checks whether vertex is reachable in graph from global entry point
     boolean isReachable(V vertex);
 
