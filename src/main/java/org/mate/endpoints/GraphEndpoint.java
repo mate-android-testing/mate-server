@@ -64,6 +64,8 @@ public class GraphEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/graph/init")) {
             return initGraph(request);
+        } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector_with_action")) {
+            return getBranchDistanceVectorWithAction(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector")) {
             return getBranchDistanceVector(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
@@ -248,6 +250,27 @@ public class GraphEndpoint implements Endpoint {
      * @param request The request message.
      * @return Returns a message containing the branch distance vector.
      */
+    private Message getBranchDistanceVectorWithAction(final Message request) {
+
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
+        // TODO: 13.01.2024 implement for CDG as well.
+
+        if (graph instanceof CFG) {
+            return getBranchDistanceVectorCFGWithAction(request);
+        } else {
+            throw new UnsupportedOperationException("Branch distance not defined on " + graph.getClass() + "!");
+        }
+    }
+
+    /**
+     * Computes the branch distance vector for a given chromosome by combining approach level + branch distance.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the branch distance vector.
+     */
     private Message getBranchDistanceVector(final Message request) {
 
         if (graph == null) {
@@ -295,6 +318,62 @@ public class GraphEndpoint implements Endpoint {
 
         return new Message.MessageBuilder("/graph/get_branch_distance_vector")
                 .withParameter("branch_distance_vector", String.join("+", branchDistanceVector))
+                .build();
+    }
+
+    /**
+     * Computes the branch distance vector for a given chromosome by combining approach level + branch distance using the CFG.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the branch distance vector.
+     */
+    private Message getBranchDistanceVectorCFGWithAction(final Message request) {
+
+        if (!(graph instanceof InterCFG)) {
+            throw new UnsupportedOperationException("Approach Level & Branch Distance only defined on InterCFG so far!");
+        }
+
+        final String packageName = request.getParameter("packageName");
+        final String chromosome = request.getParameter("chromosome");
+        Log.println("Computing the branch distance vector for the chromosome: " + chromosome);
+
+        InterCFG interCFG = (InterCFG) graph;
+
+        final var branchVertices =  interCFG.getBranchVertices();
+
+        List<List<String>> result = new LinkedList<>();
+        for (int i = 0; i < branchVertices.size(); i++) {
+            result.add(new LinkedList<>());
+        }
+
+        final List<Set<String>> tracesPerAction = getTracesPerFile(request);
+        Set<String> tracesSet = new LinkedHashSet<>();
+
+        for (Set<String> traces : tracesPerAction){
+            tracesSet.addAll(traces);
+            List<String> tracesList = new LinkedList<>(tracesSet);
+            long start = System.currentTimeMillis();
+            final var visitedVertices = interCFG.lookupVertices(tracesList);
+            long start1 = System.currentTimeMillis();
+            interCFG.precomputeBranchDistances(tracesList);
+            long end1 = System.currentTimeMillis();
+            Log.println("Pre-Computing branch distances took: " + (end1 - start1) + "ms");
+            final List<String> branchDistanceVector = computeBranchDistanceVectorCFG(visitedVertices, branchVertices);
+            long end = System.currentTimeMillis();
+            Log.println("Computing branch distance vector took: " + (end - start) + "ms");
+
+            // TODO: 13.01.2024 clean all this up
+            for (int i = 0; i < branchDistanceVector.size(); i++) {
+                result.get(i).add(branchDistanceVector.get(i));
+            }
+        }
+        List<String> intermediateResults = new LinkedList<>();
+        for (int i = 0; i < result.size(); i++) {
+            intermediateResults.add(String.join("+", result.get(i)));
+        }
+
+        return new Message.MessageBuilder("/graph/get_branch_distance_vector_with_action")
+                .withParameter("branch_distance_vector_with_action", String.join("-", intermediateResults))
                 .build();
     }
 
@@ -951,6 +1030,8 @@ public class GraphEndpoint implements Endpoint {
                 }
             }
         }
+
+        // TODO: 02.02.2024 Look into this because twice the file desktop.ini was in the return list and subsequently crashed the server.
 
         Log.println("Number of considered traces files: " + tracesFiles.size());
         return tracesFiles;

@@ -745,6 +745,7 @@ public class FitnessEndpoint implements Endpoint {
 
         switch (FitnessFunction.valueOf(fitnessFunction)) {
             case CRASH_DISTANCE:
+            case BRANCH_DISTANCE_MULTI_OBJECTIVE:
                 return storeBasicBlockActionFitnessData(request);
             default:
                 final String errorMsg = "Fitness function " + fitnessFunction + " not yet supported!";
