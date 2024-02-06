@@ -645,9 +645,9 @@ public class InterCFG extends CFG {
         }
 
         // combine and normalise approach level + branch distance
-        final double normalisedBranchDistance = (double) minBranchDistance / (minBranchDistance + 1);
-        final double combined = approachLevel + normalisedBranchDistance;
-        final double combinedNormalized = combined / (combined + 1);
+        final float normalisedBranchDistance = (float) minBranchDistance / (minBranchDistance + 1);
+        final float combined = approachLevel + normalisedBranchDistance;
+        final float combinedNormalized = combined / (combined + 1);
         return String.valueOf(combinedNormalized);
     }
 
