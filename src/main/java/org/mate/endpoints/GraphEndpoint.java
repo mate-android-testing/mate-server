@@ -64,7 +64,7 @@ public class GraphEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/graph/init")) {
             return initGraph(request);
-        } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector_with_action")) {
+        } else if (request.getSubject().startsWith("/graph/get_branch_distance_action_vector")) {
             return getBranchDistanceVectorWithAction(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector")) {
             return getBranchDistanceVector(request);
@@ -245,8 +245,8 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Computes the branch distance vector on a per-action basis for a given chromosome by combining approach level
-     * with branch distance.
+     * Computes the branch distance vector on a per action basis for a given chromosome by combining approach level with
+     * branch distance.
      *
      * @param request The request message.
      * @return Returns a message containing the branch distance vector.
@@ -321,7 +321,8 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Computes the branch distance vector for a given chromosome by combining approach level + branch distance using the CFG.
+     * Computes the branch distance vector on a per action basis for a given chromosome by combining approach level with
+     * branch distance based on the inter-procedural CFG.
      *
      * @param request The request message.
      * @return Returns a message containing the branch distance vector.
@@ -332,25 +333,24 @@ public class GraphEndpoint implements Endpoint {
             throw new UnsupportedOperationException("Approach Level & Branch Distance only defined on InterCFG so far!");
         }
 
-        final String packageName = request.getParameter("packageName");
         final String chromosome = request.getParameter("chromosome");
         Log.println("Computing the branch distance vector for the chromosome: " + chromosome);
 
-        InterCFG interCFG = (InterCFG) graph;
-
+        final InterCFG interCFG = (InterCFG) graph;
         final var branchVertices =  interCFG.getBranchVertices();
 
-        List<List<String>> result = new LinkedList<>();
+        final List<List<String>> branchDistanceActionVector = new ArrayList<>(branchVertices.size());
         for (int i = 0; i < branchVertices.size(); i++) {
-            result.add(new LinkedList<>());
+            branchDistanceActionVector.add(new LinkedList<>());
         }
 
         final List<Set<String>> tracesPerAction = getTracesPerFile(request);
-        Set<String> tracesSet = new LinkedHashSet<>();
+        final Set<String> tracesSet = new LinkedHashSet<>();
 
-        for (Set<String> traces : tracesPerAction){
+        // Compute the approach level + branch distance vector after each action.
+        for (final Set<String> traces : tracesPerAction) {
             tracesSet.addAll(traces);
-            List<String> tracesList = new LinkedList<>(tracesSet);
+            final List<String> tracesList = new LinkedList<>(tracesSet); // the traces up to the current action
             long start = System.currentTimeMillis();
             final var visitedVertices = interCFG.lookupVertices(tracesList);
             long start1 = System.currentTimeMillis();
@@ -361,18 +361,20 @@ public class GraphEndpoint implements Endpoint {
             long end = System.currentTimeMillis();
             Log.println("Computing branch distance vector took: " + (end - start) + "ms");
 
-            // TODO: 13.01.2024 clean all this up
+            // Add for each branch the branch distance fitness value after the ith action.
             for (int i = 0; i < branchDistanceVector.size(); i++) {
-                result.get(i).add(branchDistanceVector.get(i));
+                branchDistanceActionVector.get(i).add(branchDistanceVector.get(i));
             }
         }
-        List<String> intermediateResults = new LinkedList<>();
-        for (int i = 0; i < result.size(); i++) {
-            intermediateResults.add(String.join("+", result.get(i)));
+
+        // Flatten nested lists to convert the branch distance action vector to a single string.
+        final List<String> flattenedBranchDistanceActionVector = new LinkedList<>();
+        for (int i = 0; i < branchDistanceActionVector.size(); i++) {
+            flattenedBranchDistanceActionVector.add(String.join("+", branchDistanceActionVector.get(i)));
         }
 
-        return new Message.MessageBuilder("/graph/get_branch_distance_vector_with_action")
-                .withParameter("branch_distance_vector_with_action", String.join("-", intermediateResults))
+        return new Message.MessageBuilder("/graph/get_branch_distance_action_vector")
+                .withParameter("branch_distance_vector", String.join("-", flattenedBranchDistanceActionVector))
                 .build();
     }
 
