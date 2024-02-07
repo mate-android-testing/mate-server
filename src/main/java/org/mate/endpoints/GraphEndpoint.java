@@ -1031,9 +1031,7 @@ public class GraphEndpoint implements Endpoint {
                 }
             }
         }
-
-        // TODO: 02.02.2024 Look into this because twice the file desktop.ini was in the return list and subsequently crashed the server.
-
+        
         Log.println("Number of considered traces files: " + tracesFiles.size());
         return tracesFiles;
     }
