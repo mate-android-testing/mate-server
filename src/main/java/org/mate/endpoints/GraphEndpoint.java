@@ -1008,7 +1008,7 @@ public class GraphEndpoint implements Endpoint {
                                     .filter(Files::isRegularFile)
                                     .map(Path::toFile)
                                     // If the chromosome refers to a folder, the contained files, e.g., the traces
-                                    // belonging to the individual actions might be picked up in an arbitrary order
+                                    // belonging to the individual actions, might be picked up in an arbitrary order
                                     // without below comparator.
                                     .sorted((file1, file2) -> {
                                         if (file1.getName().endsWith("_" + chromosome)) {
