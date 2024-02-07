@@ -245,7 +245,8 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
-     * Computes the branch distance vector for a given chromosome by combining approach level + branch distance.
+     * Computes the branch distance vector on a per-action basis for a given chromosome by combining approach level
+     * with branch distance.
      *
      * @param request The request message.
      * @return Returns a message containing the branch distance vector.
@@ -255,8 +256,6 @@ public class GraphEndpoint implements Endpoint {
         if (graph == null) {
             throw new IllegalStateException("Graph hasn't been initialised!");
         }
-
-        // TODO: 13.01.2024 implement for CDG as well.
 
         if (graph instanceof CFG) {
             return getBranchDistanceVectorCFGWithAction(request);
