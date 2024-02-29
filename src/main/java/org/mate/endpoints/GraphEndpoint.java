@@ -336,41 +336,47 @@ public class GraphEndpoint implements Endpoint {
         final String chromosome = request.getParameter("chromosome");
         Log.println("Computing the branch distance vector for the chromosome: " + chromosome);
 
+        long start = System.currentTimeMillis();
+
         final InterCFG interCFG = (InterCFG) graph;
         final var branchVertices =  interCFG.getBranchVertices();
 
-        final List<List<String>> branchDistanceActionVector = new ArrayList<>(branchVertices.size());
-        for (int i = 0; i < branchVertices.size(); i++) {
-            branchDistanceActionVector.add(new LinkedList<>());
-        }
-
         final List<Set<String>> tracesPerAction = getTracesPerFile(request);
         final Set<String> tracesSet = new LinkedHashSet<>();
+        final String[][] branchDistanceActionVector = new String[branchVertices.size()][tracesPerAction.size()];
 
-        // Compute the approach level + branch distance vector after each action.
+        // aggregate the traces of the previous actions
+        final List<List<String>> combinedTracesPerAction = new ArrayList<>(tracesPerAction.size());
+
         for (final Set<String> traces : tracesPerAction) {
             tracesSet.addAll(traces);
-            final List<String> tracesList = new LinkedList<>(tracesSet); // the traces up to the current action
-            long start = System.currentTimeMillis();
-            final var visitedVertices = interCFG.lookupVertices(tracesList);
-            long start1 = System.currentTimeMillis();
-            interCFG.precomputeBranchDistances(tracesList);
-            long end1 = System.currentTimeMillis();
-            Log.println("Pre-Computing branch distances took: " + (end1 - start1) + "ms");
-            final List<String> branchDistanceVector = computeBranchDistanceVectorCFG(visitedVertices, branchVertices);
-            long end = System.currentTimeMillis();
-            Log.println("Computing branch distance vector took: " + (end - start) + "ms");
-
-            // Add for each branch the branch distance fitness value after the ith action.
-            for (int i = 0; i < branchDistanceVector.size(); i++) {
-                branchDistanceActionVector.get(i).add(branchDistanceVector.get(i));
-            }
+            final List<String> tracesList = new ArrayList<>(tracesSet);
+            combinedTracesPerAction.add(tracesList);
         }
 
+        IntStream.range(0, combinedTracesPerAction.size())
+                .parallel()
+                .forEach(actionIndex -> {
+                    // Compute the approach level + branch distance vector after each action.
+                    final List<String> traces = combinedTracesPerAction.get(actionIndex);
+                    final var visitedVertices = interCFG.lookupVertices(traces);
+                    final List<String> branchDistanceVector = computeBranchDistanceVectorCFG(visitedVertices, branchVertices);
+
+                    // Add for each branch the branch distance fitness value after the ith action.
+                    IntStream.range(0, branchDistanceVector.size())
+                            .parallel()
+                            .forEach(branchIndex ->
+                                    branchDistanceActionVector[branchIndex][actionIndex] = branchDistanceVector.get(branchIndex)
+                            );
+                });
+
+        long end = System.currentTimeMillis();
+        Log.println("Computing the branch distance vector took: " + (end - start) + "ms");
+
         // Flatten nested lists to convert the branch distance action vector to a single string.
-        final List<String> flattenedBranchDistanceActionVector = new LinkedList<>();
-        for (int i = 0; i < branchDistanceActionVector.size(); i++) {
-            flattenedBranchDistanceActionVector.add(String.join("+", branchDistanceActionVector.get(i)));
+        final List<String> flattenedBranchDistanceActionVector = new ArrayList<>();
+        for (int i = 0; i < branchDistanceActionVector.length; i++) {
+            flattenedBranchDistanceActionVector.add(String.join("+", branchDistanceActionVector[i]));
         }
 
         return new Message.MessageBuilder("/graph/get_branch_distance_action_vector")
