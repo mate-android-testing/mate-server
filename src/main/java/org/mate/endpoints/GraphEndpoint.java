@@ -354,6 +354,9 @@ public class GraphEndpoint implements Endpoint {
             combinedTracesPerAction.add(tracesList);
         }
 
+        interCFG.precomputeBranchDistances(new ArrayList<>(tracesSet));
+        tracesSet.clear();
+
         IntStream.range(0, combinedTracesPerAction.size())
                 .parallel()
                 .forEach(actionIndex -> {
