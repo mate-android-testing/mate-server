@@ -863,7 +863,9 @@ public class GraphEndpoint implements Endpoint {
                 boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
                 boolean resolveOnlyAUTClasses
                         = Boolean.parseBoolean(request.getParameter("resolve_only_aut_classes"));
-                initInterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, packageName, target);
+                boolean onlyApproachLevel = Boolean.parseBoolean(request.getParameter("only_approach_level"));
+                initInterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, onlyApproachLevel,
+                        packageName, target);
                 break;
             }
             case INTER_CDG: {
@@ -935,12 +937,14 @@ public class GraphEndpoint implements Endpoint {
      * @param useBasicBlocks Whether to use basic blocks for the interCFG.
      * @param excludeARTClasses Whether to exclude ART classes.
      * @param resolveOnlyAUTClasses Whether to resolve only classes belonging to the AUT package.
+     * @param onlyApproachLevel Whether to only use the approach level in the branch distance computation.
      * @param packageName The package name of the AUT.
      * @param target Describes the target vertices.
      */
     private void initInterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
-                                 boolean resolveOnlyAUTClasses, String packageName, String target) {
-        graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
+                                 boolean resolveOnlyAUTClasses, boolean onlyApproachLevel, String packageName, String target) {
+        graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, onlyApproachLevel,
+                appsDir, packageName);
         targetVertices = selectTargetVertices(target);
     }
 
