@@ -745,6 +745,7 @@ public class FitnessEndpoint implements Endpoint {
 
         switch (FitnessFunction.valueOf(fitnessFunction)) {
             case CRASH_DISTANCE:
+            case BRANCH_DISTANCE_MULTI_OBJECTIVE:
                 return storeBasicBlockActionFitnessData(request);
             default:
                 final String errorMsg = "Fitness function " + fitnessFunction + " not yet supported!";
@@ -763,18 +764,27 @@ public class FitnessEndpoint implements Endpoint {
 
         String deviceID = request.getParameter("deviceId");
         String chromosome = request.getParameter("chromosome");
-        final int actions = Integer.parseInt(request.getParameter("actions"));
 
-        // Re-assemble the traces per action.
-        final Map<String, Set<String>> tracesPerAction = new LinkedHashMap<>();
+        if (request.getParameters().containsKey("actions")) { // store all action traces in one pass
+            final int actions = Integer.parseInt(request.getParameter("actions"));
 
-        for (int i = 0; i < actions; i++) {
-            final String actionID = i + "_" + chromosome;
-            tracesPerAction.put(actionID, Set.of(request.getParameter(actionID).split("\\+")));
+            // Re-assemble the traces per action.
+            final Map<String, Set<String>> tracesPerAction = new LinkedHashMap<>();
+
+            for (int i = 0; i < actions; i++) {
+                final String actionID = i + "_" + chromosome;
+                tracesPerAction.put(actionID, Set.of(request.getParameter(actionID).split("\\+")));
+            }
+
+            Device device = Device.getDevice(deviceID);
+            device.storeTraces(chromosome, tracesPerAction);
+        } else { // store the traces of a single action
+            final String actionID = request.getParameter("actionId");
+            final Set<String> traces = Set.of(request.getParameter("traces").split("\\+"));
+            Device device = Device.getDevice(deviceID);
+            device.storeTraces(chromosome, actionID, traces);
         }
 
-        Device device = Device.getDevice(deviceID);
-        device.storeTraces(chromosome, tracesPerAction);
         return new Message("/fitness/store_action_fitness_data");
     }
 

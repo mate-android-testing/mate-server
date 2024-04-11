@@ -336,7 +336,6 @@ public final class BranchCoverageManager {
                     String[] triple = trace.split("->");
 
                     if (triple.length != 3 || trace.contains(":")) {
-                            // || trace.endsWith("->exit") || trace.endsWith("->entry")) {
                         // ignore traces related to if & switch statements or branch distance vertices
                         continue;
                     }

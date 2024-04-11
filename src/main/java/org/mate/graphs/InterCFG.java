@@ -98,6 +98,11 @@ public class InterCFG extends CFG {
     private short generation = Short.MAX_VALUE;
 
     /**
+     * Whether to only use the approach level in the 'branch distance' computations.
+     */
+    private final boolean onlyApproachLevel;
+
+    /**
      * Constructs an inter-procedural CFG.
      *
      * @param interCFG The inter-procedural CFG returned from the graph library.
@@ -106,6 +111,7 @@ public class InterCFG extends CFG {
      */
     public InterCFG(BaseCFG interCFG, Path appsDir, String packageName) {
         super(interCFG, appsDir, packageName);
+        this.onlyApproachLevel = false;
     }
 
     /**
@@ -115,17 +121,20 @@ public class InterCFG extends CFG {
      * @param useBasicBlocks Whether basic blocks should be used or not.
      * @param excludeARTClasses Whether to exclude ART classes.
      * @param resolveOnlyAUTClasses Whether to resolve only classes belonging to the AUT package.
+     * @param onlyApproachLevel Whether to only use the approach level in the branch distance computation.
      * @param appsDir The apps directory.
      * @param packageName The package name of the AUT.
      */
     public InterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses, boolean resolveOnlyAUTClasses,
-                    Path appsDir, String packageName) {
+                    boolean onlyApproachLevel, Path appsDir, String packageName) {
         super(GraphUtils.constructInterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses),
                 appsDir, packageName);
-
+        this.onlyApproachLevel = onlyApproachLevel;
         long start = System.currentTimeMillis();
         initApproachLevelCache(branchVertices);
-        initBranchDistanceCache(getInstrumentationPoints(packageName));
+        if (!onlyApproachLevel) {
+            initBranchDistanceCache(getInstrumentationPoints(packageName));
+        }
         long end = System.currentTimeMillis();
         Log.println("Pre-Computing approach levels and branch distances took: " + (end - start) + "ms");
     }
@@ -306,7 +315,8 @@ public class InterCFG extends CFG {
          * could be covered; and otherwise we combine the approach level to the closest if or switch statement with the
          * branch distance.
          */
-        return minDistanceVertex == null ? "1" : minDistance == 0 ? "0"
+        return minDistanceVertex == null ? "1" : minDistance == 0 ? "0" : onlyApproachLevel ?
+                String.valueOf(((float) minDistance / (minDistance + 1))) // normalise approach level
                 : combineApproachLevelAndBranchDistance(minDistance , minDistanceVertex, branchVertex);
     }
 
@@ -458,6 +468,10 @@ public class InterCFG extends CFG {
      * @param traces The list of traces.
      */
     public void precomputeBranchDistances(final List<String> traces) {
+
+        if (onlyApproachLevel) {
+            return;
+        }
 
         final short g = generation--;
 

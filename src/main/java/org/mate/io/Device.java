@@ -566,6 +566,46 @@ public class Device {
     }
 
     /**
+     * Stores the given action traces of the given test case to disk.
+     *
+     * @param testCase The test case for which the traces should be stored to disk.
+     * @param actionID The action id for which the traces should be stored.
+     * @param traces The traces belonging to the action.
+     */
+    public void storeTraces(final String testCase, final String actionID, final Set<String> traces) {
+
+        Log.println("Chromosome: " + testCase);
+        final String actionTraceID = actionID + "_" + testCase;
+
+        if (coveredTestCases.contains(actionTraceID)) {
+            // We have already stored the action traces for the given test case and don't want to overwrite (corrupt) them.
+            return;
+        }
+
+        File appDir = new File(appsDir.toFile(), packageName);
+        File tracesBaseDir = new File(new File(appDir, "traces"), testCase);
+
+        // create traces base directory if not yet present
+        if (!tracesBaseDir.exists()) {
+            Log.println("Creating traces base directory: " + tracesBaseDir.mkdirs());
+        }
+
+        final File tracesFile = new File(tracesBaseDir, actionTraceID);
+        try (PrintWriter writer = new PrintWriter(tracesFile)) {
+            for (String trace : traces) {
+                if (!trace.isEmpty()) { // skip empty lines
+                    writer.println(trace);
+                }
+            }
+        } catch (IOException e) {
+            Log.printError("Couldn't write traces to file: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        coveredTestCases.add(actionTraceID);
+    }
+
+    /**
      * Stores the given traces of the given test case chromosome onto disk.
      *
      * @param testCase The test case for which the traces should be stored to disk.

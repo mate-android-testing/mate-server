@@ -64,6 +64,8 @@ public class GraphEndpoint implements Endpoint {
     public Message handle(Message request) {
         if (request.getSubject().startsWith("/graph/init")) {
             return initGraph(request);
+        } else if (request.getSubject().startsWith("/graph/get_branch_distance_action_vector")) {
+            return getBranchDistanceVectorWithAction(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance_vector")) {
             return getBranchDistanceVector(request);
         } else if (request.getSubject().startsWith("/graph/get_branch_distance")) {
@@ -243,6 +245,26 @@ public class GraphEndpoint implements Endpoint {
     }
 
     /**
+     * Computes the branch distance vector on a per action basis for a given chromosome by combining approach level with
+     * branch distance.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the branch distance vector.
+     */
+    private Message getBranchDistanceVectorWithAction(final Message request) {
+
+        if (graph == null) {
+            throw new IllegalStateException("Graph hasn't been initialised!");
+        }
+
+        if (graph instanceof CFG) {
+            return getBranchDistanceVectorCFGWithAction(request);
+        } else {
+            throw new UnsupportedOperationException("Branch distance not defined on " + graph.getClass() + "!");
+        }
+    }
+
+    /**
      * Computes the branch distance vector for a given chromosome by combining approach level + branch distance.
      *
      * @param request The request message.
@@ -295,6 +317,73 @@ public class GraphEndpoint implements Endpoint {
 
         return new Message.MessageBuilder("/graph/get_branch_distance_vector")
                 .withParameter("branch_distance_vector", String.join("+", branchDistanceVector))
+                .build();
+    }
+
+    /**
+     * Computes the branch distance vector on a per action basis for a given chromosome by combining approach level with
+     * branch distance based on the inter-procedural CFG.
+     *
+     * @param request The request message.
+     * @return Returns a message containing the branch distance vector.
+     */
+    private Message getBranchDistanceVectorCFGWithAction(final Message request) {
+
+        if (!(graph instanceof InterCFG)) {
+            throw new UnsupportedOperationException("Approach Level & Branch Distance only defined on InterCFG so far!");
+        }
+
+        final String chromosome = request.getParameter("chromosome");
+        Log.println("Computing the branch distance vector for the chromosome: " + chromosome);
+
+        long start = System.currentTimeMillis();
+
+        final InterCFG interCFG = (InterCFG) graph;
+        final var branchVertices =  interCFG.getBranchVertices();
+
+        final List<Set<String>> tracesPerAction = getTracesPerFile(request);
+        final Set<String> tracesSet = new LinkedHashSet<>();
+        final String[][] branchDistanceActionVector = new String[branchVertices.size()][tracesPerAction.size()];
+
+        // aggregate the traces of the previous actions
+        final List<List<String>> combinedTracesPerAction = new ArrayList<>(tracesPerAction.size());
+
+        for (final Set<String> traces : tracesPerAction) {
+            tracesSet.addAll(traces);
+            final List<String> tracesList = new ArrayList<>(tracesSet);
+            combinedTracesPerAction.add(tracesList);
+        }
+
+        interCFG.precomputeBranchDistances(new ArrayList<>(tracesSet));
+        tracesSet.clear();
+
+        IntStream.range(0, combinedTracesPerAction.size())
+                .parallel()
+                .forEach(actionIndex -> {
+                    // Compute the approach level + branch distance vector after each action.
+                    final List<String> traces = combinedTracesPerAction.get(actionIndex);
+                    final var visitedVertices = interCFG.lookupVertices(traces);
+                    final List<String> branchDistanceVector = computeBranchDistanceVectorCFG(visitedVertices, branchVertices);
+
+                    // Add for each branch the branch distance fitness value after the ith action.
+                    IntStream.range(0, branchDistanceVector.size())
+                            .parallel()
+                            .forEach(branchIndex ->
+                                    branchDistanceActionVector[branchIndex][actionIndex] = branchDistanceVector.get(branchIndex)
+                            );
+                });
+
+        long end = System.currentTimeMillis();
+        Log.println("Computing the branch distance vector took: " + (end - start) + "ms");
+
+        // Flatten nested lists to convert the branch distance action vector to a single string.
+        final List<String> flattenedBranchDistanceActionVector = new ArrayList<>();
+        for (int i = 0; i < branchDistanceActionVector.length; i++) {
+            flattenedBranchDistanceActionVector.add(String.join("+", branchDistanceActionVector[i]));
+        }
+
+        return new Message.MessageBuilder("/graph/get_branch_distance_action_vector")
+                .withParameter("branch_distance_vector", String.join("-", flattenedBranchDistanceActionVector))
                 .build();
     }
 
@@ -777,7 +866,9 @@ public class GraphEndpoint implements Endpoint {
                 boolean excludeARTClasses = Boolean.parseBoolean(request.getParameter("exclude_art_classes"));
                 boolean resolveOnlyAUTClasses
                         = Boolean.parseBoolean(request.getParameter("resolve_only_aut_classes"));
-                initInterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, packageName, target);
+                boolean onlyApproachLevel = Boolean.parseBoolean(request.getParameter("only_approach_level"));
+                initInterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, onlyApproachLevel,
+                        packageName, target);
                 break;
             }
             case INTER_CDG: {
@@ -849,12 +940,14 @@ public class GraphEndpoint implements Endpoint {
      * @param useBasicBlocks Whether to use basic blocks for the interCFG.
      * @param excludeARTClasses Whether to exclude ART classes.
      * @param resolveOnlyAUTClasses Whether to resolve only classes belonging to the AUT package.
+     * @param onlyApproachLevel Whether to only use the approach level in the branch distance computation.
      * @param packageName The package name of the AUT.
      * @param target Describes the target vertices.
      */
     private void initInterCFG(File apkPath, boolean useBasicBlocks, boolean excludeARTClasses,
-                                 boolean resolveOnlyAUTClasses, String packageName, String target) {
-        graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, appsDir, packageName);
+                                 boolean resolveOnlyAUTClasses, boolean onlyApproachLevel, String packageName, String target) {
+        graph = new InterCFG(apkPath, useBasicBlocks, excludeARTClasses, resolveOnlyAUTClasses, onlyApproachLevel,
+                appsDir, packageName);
         targetVertices = selectTargetVertices(target);
     }
 
@@ -928,7 +1021,7 @@ public class GraphEndpoint implements Endpoint {
                                     .filter(Files::isRegularFile)
                                     .map(Path::toFile)
                                     // If the chromosome refers to a folder, the contained files, e.g., the traces
-                                    // belonging to the individual actions might be picked up in an arbitrary order
+                                    // belonging to the individual actions, might be picked up in an arbitrary order
                                     // without below comparator.
                                     .sorted((file1, file2) -> {
                                         if (file1.getName().endsWith("_" + chromosome)) {
@@ -951,7 +1044,7 @@ public class GraphEndpoint implements Endpoint {
                 }
             }
         }
-
+        
         Log.println("Number of considered traces files: " + tracesFiles.size());
         return tracesFiles;
     }
